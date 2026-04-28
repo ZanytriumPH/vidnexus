@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../app/widgets/app_bottom_nav.dart';
 import 'video_summary_models.dart';
 import 'video_summary_repository.dart';
+import '../knowledge_base/knowledge_base_home_screen.dart';
 import 'widgets/home_shell_widgets.dart';
 import 'widgets/video_summary_content_widgets.dart';
 import 'widgets/video_summary_drawer_widgets.dart';
@@ -139,11 +141,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                child: StageOneBottomNav(
-                  onKnowledgeBasePressed: () => _handleSectionSelection(
-                    context,
-                    StageOneNavSection.knowledgeBase,
-                  ),
+                child: AppBottomNav(
+                  current: AppNavSection.videoSummary,
+                  onSelected: (section) =>
+                      _handleSectionSelection(context, section),
                 ),
               ),
             ],
@@ -153,17 +154,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _handleSectionSelection(
-    BuildContext context,
-    StageOneNavSection section,
-  ) {
+  void _handleSectionSelection(BuildContext context, AppNavSection section) {
     switch (section) {
-      case StageOneNavSection.videoSummary:
+      case AppNavSection.videoSummary:
         return;
-      case StageOneNavSection.knowledgeBase:
-        ScaffoldMessenger.of(
+      case AppNavSection.knowledgeBase:
+        Navigator.pushNamedAndRemoveUntil(
           context,
-        ).showSnackBar(const SnackBar(content: Text('知识库模块仍保留占位，当前聚焦视频总结流程。')));
+          KnowledgeBaseHomeScreen.routeName,
+          (route) => false,
+        );
     }
   }
 

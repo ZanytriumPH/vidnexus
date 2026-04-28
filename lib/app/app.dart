@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../features/home/fake_video_summary_repository.dart';
 import '../features/home/home_screen.dart';
-import '../features/module_placeholder/module_placeholder_screen.dart';
+import '../features/knowledge_base/knowledge_base_home_screen.dart';
 import 'theme/app_theme.dart';
 
 class VidNexusApp extends StatelessWidget {
@@ -18,8 +18,8 @@ class VidNexusApp extends StatelessWidget {
       routes: {
         HomeScreen.routeName: (_) =>
             HomeScreen(repository: const FakeVideoSummaryRepository()),
-        ModulePlaceholderScreen.knowledgeRouteName: (_) =>
-            const ModulePlaceholderScreen.knowledgeBase(),
+        KnowledgeBaseHomeScreen.routeName: (_) =>
+            const KnowledgeBaseHomeScreen(),
       },
     );
   }
