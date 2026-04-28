@@ -18,68 +18,58 @@ class FakeVideoSummaryRepository extends VideoSummaryRepository {
 
   @override
   Stream<ProcessingSnapshot> startDraftGeneration() async* {
-    final snapshots = <ProcessingSnapshot>[
-      const ProcessingSnapshot(
-        progress: 0.32,
-        statusLabel: '处理中',
-        headline: '正在生成结构化初稿',
-        etaLabel: '当前主步骤：融合语音、关键词和版面信息，准备输出第一版结构梳理。',
-        badges: [
-          ProcessingBadge(label: '语音转写 已完成', active: false),
-          ProcessingBadge(label: '多轮融合 进行中', active: true),
-          ProcessingBadge(label: '总结卡片可视化 处理中', active: false),
-        ],
-        steps: [
-          ProcessingStep(
-            label: '语音转写与切片',
-            detail: '142 秒文本已完成校准。',
-            progress: 100,
-          ),
-          ProcessingStep(
-            label: '关键词归因与对齐',
-            detail: '96 处关键点已归入片段，质检线继续进行中。',
-            progress: 82,
-          ),
-          ProcessingStep(
-            label: '章节整合与摘要初稿',
-            detail: '正在组织段间跳转语句与第一版总括。',
-            progress: 64,
-          ),
-        ],
-      ),
-      const ProcessingSnapshot(
-        progress: 0.68,
-        statusLabel: '处理中',
-        headline: '正在生成结构化初稿',
-        etaLabel: '当前主步骤：融合语音、关键词和版面信息，准备输出第一版结构梳理。',
-        badges: [
-          ProcessingBadge(label: '语音转写 已完成', active: false),
-          ProcessingBadge(label: '多轮融合 进行中', active: true),
-          ProcessingBadge(label: '总结卡片可视化 处理中', active: false),
-        ],
-        steps: [
-          ProcessingStep(
-            label: '语音转写与切片',
-            detail: '142 秒文本已完成校准。',
-            progress: 100,
-          ),
-          ProcessingStep(
-            label: '关键词归因与对齐',
-            detail: '96 处关键点已归入片段，质检线继续进行中。',
-            progress: 92,
-          ),
-          ProcessingStep(
-            label: '章节整合与摘要初稿',
-            detail: '正在组织段间跳转语句与第一版总括。',
-            progress: 76,
-          ),
-        ],
-      ),
-    ];
+    const totalFrames = 11;
 
-    for (final snapshot in snapshots) {
-      await Future<void>.delayed(const Duration(milliseconds: 900));
-      yield snapshot;
+    for (var frame = 0; frame <= totalFrames; frame++) {
+      final progress = frame / totalFrames;
+      final stepOneProgress = (progress * 160).round().clamp(0, 100);
+      final stepTwoProgress = ((progress - 0.18) * 145).round().clamp(0, 100);
+      final stepThreeProgress = ((progress - 0.42) * 175).round().clamp(0, 100);
+
+      yield ProcessingSnapshot(
+        progress: progress,
+        statusLabel: progress >= 1 ? '处理完成' : '处理中',
+        headline: '正在生成结构化初稿',
+        etaLabel: progress >= 1
+            ? '全部处理步骤已完成，准备进入草稿整理。'
+            : '当前主步骤：融合语音、关键词和版面信息，准备输出第一版结构梳理。',
+        badges: [
+          ProcessingBadge(label: '语音转写 已完成', active: stepOneProgress >= 100),
+          ProcessingBadge(
+            label: stepTwoProgress >= 100 ? '多轮融合 已完成' : '多轮融合 进行中',
+            active: stepTwoProgress > 0 && stepTwoProgress < 100,
+          ),
+          ProcessingBadge(
+            label: stepThreeProgress >= 100 ? '总结卡片可视化 已完成' : '总结卡片可视化 处理中',
+            active: stepThreeProgress > 0 && stepThreeProgress < 100,
+          ),
+        ],
+        steps: [
+          ProcessingStep(
+            label: '语音转写与切片',
+            detail: stepOneProgress >= 100
+                ? '142 秒文本已完成校准。'
+                : '正在抽取片段并比对字幕断点。',
+            progress: stepOneProgress,
+          ),
+          ProcessingStep(
+            label: '关键词归因与对齐',
+            detail: stepTwoProgress >= 100
+                ? '96 处关键点已归入片段，质检线已完成。'
+                : '96 处关键点正在归入片段，质检线继续进行中。',
+            progress: stepTwoProgress,
+          ),
+          ProcessingStep(
+            label: '章节整合与摘要初稿',
+            detail: stepThreeProgress >= 100
+                ? '章节总括与首版摘要已整理完毕。'
+                : '正在组织段间跳转语句与第一版总括。',
+            progress: stepThreeProgress,
+          ),
+        ],
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 550));
     }
   }
 

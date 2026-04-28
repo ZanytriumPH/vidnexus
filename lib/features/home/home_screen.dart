@@ -319,6 +319,7 @@ class _VideoSummaryWorkspace extends StatelessWidget {
         highlighted: highlighted,
         videoAsset: videoAsset,
         processingSnapshot: processingSnapshot,
+        processingExpanded: processingExpanded,
         onTap: stage == VideoSummaryStage.processing
             ? onProcessingCardPressed
             : onUploadCardPressed,
@@ -345,8 +346,17 @@ class _VideoSummaryWorkspace extends StatelessWidget {
     if (stage == VideoSummaryStage.processing && processingSnapshot != null) {
       children.addAll([
         const SizedBox(height: 12),
-        if (processingExpanded)
-          _ProcessingDetailCard(snapshot: processingSnapshot!),
+        AnimatedCrossFade(
+          duration: const Duration(milliseconds: 220),
+          firstCurve: Curves.easeOutCubic,
+          secondCurve: Curves.easeOutCubic,
+          sizeCurve: Curves.easeOutCubic,
+          crossFadeState: processingExpanded
+              ? CrossFadeState.showFirst
+              : CrossFadeState.showSecond,
+          firstChild: _ProcessingDetailCard(snapshot: processingSnapshot!),
+          secondChild: const _ProcessingCollapsedHintCard(),
+        ),
       ]);
     }
 
@@ -450,6 +460,7 @@ class _HeroCard extends StatelessWidget {
     required this.highlighted,
     required this.videoAsset,
     required this.processingSnapshot,
+    required this.processingExpanded,
     required this.onTap,
   });
 
@@ -457,6 +468,7 @@ class _HeroCard extends StatelessWidget {
   final bool highlighted;
   final VideoAssetInfo videoAsset;
   final ProcessingSnapshot? processingSnapshot;
+  final bool processingExpanded;
   final VoidCallback onTap;
 
   @override
@@ -504,12 +516,22 @@ class _HeroCard extends StatelessWidget {
                 _StatusPill(label: pillLabel),
                 const Spacer(),
                 if (isProcessing)
-                  Text(
-                    '已展开',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 10,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w700,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.72),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      processingExpanded ? '点击收起详情' : '点击展开详情',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: 9.5,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
               ],
@@ -553,16 +575,10 @@ class _HeroCard extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(99),
-                      child: LinearProgressIndicator(
-                        value: processingSnapshot!.progress,
-                        minHeight: 4,
-                        backgroundColor: const Color(0xFFD9EAF8),
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          AppColors.primary,
-                        ),
-                      ),
+                    child: _AnimatedProgressBar(
+                      value: processingSnapshot!.progress,
+                      minHeight: 4,
+                      backgroundColor: const Color(0xFFD9EAF8),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -582,6 +598,29 @@ class _HeroCard extends StatelessWidget {
                 children: processingSnapshot!.badges
                     .map((badge) => _ProcessingBadgeChip(badge: badge))
                     .toList(),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(
+                    processingExpanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    processingExpanded
+                        ? '点击蓝色卡片可收起详细处理信息'
+                        : '点击蓝色卡片可展开详细处理信息',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 9.5,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ],
             if (isDraft || isFinal)
@@ -785,6 +824,58 @@ class _ProcessingDetailCard extends StatelessWidget {
   }
 }
 
+class _ProcessingCollapsedHintCard extends StatelessWidget {
+  const _ProcessingCollapsedHintCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      radius: 18,
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.unfold_more_rounded,
+              size: 16,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '详细处理信息已收起',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '点击上方蓝色卡片可再次展开，查看各步骤实时进度。',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 9.5,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ProcessingStepTile extends StatelessWidget {
   const _ProcessingStepTile({required this.step});
 
@@ -792,6 +883,8 @@ class _ProcessingStepTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final progressValue = step.progress / 100;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
       decoration: BoxDecoration(
@@ -812,27 +905,26 @@ class _ProcessingStepTile extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
-                '${step.progress}%',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 10,
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w700,
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 48,
+                child: Text(
+                  '${step.progress}%',
+                  textAlign: TextAlign.right,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 10,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: step.progress / 100,
-              minHeight: 4,
-              backgroundColor: const Color(0xFFE3E9EF),
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                AppColors.primary,
-              ),
-            ),
+          _AnimatedProgressBar(
+            value: progressValue,
+            minHeight: 4,
+            backgroundColor: const Color(0xFFE3E9EF),
           ),
           const SizedBox(height: 6),
           Text(
@@ -847,6 +939,52 @@ class _ProcessingStepTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AnimatedProgressBar extends StatelessWidget {
+  const _AnimatedProgressBar({
+    required this.value,
+    required this.minHeight,
+    required this.backgroundColor,
+  });
+
+  final double value;
+  final double minHeight;
+  final Color backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final safeValue = value.clamp(0.0, 1.0);
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: safeValue),
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+      builder: (context, animatedValue, child) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(99),
+          child: LinearProgressIndicator(
+            value: animatedValue,
+            minHeight: minHeight,
+            backgroundColor: backgroundColor,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              _progressColor(animatedValue),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+Color _progressColor(double value) {
+  final safeValue = value.clamp(0.0, 1.0);
+  return Color.lerp(
+        const Color(0xFFAED8FF),
+        const Color(0xFF1F5BEA),
+        safeValue,
+      ) ??
+      AppColors.primary;
 }
 
 class _DraftBodyCard extends StatelessWidget {
