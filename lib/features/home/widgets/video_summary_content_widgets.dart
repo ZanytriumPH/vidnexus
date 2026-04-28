@@ -581,44 +581,44 @@ class TimestampSection extends StatelessWidget {
         ),
         if (enabled) ...[
           const SizedBox(height: 8),
-          Container(
-            height: 36,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF6F8FB),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFD7DFE7)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(9),
-                    border: Border.all(color: const Color(0xFFD7DFE7)),
-                  ),
-                  child: const Icon(
-                    Icons.schedule_rounded,
-                    size: 11,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    selectedLabel,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 10,
-                      color: AppColors.textPrimary,
+          InkWell(
+            onTap: () => _showIntervalPicker(context),
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF6F8FB),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFD7DFE7)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(color: const Color(0xFFD7DFE7)),
+                    ),
+                    child: const Icon(
+                      Icons.schedule_rounded,
+                      size: 11,
+                      color: AppColors.textSecondary,
                     ),
                   ),
-                ),
-                InkWell(
-                  onTap: () => _showIntervalPicker(context),
-                  borderRadius: BorderRadius.circular(9),
-                  child: Container(
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      selectedLabel,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: 10,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  Container(
                     width: 18,
                     height: 18,
                     decoration: BoxDecoration(
@@ -631,8 +631,8 @@ class TimestampSection extends StatelessWidget {
                       color: Colors.white,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
