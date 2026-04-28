@@ -101,16 +101,7 @@ class FakeVideoSummaryRepository extends VideoSummaryRepository {
         TimestampChipData(label: '00:12:30 - 00:14:00', note: '核心机制与工作流'),
         TimestampChipData(label: '00:08:20 - 00:10:40', note: '工具调用与循环'),
       ],
-      messages: const [
-        ChatMessage(
-          sender: SummaryChatSender.system,
-          text: '如果用户使用时间范围，那么发送消息出去的时候应该也会显示这个时间范围',
-        ),
-        ChatMessage(
-          sender: SummaryChatSender.system,
-          text: '如果你点回转的视频模块，我会继续帮你同步话题窗口直到被证实，再回答你的问题。',
-        ),
-      ],
+      messages: const [],
     );
   }
 

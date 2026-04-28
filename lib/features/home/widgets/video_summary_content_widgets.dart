@@ -404,46 +404,81 @@ class ChatThread extends StatelessWidget {
           .map(
             (message) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: Align(
-                alignment: message.sender == SummaryChatSender.user
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft,
-                child: Container(
-                  width: message.sender == SummaryChatSender.user ? 290 : 320,
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFD7DFE7)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        message.text,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontSize: 10.5,
-                          height: 1.45,
-                        ),
-                      ),
-                      if (message.timestampLabel != null) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          message.timestampLabel!,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                fontSize: 9,
-                                color: AppColors.textHint,
-                              ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
+              child: _SummaryChatBubble(message: message),
             ),
           )
           .toList(),
+    );
+  }
+}
+
+class _SummaryChatBubble extends StatelessWidget {
+  const _SummaryChatBubble({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final isUser = message.sender == SummaryChatSender.user;
+
+    if (isUser) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 351),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE7F3FD),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.borderStrong),
+          ),
+          child: _SummaryChatBubbleBody(message: message),
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderStrong),
+      ),
+      child: _SummaryChatBubbleBody(message: message),
+    );
+  }
+}
+
+class _SummaryChatBubbleBody extends StatelessWidget {
+  const _SummaryChatBubbleBody({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          message.text,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontSize: 11,
+            height: 1.55,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        if (message.timestampLabel != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            message.timestampLabel!,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 9,
+              color: AppColors.textHint,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

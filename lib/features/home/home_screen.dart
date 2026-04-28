@@ -657,27 +657,9 @@ class _HomeScreenState extends State<HomeScreen> {
           TimestampChipData(label: '00:05:10 - 00:07:00', note: '方案价值与验证'),
           TimestampChipData(label: '00:10:20 - 00:12:10', note: '交付节奏与风险'),
         ],
-        messages: [
-          ChatMessage(
-            sender: SummaryChatSender.system,
-            text: '如果你要继续追问，我会优先围绕方案价值、上线节奏和验证方式补充细节。',
-          ),
-          ChatMessage(
-            sender: SummaryChatSender.system,
-            text: '也可以直接指定时间范围，我会把该片段的上下文一起带进回答。',
-          ),
-        ],
+        messages: [],
       ),
-      chatMessages: [
-        ChatMessage(
-          sender: SummaryChatSender.system,
-          text: '如果你要继续追问，我会优先围绕方案价值、上线节奏和验证方式补充细节。',
-        ),
-        ChatMessage(
-          sender: SummaryChatSender.system,
-          text: '也可以直接指定时间范围，我会把该片段的上下文一起带进回答。',
-        ),
-      ],
+      chatMessages: [],
     );
   }
 }
