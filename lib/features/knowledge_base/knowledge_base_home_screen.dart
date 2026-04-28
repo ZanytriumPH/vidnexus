@@ -4,6 +4,8 @@ import '../../app/theme/app_colors.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_card.dart';
 import '../home/home_screen.dart';
+import 'knowledge_base_models.dart';
+import 'knowledge_base_session_screen.dart';
 
 class KnowledgeBaseHomeScreen extends StatelessWidget {
   const KnowledgeBaseHomeScreen({super.key});
@@ -281,23 +283,7 @@ class _KnowledgeLibraryGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const items = [
-      _KnowledgeLibraryItem(
-        title: 'AI 产品调研库',
-        meta: '18 份资料 · 最近追问“竞品如何构建记忆层？”',
-        description: '收纳市场报告、论文、视频摘要与竞品评测。',
-      ),
-      _KnowledgeLibraryItem(
-        title: '架构设计知识库',
-        meta: '9 份资料 · 2 个导图摘要',
-        description: '将录屏、设计文档和技术评审沉淀为可问答资产。',
-      ),
-      _KnowledgeLibraryItem(
-        title: '需求分析课程库',
-        meta: '5 份资料 · 最近追问“核心用例描述维度指南？”',
-        description: '将课程、案例和评审笔记整理成稳定的知识单元。',
-      ),
-    ];
+    const items = demoKnowledgeBaseLibraries;
 
     return Column(
       children: [
@@ -325,69 +311,67 @@ class _KnowledgeLibraryGrid extends StatelessWidget {
 class _KnowledgeLibraryCard extends StatelessWidget {
   const _KnowledgeLibraryCard({required this.item});
 
-  final _KnowledgeLibraryItem item;
+  final KnowledgeBaseLibrary item;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      radius: 20,
-      padding: const EdgeInsets.all(16),
-      backgroundColor: Colors.white,
-      borderColor: AppColors.borderStrong,
-      child: SizedBox(
-        height: 121,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              item.title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              item.meta,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 11,
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500,
-                height: 1.35,
-              ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: Text(
-                item.description,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 12,
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => KnowledgeBaseSessionScreen(library: item),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: AppCard(
+        radius: 20,
+        padding: const EdgeInsets.all(16),
+        backgroundColor: Colors.white,
+        borderColor: AppColors.borderStrong,
+        child: SizedBox(
+          height: 121,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
                   color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                item.meta,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
                   fontWeight: FontWeight.w500,
                   height: 1.35,
                 ),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Expanded(
+                child: Text(
+                  item.description,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 12,
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w500,
+                    height: 1.35,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-}
-
-class _KnowledgeLibraryItem {
-  const _KnowledgeLibraryItem({
-    required this.title,
-    required this.meta,
-    required this.description,
-  });
-
-  final String title;
-  final String meta;
-  final String description;
 }
