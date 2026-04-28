@@ -188,7 +188,7 @@ class _KnowledgeHeroCard extends StatelessWidget {
       gradient: const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFFF6FCFF), Color(0xFFB0E1FF)],
+        colors: [Color(0xFFB0E1FF), Color(0xFFF6FCFF)],
       ),
       borderColor: const Color(0xFFD7EAFB),
       child: Stack(

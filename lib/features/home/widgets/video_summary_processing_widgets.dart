@@ -36,7 +36,7 @@ class HeroCard extends StatelessWidget {
     final String title = switch (stage) {
       VideoSummaryStage.ready => '本地上传',
       VideoSummaryStage.processing => '正在生成结构化初稿',
-      VideoSummaryStage.draft => '聚合稿已生成，处理详情已自动折叠',
+      VideoSummaryStage.draft => '初稿已生成，处理详情已自动折叠',
       VideoSummaryStage.finalChat => '当前会话已切换为可追问对话窗口',
     };
     final String subtitle = switch (stage) {

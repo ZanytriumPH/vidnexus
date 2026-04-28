@@ -18,13 +18,16 @@ class VideoSummaryWorkspace extends StatelessWidget {
     required this.chatMessages,
     required this.preferenceController,
     required this.chatController,
+    required this.draftBodyController,
     required this.processingExpanded,
+    required this.isDraftEditMode,
     required this.isGenerating,
     required this.isSendingChat,
     required this.isTimestampScoped,
     required this.selectedTimestampIndex,
     required this.onUploadCardPressed,
     required this.onProcessingCardPressed,
+    required this.onDraftEditModeChanged,
     required this.onStartPressed,
     required this.onGenerateFinalPressed,
     required this.onSendChatPressed,
@@ -42,13 +45,16 @@ class VideoSummaryWorkspace extends StatelessWidget {
   final List<ChatMessage> chatMessages;
   final TextEditingController preferenceController;
   final TextEditingController chatController;
+  final TextEditingController draftBodyController;
   final bool processingExpanded;
+  final bool isDraftEditMode;
   final bool isGenerating;
   final bool isSendingChat;
   final bool isTimestampScoped;
   final int selectedTimestampIndex;
   final VoidCallback onUploadCardPressed;
   final VoidCallback onProcessingCardPressed;
+  final ValueChanged<bool> onDraftEditModeChanged;
   final VoidCallback? onStartPressed;
   final VoidCallback? onGenerateFinalPressed;
   final VoidCallback? onSendChatPressed;
@@ -107,7 +113,12 @@ class VideoSummaryWorkspace extends StatelessWidget {
     if (stage == VideoSummaryStage.draft && draftResult != null) {
       children.addAll([
         const SizedBox(height: 12),
-        DraftBodyCard(draft: draftResult!),
+        DraftBodyCard(
+          draft: draftResult!,
+          draftBodyController: draftBodyController,
+          isEditMode: isDraftEditMode,
+          onModeChanged: onDraftEditModeChanged,
+        ),
         const SizedBox(height: 10),
         const SectionLabel(title: '总结指导（可选）', centered: false),
         const SizedBox(height: 6),
@@ -157,9 +168,18 @@ class VideoSummaryWorkspace extends StatelessWidget {
 }
 
 class DraftBodyCard extends StatelessWidget {
-  const DraftBodyCard({required this.draft, super.key});
+  const DraftBodyCard({
+    required this.draft,
+    required this.draftBodyController,
+    required this.isEditMode,
+    required this.onModeChanged,
+    super.key,
+  });
 
   final DraftResult draft;
+  final TextEditingController draftBodyController;
+  final bool isEditMode;
+  final ValueChanged<bool> onModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -173,16 +193,24 @@ class DraftBodyCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '聚合稿正文',
+                  '初稿正文',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-              const MiniTab(active: true, label: '编辑'),
+              MiniTab(
+                active: isEditMode,
+                label: '编辑',
+                onTap: () => onModeChanged(true),
+              ),
               const SizedBox(width: 6),
-              const MiniTab(active: false, label: '预览'),
+              MiniTab(
+                active: !isEditMode,
+                label: '预览',
+                onTap: () => onModeChanged(false),
+              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -206,12 +234,31 @@ class DraftBodyCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  draft.paragraphs.join('\n\n'),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontSize: 11, height: 1.55),
-                ),
+                if (isEditMode)
+                  TextField(
+                    controller: draftBodyController,
+                    maxLines: null,
+                    minLines: 6,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      isCollapsed: true,
+                    ),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: 11,
+                      height: 1.55,
+                      color: AppColors.textPrimary,
+                    ),
+                  )
+                else
+                  Text(
+                    draftBodyController.text,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: 11,
+                      height: 1.55,
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 Text(
                   draft.overview,
@@ -250,27 +297,37 @@ class DraftBodyCard extends StatelessWidget {
 }
 
 class MiniTab extends StatelessWidget {
-  const MiniTab({required this.active, required this.label, super.key});
+  const MiniTab({
+    required this.active,
+    required this.label,
+    this.onTap,
+    super.key,
+  });
 
   final bool active;
   final String label;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 22,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: active ? const Color(0xFF1E2430) : const Color(0xFFF0F2F5),
-        borderRadius: BorderRadius.circular(11),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontSize: 9.5,
-          fontWeight: FontWeight.w700,
-          color: active ? Colors.white : AppColors.textSecondary,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(11),
+      child: Container(
+        height: 22,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFF1E2430) : const Color(0xFFF0F2F5),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w700,
+            color: active ? Colors.white : AppColors.textSecondary,
+          ),
         ),
       ),
     );

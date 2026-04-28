@@ -77,7 +77,7 @@ class FakeVideoSummaryRepository extends VideoSummaryRepository {
   Future<DraftResult> fetchDraftResult() async {
     await Future<void>.delayed(const Duration(milliseconds: 400));
     return const DraftResult(
-      overview: '聚合稿已生成，处理详情已自动折叠',
+      overview: '初稿已生成，处理详情已自动折叠',
       paragraphs: [
         '《视频总结》这次结构化内容初稿，系统共检出并修订了 Agent 结构的核心概念和底层细节。讲解者结合 LangChain 框架，详细分析了 Agent 的工作流程，包括用户输入、查询循环和工具调用等模块。',
         '综合总结：该视频分片通过音频与页面结合，深入探讨了技术路线化的重要意义及其在面对初行之复杂中的应用价值。',

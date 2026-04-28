@@ -197,7 +197,7 @@ class _ConversationPreviewCard extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [Colors.white, Color(0xFFCFEDFF)],
+          colors: [Color(0xFFCFEDFF), Colors.white],
         ),
         borderColor: AppColors.borderStrong,
         child: Row(

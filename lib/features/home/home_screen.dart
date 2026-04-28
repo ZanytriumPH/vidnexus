@@ -23,9 +23,11 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _preferenceController = TextEditingController();
   final TextEditingController _chatController = TextEditingController();
+  final TextEditingController _draftBodyController = TextEditingController();
 
   bool _uploadHighlighted = false;
   bool _processingExpanded = true;
+  bool _isDraftEditMode = true;
   bool _isGenerating = false;
   bool _isSendingChat = false;
   bool _isTimestampScoped = true;
@@ -54,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _preferenceController.dispose();
     _chatController.dispose();
+    _draftBodyController.dispose();
     super.dispose();
   }
 
@@ -106,13 +109,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         chatMessages: _chatMessages,
                         preferenceController: _preferenceController,
                         chatController: _chatController,
+                        draftBodyController: _draftBodyController,
                         processingExpanded: _processingExpanded,
+                        isDraftEditMode: _isDraftEditMode,
                         isGenerating: _isGenerating,
                         isSendingChat: _isSendingChat,
                         isTimestampScoped: _isTimestampScoped,
                         selectedTimestampIndex: _selectedTimestampIndex,
                         onUploadCardPressed: _toggleUploadSelection,
                         onProcessingCardPressed: _toggleProcessingExpanded,
+                        onDraftEditModeChanged: (value) {
+                          setState(() {
+                            _isDraftEditMode = value;
+                            _syncActiveSession();
+                          });
+                        },
                         onStartPressed: _isGenerating
                             ? null
                             : _startDraftGeneration,
@@ -170,8 +181,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void _resetPageState() {
     _preferenceController.clear();
     _chatController.clear();
+    _draftBodyController.clear();
     _uploadHighlighted = false;
     _processingExpanded = _defaultProcessingExpanded;
+    _isDraftEditMode = true;
     _isGenerating = false;
     _isSendingChat = false;
     _isTimestampScoped = _defaultTimestampScoped;
@@ -238,6 +251,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _draftResult = draft;
         _stage = VideoSummaryStage.draft;
         _processingExpanded = false;
+        _isDraftEditMode = true;
+        _draftBodyController.text = draft.paragraphs.join('\n\n');
         _syncActiveSession();
       });
     } finally {
@@ -256,6 +271,17 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    final editedParagraphs = _draftBodyController.text
+        .split(RegExp(r'\n\s*\n'))
+        .map((paragraph) => paragraph.trim())
+        .where((paragraph) => paragraph.isNotEmpty)
+        .toList();
+    final effectiveDraft = DraftResult(
+      overview: draft.overview,
+      paragraphs: editedParagraphs.isEmpty ? draft.paragraphs : editedParagraphs,
+      suggestionHint: draft.suggestionHint,
+    );
+
     setState(() {
       _isGenerating = true;
     });
@@ -263,7 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final summary = await widget.repository.generateFinalSummary(
         guidance: _preferenceController.text.trim(),
-        draft: draft,
+        draft: effectiveDraft,
       );
       if (!mounted) {
         return;
@@ -272,6 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _finalSummaryData = summary;
         _chatMessages = List<ChatMessage>.from(summary.messages);
+        _draftResult = effectiveDraft;
         _stage = VideoSummaryStage.finalChat;
         _selectedTimestampIndex = 0;
         _syncActiveSession();
@@ -486,6 +513,8 @@ class _HomeScreenState extends State<HomeScreen> {
       isTimestampScoped: _isTimestampScoped,
       selectedTimestampIndex: _selectedTimestampIndex,
       preferenceText: _preferenceController.text,
+      draftBodyText: _draftBodyController.text,
+      isDraftEditMode: _isDraftEditMode,
       processingSnapshot: _processingSnapshot,
       draftResult: _draftResult,
       finalSummaryData: _finalSummaryData,
@@ -501,11 +530,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _isSendingChat = false;
     _isTimestampScoped = snapshot.isTimestampScoped;
     _selectedTimestampIndex = snapshot.selectedTimestampIndex;
+    _isDraftEditMode = snapshot.isDraftEditMode;
     _processingSnapshot = snapshot.processingSnapshot;
     _draftResult = snapshot.draftResult;
     _finalSummaryData = snapshot.finalSummaryData;
     _chatMessages = List<ChatMessage>.from(snapshot.chatMessages);
     _preferenceController.text = snapshot.preferenceText;
+    _draftBodyController.text = snapshot.draftBodyText;
     _chatController.clear();
   }
 
@@ -540,6 +571,8 @@ class _HomeScreenState extends State<HomeScreen> {
       isTimestampScoped: true,
       selectedTimestampIndex: 0,
       preferenceText: '先整理关键结论，再补充可执行动作。',
+      draftBodyText: '',
+      isDraftEditMode: true,
       processingSnapshot: const ProcessingSnapshot(
         progress: 0.58,
         statusLabel: '处理中',
@@ -582,9 +615,12 @@ class _HomeScreenState extends State<HomeScreen> {
       isTimestampScoped: true,
       selectedTimestampIndex: 0,
       preferenceText: '保留原结论，但把执行建议写得更明确。',
+      draftBodyText:
+          '这段竞品分析主要围绕用户分层、内容抓手和转化动作展开，前半段聚焦目标用户的需求切片，后半段则落到产品策略和执行节奏。\n\n当前结构稿已经整理完主线、亮点和风险项，适合继续补充面向团队同步的版本。',
+      isDraftEditMode: true,
       processingSnapshot: null,
       draftResult: DraftResult(
-        overview: '聚合稿已生成，处理详情已自动折叠',
+        overview: '初稿已生成，处理详情已自动折叠',
         paragraphs: [
           '这段竞品分析主要围绕用户分层、内容抓手和转化动作展开，前半段聚焦目标用户的需求切片，后半段则落到产品策略和执行节奏。',
           '当前结构稿已经整理完主线、亮点和风险项，适合继续补充面向团队同步的版本。',
@@ -604,9 +640,11 @@ class _HomeScreenState extends State<HomeScreen> {
       isTimestampScoped: true,
       selectedTimestampIndex: 0,
       preferenceText: '重点保留行动建议与里程碑。',
+      draftBodyText: '产品方案讲解已经覆盖目标问题、用户路径和价值验证。',
+      isDraftEditMode: false,
       processingSnapshot: null,
       draftResult: DraftResult(
-        overview: '聚合稿已生成，处理详情已自动折叠',
+        overview: '初稿已生成，处理详情已自动折叠',
         paragraphs: ['产品方案讲解已经覆盖目标问题、用户路径和价值验证。'],
         suggestionHint: '继续补充差异化价值和风险边界。',
       ),
@@ -745,6 +783,8 @@ class _SessionSnapshot {
     required this.isTimestampScoped,
     required this.selectedTimestampIndex,
     required this.preferenceText,
+    required this.draftBodyText,
+    required this.isDraftEditMode,
     required this.processingSnapshot,
     required this.draftResult,
     required this.finalSummaryData,
@@ -757,6 +797,8 @@ class _SessionSnapshot {
   final bool isTimestampScoped;
   final int selectedTimestampIndex;
   final String preferenceText;
+  final String draftBodyText;
+  final bool isDraftEditMode;
   final ProcessingSnapshot? processingSnapshot;
   final DraftResult? draftResult;
   final FinalSummaryData? finalSummaryData;
