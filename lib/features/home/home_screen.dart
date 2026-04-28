@@ -20,6 +20,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const int _minimumTimestampRangeSeconds = 10;
+
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _preferenceController = TextEditingController();
   final TextEditingController _chatController = TextEditingController();
@@ -30,10 +32,11 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isDraftEditMode = true;
   bool _isGenerating = false;
   bool _isSendingChat = false;
-  bool _isTimestampScoped = true;
-  int _selectedTimestampIndex = 0;
+  bool _isTimestampScoped = false;
+  int _selectedTimestampStartSeconds = 0;
+  int _selectedTimestampEndSeconds = _minimumTimestampRangeSeconds;
   VideoSummaryStage _stage = VideoSummaryStage.ready;
-  bool _defaultTimestampScoped = true;
+  bool _defaultTimestampScoped = false;
   bool _defaultProcessingExpanded = true;
   late final VideoAssetInfo _videoAsset;
   late List<_SessionHistoryEntry> _sessions;
@@ -48,6 +51,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _videoAsset = widget.repository.getVideoAsset();
+    final initialRange = _buildDefaultTimestampRange();
+    _selectedTimestampStartSeconds = initialRange.startSeconds;
+    _selectedTimestampEndSeconds = initialRange.endSeconds;
     _sessions = _buildInitialSessions();
     _activeSessionId = _sessions.first.id;
   }
@@ -115,7 +121,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         isGenerating: _isGenerating,
                         isSendingChat: _isSendingChat,
                         isTimestampScoped: _isTimestampScoped,
-                        selectedTimestampIndex: _selectedTimestampIndex,
+                        selectedTimestampLabel: _formatTimestampRange(
+                          _selectedTimestampStartSeconds,
+                          _selectedTimestampEndSeconds,
+                        ),
+                        totalDurationSeconds: _videoDurationInSeconds,
+                        selectedTimestampStartSeconds:
+                            _selectedTimestampStartSeconds,
+                        selectedTimestampEndSeconds: _selectedTimestampEndSeconds,
                         onUploadCardPressed: _toggleUploadSelection,
                         onProcessingCardPressed: _toggleProcessingExpanded,
                         onDraftEditModeChanged: (value) {
@@ -139,9 +152,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             _syncActiveSession();
                           });
                         },
-                        onTimestampSelected: (index) {
+                        onTimestampRangeChanged: (range) {
                           setState(() {
-                            _selectedTimestampIndex = index;
+                            _selectedTimestampStartSeconds = range.startSeconds;
+                            _selectedTimestampEndSeconds = range.endSeconds;
                             _syncActiveSession();
                           });
                         },
@@ -188,7 +202,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _isGenerating = false;
     _isSendingChat = false;
     _isTimestampScoped = _defaultTimestampScoped;
-    _selectedTimestampIndex = 0;
+    final defaultRange = _buildDefaultTimestampRange();
+    _selectedTimestampStartSeconds = defaultRange.startSeconds;
+    _selectedTimestampEndSeconds = defaultRange.endSeconds;
     _stage = VideoSummaryStage.ready;
     _processingSnapshot = null;
     _draftResult = null;
@@ -300,7 +316,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _chatMessages = List<ChatMessage>.from(summary.messages);
         _draftResult = effectiveDraft;
         _stage = VideoSummaryStage.finalChat;
-        _selectedTimestampIndex = 0;
+        final seededRange = _buildRangeFromSummary(summary);
+        _selectedTimestampStartSeconds = seededRange.startSeconds;
+        _selectedTimestampEndSeconds = seededRange.endSeconds;
         _syncActiveSession();
       });
     } finally {
@@ -320,11 +338,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final timestampLabel =
-        _isTimestampScoped &&
-            _finalSummaryData != null &&
-            _finalSummaryData!.timestampChips.isNotEmpty
-        ? _finalSummaryData!.timestampChips[_selectedTimestampIndex].label
-        : null;
+      _isTimestampScoped
+      ? _formatTimestampRange(
+        _selectedTimestampStartSeconds,
+        _selectedTimestampEndSeconds,
+        )
+      : null;
 
     final userMessage = ChatMessage(
       sender: SummaryChatSender.user,
@@ -346,7 +365,14 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       setState(() {
-        _chatMessages = [..._chatMessages, reply];
+        _chatMessages = [
+          ..._chatMessages,
+          ChatMessage(
+            sender: reply.sender,
+            text: reply.text,
+            timestampLabel: timestampLabel,
+          ),
+        ];
         _syncActiveSession();
       });
     } finally {
@@ -441,8 +467,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 18),
                   _SettingsTile(
-                    title: '新会话默认开启时间戳追问',
-                    subtitle: '进入最终稿后保留时间范围筛选开关。',
+                    title: '新会话默认开启时间区间追问',
+                    subtitle: '进入最终稿后默认显示时间区间选择条。',
                     value: _defaultTimestampScoped,
                     onChanged: (value) {
                       setState(() {
@@ -511,7 +537,8 @@ class _HomeScreenState extends State<HomeScreen> {
       uploadHighlighted: _uploadHighlighted,
       processingExpanded: _processingExpanded,
       isTimestampScoped: _isTimestampScoped,
-      selectedTimestampIndex: _selectedTimestampIndex,
+      selectedTimestampStartSeconds: _selectedTimestampStartSeconds,
+      selectedTimestampEndSeconds: _selectedTimestampEndSeconds,
       preferenceText: _preferenceController.text,
       draftBodyText: _draftBodyController.text,
       isDraftEditMode: _isDraftEditMode,
@@ -529,7 +556,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _isGenerating = false;
     _isSendingChat = false;
     _isTimestampScoped = snapshot.isTimestampScoped;
-    _selectedTimestampIndex = snapshot.selectedTimestampIndex;
+    _selectedTimestampStartSeconds = snapshot.selectedTimestampStartSeconds;
+    _selectedTimestampEndSeconds = snapshot.selectedTimestampEndSeconds;
     _isDraftEditMode = snapshot.isDraftEditMode;
     _processingSnapshot = snapshot.processingSnapshot;
     _draftResult = snapshot.draftResult;
@@ -569,7 +597,8 @@ class _HomeScreenState extends State<HomeScreen> {
       uploadHighlighted: true,
       processingExpanded: true,
       isTimestampScoped: true,
-      selectedTimestampIndex: 0,
+      selectedTimestampStartSeconds: 0,
+      selectedTimestampEndSeconds: 30,
       preferenceText: '先整理关键结论，再补充可执行动作。',
       draftBodyText: '',
       isDraftEditMode: true,
@@ -613,7 +642,8 @@ class _HomeScreenState extends State<HomeScreen> {
       uploadHighlighted: true,
       processingExpanded: false,
       isTimestampScoped: true,
-      selectedTimestampIndex: 0,
+      selectedTimestampStartSeconds: 0,
+      selectedTimestampEndSeconds: 30,
       preferenceText: '保留原结论，但把执行建议写得更明确。',
       draftBodyText:
           '这段竞品分析主要围绕用户分层、内容抓手和转化动作展开，前半段聚焦目标用户的需求切片，后半段则落到产品策略和执行节奏。\n\n当前结构稿已经整理完主线、亮点和风险项，适合继续补充面向团队同步的版本。',
@@ -637,8 +667,9 @@ class _HomeScreenState extends State<HomeScreen> {
       stage: VideoSummaryStage.finalChat,
       uploadHighlighted: true,
       processingExpanded: false,
-      isTimestampScoped: true,
-      selectedTimestampIndex: 0,
+      isTimestampScoped: false,
+      selectedTimestampStartSeconds: 310,
+      selectedTimestampEndSeconds: 420,
       preferenceText: '重点保留行动建议与里程碑。',
       draftBodyText: '产品方案讲解已经覆盖目标问题、用户路径和价值验证。',
       isDraftEditMode: false,
@@ -661,6 +692,93 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       chatMessages: [],
     );
+  }
+
+  int get _videoDurationInSeconds => _parseVideoDurationLabel(_videoAsset.durationLabel);
+
+  _TimestampRange _buildDefaultTimestampRange() {
+    final total = _videoDurationInSeconds;
+    final defaultLength = total >= 30 ? 30 : total;
+    final safeLength = defaultLength >= _minimumTimestampRangeSeconds
+        ? defaultLength
+        : _minimumTimestampRangeSeconds;
+    final end = safeLength.clamp(
+      _minimumTimestampRangeSeconds,
+      total,
+    );
+    return _TimestampRange(startSeconds: 0, endSeconds: end);
+  }
+
+  _TimestampRange _buildRangeFromSummary(FinalSummaryData summary) {
+    final seeded = summary.timestampChips.isNotEmpty
+        ? _tryParseTimestampRange(summary.timestampChips.first.label)
+        : _tryParseTimestampRange(summary.summaryTimestampLabel);
+    return _sanitizeTimestampRange(seeded ?? _buildDefaultTimestampRange());
+  }
+
+  _TimestampRange _sanitizeTimestampRange(_TimestampRange range) {
+    final total = _videoDurationInSeconds;
+    final maxStart = (total - _minimumTimestampRangeSeconds).clamp(0, total);
+    final start = range.startSeconds.clamp(0, maxStart);
+    final minEnd = (start + _minimumTimestampRangeSeconds).clamp(
+      _minimumTimestampRangeSeconds,
+      total,
+    );
+    final end = range.endSeconds.clamp(minEnd, total);
+    return _TimestampRange(startSeconds: start, endSeconds: end);
+  }
+
+  _TimestampRange? _tryParseTimestampRange(String raw) {
+    final matches = RegExp(r'(\d{2}:\d{2}(?::\d{2})?)').allMatches(raw).toList();
+    if (matches.length < 2) {
+      return null;
+    }
+
+    final start = _parseClockLabel(matches.first.group(0)!);
+    final end = _parseClockLabel(matches[1].group(0)!);
+    if (end - start < _minimumTimestampRangeSeconds) {
+      return null;
+    }
+
+    return _TimestampRange(startSeconds: start, endSeconds: end);
+  }
+
+  int _parseClockLabel(String value) {
+    final parts = value.split(':').map(int.parse).toList();
+    if (parts.length == 2) {
+      return parts[0] * 60 + parts[1];
+    }
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+
+  int _parseVideoDurationLabel(String label) {
+    final compact = label.trim();
+    if (compact.contains(':')) {
+      return _parseClockLabel(compact);
+    }
+
+    final minuteMatch = RegExp(r'(\d+)\s*m').firstMatch(compact);
+    final secondMatch = RegExp(r'(\d+)\s*s').firstMatch(compact);
+    final minutes = int.tryParse(minuteMatch?.group(1) ?? '0') ?? 0;
+    final seconds = int.tryParse(secondMatch?.group(1) ?? '0') ?? 0;
+    final total = minutes * 60 + seconds;
+    return total >= _minimumTimestampRangeSeconds
+        ? total
+        : _minimumTimestampRangeSeconds;
+  }
+
+  String _formatTimestampRange(int startSeconds, int endSeconds) {
+    return '${_formatClock(startSeconds)} - ${_formatClock(endSeconds)}';
+  }
+
+  String _formatClock(int totalSeconds) {
+    final hours = totalSeconds ~/ 3600;
+    final minutes = (totalSeconds % 3600) ~/ 60;
+    final seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 }
 
@@ -763,7 +881,8 @@ class _SessionSnapshot {
     required this.uploadHighlighted,
     required this.processingExpanded,
     required this.isTimestampScoped,
-    required this.selectedTimestampIndex,
+    required this.selectedTimestampStartSeconds,
+    required this.selectedTimestampEndSeconds,
     required this.preferenceText,
     required this.draftBodyText,
     required this.isDraftEditMode,
@@ -777,7 +896,8 @@ class _SessionSnapshot {
   final bool uploadHighlighted;
   final bool processingExpanded;
   final bool isTimestampScoped;
-  final int selectedTimestampIndex;
+  final int selectedTimestampStartSeconds;
+  final int selectedTimestampEndSeconds;
   final String preferenceText;
   final String draftBodyText;
   final bool isDraftEditMode;
@@ -785,4 +905,14 @@ class _SessionSnapshot {
   final DraftResult? draftResult;
   final FinalSummaryData? finalSummaryData;
   final List<ChatMessage> chatMessages;
+}
+
+class _TimestampRange {
+  const _TimestampRange({
+    required this.startSeconds,
+    required this.endSeconds,
+  });
+
+  final int startSeconds;
+  final int endSeconds;
 }
