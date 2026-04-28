@@ -10,48 +10,57 @@ abstract final class AppTheme {
         seedColor: AppColors.primary,
         brightness: Brightness.light,
         surface: AppColors.surface,
+      ).copyWith(
+        onSurface: AppColors.textPrimary,
+        onPrimary: Colors.white,
       ),
       scaffoldBackgroundColor: AppColors.pageBackground,
     );
 
+    final textTheme = base.textTheme.copyWith(
+      headlineMedium: const TextStyle(
+        fontSize: 28,
+        fontWeight: FontWeight.w700,
+        height: 1.15,
+        color: AppColors.textPrimary,
+      ),
+      titleLarge: const TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        height: 1.2,
+        color: AppColors.textPrimary,
+      ),
+      titleMedium: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        height: 1.25,
+        color: AppColors.textPrimary,
+      ),
+      bodyLarge: const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        height: 1.3,
+        color: AppColors.textPrimary,
+      ),
+      bodyMedium: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        height: 1.45,
+        color: AppColors.textPrimary,
+      ),
+      bodySmall: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        height: 1.4,
+        color: AppColors.textPrimary,
+      ),
+    );
+
     return base.copyWith(
-      textTheme: base.textTheme
-          .apply(
-            bodyColor: AppColors.textPrimary,
-            displayColor: AppColors.textPrimary,
-          )
-          .copyWith(
-            headlineMedium: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              height: 1.15,
-            ),
-            titleLarge: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              height: 1.2,
-            ),
-            titleMedium: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              height: 1.25,
-            ),
-            bodyLarge: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              height: 1.3,
-            ),
-            bodyMedium: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              height: 1.45,
-            ),
-            bodySmall: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              height: 1.4,
-            ),
-          ),
+      textTheme: textTheme,
+      primaryTextTheme: textTheme,
+      iconTheme: const IconThemeData(color: AppColors.textPrimary),
+      primaryIconTheme: const IconThemeData(color: AppColors.textPrimary),
       dividerColor: AppColors.border,
       cardColor: AppColors.surface,
       elevatedButtonTheme: ElevatedButtonThemeData(

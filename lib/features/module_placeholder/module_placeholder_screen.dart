@@ -17,13 +17,6 @@ class ModulePlaceholderScreen extends StatelessWidget {
     super.key,
   });
 
-  const ModulePlaceholderScreen.processing({super.key})
-    : title = '处理中占位',
-      subtitle = '阶段 1 里先保留 processing 的进入落点，具体进度反馈会在下一阶段实现。',
-      currentSection = AppNavSection.videoSummary,
-      items = const ['渐变高亮区', '处理进度信息卡', '状态提示文案', '跳转到草稿页的后续衔接'],
-      primaryActionLabel = '返回视频入口';
-
   const ModulePlaceholderScreen.knowledgeBase({super.key})
     : title = '知识库',
       subtitle = '这里只保留知识资产模块入口，具体页面会在后续阶段逐步补齐。',
@@ -31,7 +24,6 @@ class ModulePlaceholderScreen extends StatelessWidget {
       items = const ['3. 首页', '3.1 会话', '3.2 聊天', '3.3 来源'],
       primaryActionLabel = '返回视频入口';
 
-  static const processingRouteName = '/video-summary/processing';
   static const knowledgeRouteName = '/knowledge-base';
 
   final String title;
