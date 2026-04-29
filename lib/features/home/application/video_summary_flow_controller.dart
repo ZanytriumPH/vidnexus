@@ -1,0 +1,450 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../video_summary_models.dart';
+import '../video_summary_repository.dart';
+import 'video_summary_settings_controller.dart';
+
+final videoSummaryFlowControllerProvider =
+    NotifierProvider<VideoSummaryFlowController, VideoSummaryFlowState>(
+      VideoSummaryFlowController.new,
+    );
+
+class VideoSummaryFlowState {
+  const VideoSummaryFlowState({
+    required this.videoAsset,
+    required this.uploadHighlighted,
+    required this.processingExpanded,
+    required this.isDraftEditMode,
+    required this.isGenerating,
+    required this.isSendingChat,
+    required this.isTimestampScoped,
+    required this.selectedTimestampStartSeconds,
+    required this.selectedTimestampEndSeconds,
+    required this.stage,
+    required this.processingSnapshot,
+    required this.draftResult,
+    required this.finalSummaryData,
+    required this.chatMessages,
+  });
+
+  final VideoAssetInfo videoAsset;
+  final bool uploadHighlighted;
+  final bool processingExpanded;
+  final bool isDraftEditMode;
+  final bool isGenerating;
+  final bool isSendingChat;
+  final bool isTimestampScoped;
+  final int selectedTimestampStartSeconds;
+  final int selectedTimestampEndSeconds;
+  final VideoSummaryStage stage;
+  final ProcessingSnapshot? processingSnapshot;
+  final DraftResult? draftResult;
+  final FinalSummaryData? finalSummaryData;
+  final List<ChatMessage> chatMessages;
+
+  factory VideoSummaryFlowState.initial({required VideoAssetInfo videoAsset}) {
+    return VideoSummaryFlowState(
+      videoAsset: videoAsset,
+      uploadHighlighted: false,
+      processingExpanded: true,
+      isDraftEditMode: true,
+      isGenerating: false,
+      isSendingChat: false,
+      isTimestampScoped: false,
+      selectedTimestampStartSeconds: 0,
+      selectedTimestampEndSeconds:
+          VideoSummaryFlowController.minimumTimestampRangeSeconds,
+      stage: VideoSummaryStage.ready,
+      processingSnapshot: null,
+      draftResult: null,
+      finalSummaryData: null,
+      chatMessages: const [],
+    );
+  }
+
+  static const _unset = Object();
+
+  VideoSummaryFlowState copyWith({
+    VideoAssetInfo? videoAsset,
+    bool? uploadHighlighted,
+    bool? processingExpanded,
+    bool? isDraftEditMode,
+    bool? isGenerating,
+    bool? isSendingChat,
+    bool? isTimestampScoped,
+    int? selectedTimestampStartSeconds,
+    int? selectedTimestampEndSeconds,
+    VideoSummaryStage? stage,
+    Object? processingSnapshot = _unset,
+    Object? draftResult = _unset,
+    Object? finalSummaryData = _unset,
+    List<ChatMessage>? chatMessages,
+  }) {
+    return VideoSummaryFlowState(
+      videoAsset: videoAsset ?? this.videoAsset,
+      uploadHighlighted: uploadHighlighted ?? this.uploadHighlighted,
+      processingExpanded: processingExpanded ?? this.processingExpanded,
+      isDraftEditMode: isDraftEditMode ?? this.isDraftEditMode,
+      isGenerating: isGenerating ?? this.isGenerating,
+      isSendingChat: isSendingChat ?? this.isSendingChat,
+      isTimestampScoped: isTimestampScoped ?? this.isTimestampScoped,
+      selectedTimestampStartSeconds:
+          selectedTimestampStartSeconds ?? this.selectedTimestampStartSeconds,
+      selectedTimestampEndSeconds:
+          selectedTimestampEndSeconds ?? this.selectedTimestampEndSeconds,
+      stage: stage ?? this.stage,
+      processingSnapshot: processingSnapshot == _unset
+          ? this.processingSnapshot
+          : processingSnapshot as ProcessingSnapshot?,
+      draftResult: draftResult == _unset
+          ? this.draftResult
+          : draftResult as DraftResult?,
+      finalSummaryData: finalSummaryData == _unset
+          ? this.finalSummaryData
+          : finalSummaryData as FinalSummaryData?,
+      chatMessages: chatMessages ?? this.chatMessages,
+    );
+  }
+}
+
+class VideoSummaryFlowSnapshot {
+  const VideoSummaryFlowSnapshot({
+    required this.stage,
+    required this.uploadHighlighted,
+    required this.processingExpanded,
+    required this.isTimestampScoped,
+    required this.selectedTimestampStartSeconds,
+    required this.selectedTimestampEndSeconds,
+    required this.isDraftEditMode,
+    required this.processingSnapshot,
+    required this.draftResult,
+    required this.finalSummaryData,
+    required this.chatMessages,
+  });
+
+  final VideoSummaryStage stage;
+  final bool uploadHighlighted;
+  final bool processingExpanded;
+  final bool isTimestampScoped;
+  final int selectedTimestampStartSeconds;
+  final int selectedTimestampEndSeconds;
+  final bool isDraftEditMode;
+  final ProcessingSnapshot? processingSnapshot;
+  final DraftResult? draftResult;
+  final FinalSummaryData? finalSummaryData;
+  final List<ChatMessage> chatMessages;
+}
+
+class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
+  static const int minimumTimestampRangeSeconds = 10;
+
+  VideoSummaryRepository get _repository => ref.read(videoSummaryRepositoryProvider);
+
+  @override
+  VideoSummaryFlowState build() {
+    final videoAsset = _repository.getVideoAsset();
+    final initialState = VideoSummaryFlowState.initial(videoAsset: videoAsset);
+    final defaultRange = _buildDefaultTimestampRange(videoAsset.durationLabel);
+    return initialState.copyWith(
+      selectedTimestampStartSeconds: defaultRange.startSeconds,
+      selectedTimestampEndSeconds: defaultRange.endSeconds,
+    );
+  }
+
+  int get videoDurationInSeconds =>
+      _parseVideoDurationLabel(state.videoAsset.durationLabel);
+
+  String get selectedTimestampLabel => formatTimestampRange(
+        state.selectedTimestampStartSeconds,
+        state.selectedTimestampEndSeconds,
+      );
+
+  void reset() {
+    final settings = ref.read(videoSummarySettingsProvider);
+    final defaultRange = _buildDefaultTimestampRange(state.videoAsset.durationLabel);
+    state = state.copyWith(
+      uploadHighlighted: false,
+      processingExpanded: settings.defaultProcessingExpanded,
+      isDraftEditMode: true,
+      isGenerating: false,
+      isSendingChat: false,
+      isTimestampScoped: settings.defaultTimestampScoped,
+      selectedTimestampStartSeconds: defaultRange.startSeconds,
+      selectedTimestampEndSeconds: defaultRange.endSeconds,
+      stage: VideoSummaryStage.ready,
+      processingSnapshot: null,
+      draftResult: null,
+      finalSummaryData: null,
+      chatMessages: const [],
+    );
+  }
+
+  void toggleUploadSelection() {
+    state = state.copyWith(uploadHighlighted: !state.uploadHighlighted);
+  }
+
+  void toggleProcessingExpanded() {
+    if (state.stage != VideoSummaryStage.processing) {
+      return;
+    }
+
+    state = state.copyWith(processingExpanded: !state.processingExpanded);
+  }
+
+  void setDraftEditMode(bool value) {
+    state = state.copyWith(isDraftEditMode: value);
+  }
+
+  void setTimestampScope(bool value) {
+    state = state.copyWith(isTimestampScoped: value);
+  }
+
+  void setTimestampRange(TimestampRangeSelection range) {
+    state = state.copyWith(
+      selectedTimestampStartSeconds: range.startSeconds,
+      selectedTimestampEndSeconds: range.endSeconds,
+    );
+  }
+
+  Future<void> startDraftGeneration() async {
+    if (state.isGenerating) {
+      return;
+    }
+
+    final settings = ref.read(videoSummarySettingsProvider);
+
+    state = state.copyWith(
+      isGenerating: true,
+      stage: VideoSummaryStage.processing,
+      processingExpanded: settings.defaultProcessingExpanded,
+      processingSnapshot: null,
+      draftResult: null,
+      finalSummaryData: null,
+      chatMessages: const [],
+    );
+
+    try {
+      await for (final snapshot in _repository.startDraftGeneration()) {
+        state = state.copyWith(processingSnapshot: snapshot);
+      }
+
+      final draft = await _repository.fetchDraftResult();
+      state = state.copyWith(
+        draftResult: draft,
+        stage: VideoSummaryStage.draft,
+        processingExpanded: false,
+        isDraftEditMode: true,
+      );
+    } finally {
+      state = state.copyWith(isGenerating: false);
+    }
+  }
+
+  Future<void> generateFinalSummary({
+    required String guidance,
+    required String draftBodyText,
+  }) async {
+    final draft = state.draftResult;
+    if (state.isGenerating || draft == null) {
+      return;
+    }
+
+    final editedParagraphs = draftBodyText
+        .split(RegExp(r'\n\s*\n'))
+        .map((paragraph) => paragraph.trim())
+        .where((paragraph) => paragraph.isNotEmpty)
+        .toList();
+    final effectiveDraft = DraftResult(
+      overview: draft.overview,
+      paragraphs: editedParagraphs.isEmpty ? draft.paragraphs : editedParagraphs,
+      suggestionHint: draft.suggestionHint,
+    );
+
+    state = state.copyWith(isGenerating: true);
+
+    try {
+      final summary = await _repository.generateFinalSummary(
+        guidance: guidance,
+        draft: effectiveDraft,
+      );
+      final seededRange = _buildRangeFromSummary(summary);
+      state = state.copyWith(
+        finalSummaryData: summary,
+        chatMessages: List<ChatMessage>.from(summary.messages),
+        draftResult: effectiveDraft,
+        stage: VideoSummaryStage.finalChat,
+        selectedTimestampStartSeconds: seededRange.startSeconds,
+        selectedTimestampEndSeconds: seededRange.endSeconds,
+      );
+    } finally {
+      state = state.copyWith(isGenerating: false);
+    }
+  }
+
+  Future<void> sendChatMessage(String rawMessage) async {
+    final message = rawMessage.trim();
+    if (state.isSendingChat || message.isEmpty) {
+      return;
+    }
+
+    final timestampLabel = state.isTimestampScoped
+        ? formatTimestampRange(
+            state.selectedTimestampStartSeconds,
+            state.selectedTimestampEndSeconds,
+          )
+        : null;
+
+    final userMessage = ChatMessage(
+      sender: SummaryChatSender.user,
+      text: message,
+      timestampLabel: timestampLabel,
+    );
+
+    state = state.copyWith(
+      isSendingChat: true,
+      chatMessages: [...state.chatMessages, userMessage],
+    );
+
+    try {
+      final reply = await _repository.sendSummaryChatMessage(message);
+      state = state.copyWith(
+        chatMessages: [
+          ...state.chatMessages,
+          ChatMessage(
+            sender: reply.sender,
+            text: reply.text,
+            timestampLabel: timestampLabel,
+          ),
+        ],
+      );
+    } finally {
+      state = state.copyWith(isSendingChat: false);
+    }
+  }
+
+  VideoSummaryFlowSnapshot captureSnapshot() {
+    return VideoSummaryFlowSnapshot(
+      stage: state.stage,
+      uploadHighlighted: state.uploadHighlighted,
+      processingExpanded: state.processingExpanded,
+      isTimestampScoped: state.isTimestampScoped,
+      selectedTimestampStartSeconds: state.selectedTimestampStartSeconds,
+      selectedTimestampEndSeconds: state.selectedTimestampEndSeconds,
+      isDraftEditMode: state.isDraftEditMode,
+      processingSnapshot: state.processingSnapshot,
+      draftResult: state.draftResult,
+      finalSummaryData: state.finalSummaryData,
+      chatMessages: List<ChatMessage>.from(state.chatMessages),
+    );
+  }
+
+  void restoreSnapshot(VideoSummaryFlowSnapshot snapshot) {
+    state = state.copyWith(
+      stage: snapshot.stage,
+      uploadHighlighted: snapshot.uploadHighlighted,
+      processingExpanded: snapshot.processingExpanded,
+      isGenerating: false,
+      isSendingChat: false,
+      isTimestampScoped: snapshot.isTimestampScoped,
+      selectedTimestampStartSeconds: snapshot.selectedTimestampStartSeconds,
+      selectedTimestampEndSeconds: snapshot.selectedTimestampEndSeconds,
+      isDraftEditMode: snapshot.isDraftEditMode,
+      processingSnapshot: snapshot.processingSnapshot,
+      draftResult: snapshot.draftResult,
+      finalSummaryData: snapshot.finalSummaryData,
+      chatMessages: List<ChatMessage>.from(snapshot.chatMessages),
+    );
+  }
+
+  String formatTimestampRange(int startSeconds, int endSeconds) {
+    return '${_formatClock(startSeconds)} - ${_formatClock(endSeconds)}';
+  }
+
+  _TimestampRange _buildDefaultTimestampRange(String durationLabel) {
+    final total = _parseVideoDurationLabel(durationLabel);
+    final defaultLength = total >= 30 ? 30 : total;
+    final safeLength = defaultLength >= minimumTimestampRangeSeconds
+        ? defaultLength
+        : minimumTimestampRangeSeconds;
+    final end = safeLength.clamp(minimumTimestampRangeSeconds, total);
+    return _TimestampRange(startSeconds: 0, endSeconds: end);
+  }
+
+  _TimestampRange _buildRangeFromSummary(FinalSummaryData summary) {
+    final seeded = summary.timestampChips.isNotEmpty
+        ? _tryParseTimestampRange(summary.timestampChips.first.label)
+        : _tryParseTimestampRange(summary.summaryTimestampLabel);
+    return _sanitizeTimestampRange(seeded ?? _buildDefaultTimestampRange(state.videoAsset.durationLabel));
+  }
+
+  _TimestampRange _sanitizeTimestampRange(_TimestampRange range) {
+    final total = videoDurationInSeconds;
+    final maxStart = (total - minimumTimestampRangeSeconds).clamp(0, total);
+    final start = range.startSeconds.clamp(0, maxStart);
+    final minEnd = (start + minimumTimestampRangeSeconds).clamp(
+      minimumTimestampRangeSeconds,
+      total,
+    );
+    final end = range.endSeconds.clamp(minEnd, total);
+    return _TimestampRange(startSeconds: start, endSeconds: end);
+  }
+
+  _TimestampRange? _tryParseTimestampRange(String raw) {
+    final matches = RegExp(r'(\d{2}:\d{2}(?::\d{2})?)').allMatches(raw).toList();
+    if (matches.length < 2) {
+      return null;
+    }
+
+    final start = _parseClockLabel(matches.first.group(0)!);
+    final end = _parseClockLabel(matches[1].group(0)!);
+    if (end - start < minimumTimestampRangeSeconds) {
+      return null;
+    }
+
+    return _TimestampRange(startSeconds: start, endSeconds: end);
+  }
+
+  int _parseClockLabel(String value) {
+    final parts = value.split(':').map(int.parse).toList();
+    if (parts.length == 2) {
+      return parts[0] * 60 + parts[1];
+    }
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+
+  int _parseVideoDurationLabel(String label) {
+    final compact = label.trim();
+    if (compact.contains(':')) {
+      return _parseClockLabel(compact);
+    }
+
+    final minuteMatch = RegExp(r'(\d+)\s*m').firstMatch(compact);
+    final secondMatch = RegExp(r'(\d+)\s*s').firstMatch(compact);
+    final minutes = int.tryParse(minuteMatch?.group(1) ?? '0') ?? 0;
+    final seconds = int.tryParse(secondMatch?.group(1) ?? '0') ?? 0;
+    final total = minutes * 60 + seconds;
+    return total >= minimumTimestampRangeSeconds
+        ? total
+        : minimumTimestampRangeSeconds;
+  }
+
+  String _formatClock(int totalSeconds) {
+    final hours = totalSeconds ~/ 3600;
+    final minutes = (totalSeconds % 3600) ~/ 60;
+    final seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+}
+
+class _TimestampRange {
+  const _TimestampRange({
+    required this.startSeconds,
+    required this.endSeconds,
+  });
+
+  final int startSeconds;
+  final int endSeconds;
+}
