@@ -13,7 +13,7 @@ class DraftStageWorkspace extends StatelessWidget {
     required this.highlighted,
     required this.videoAsset,
     required this.draftResult,
-    required this.preferenceController,
+    required this.guidanceController,
     required this.draftBodyController,
     required this.isDraftEditMode,
     required this.isGenerating,
@@ -26,7 +26,7 @@ class DraftStageWorkspace extends StatelessWidget {
   final bool highlighted;
   final VideoAssetInfo videoAsset;
   final DraftResult draftResult;
-  final TextEditingController preferenceController;
+  final TextEditingController guidanceController;
   final TextEditingController draftBodyController;
   final bool isDraftEditMode;
   final bool isGenerating;
@@ -58,9 +58,9 @@ class DraftStageWorkspace extends StatelessWidget {
         const SectionLabel(title: '总结指导（可选）', centered: false),
         const SizedBox(height: 6),
         PreferenceCard(
-          controller: preferenceController,
+          controller: guidanceController,
           hintText: draftResult.suggestionHint,
-          singleLine: true,
+          prominent: true,
         ),
         const SizedBox(height: 14),
         AppPrimaryButton(

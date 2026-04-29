@@ -17,7 +17,8 @@ class VideoSummaryWorkspace extends StatelessWidget {
     required this.draftResult,
     required this.finalSummaryData,
     required this.chatMessages,
-    required this.preferenceController,
+    required this.readyPreferenceController,
+    required this.draftGuidanceController,
     required this.chatController,
     required this.draftBodyController,
     required this.processingExpanded,
@@ -47,7 +48,8 @@ class VideoSummaryWorkspace extends StatelessWidget {
   final DraftResult? draftResult;
   final FinalSummaryData? finalSummaryData;
   final List<ChatMessage> chatMessages;
-  final TextEditingController preferenceController;
+  final TextEditingController readyPreferenceController;
+  final TextEditingController draftGuidanceController;
   final TextEditingController chatController;
   final TextEditingController draftBodyController;
   final bool processingExpanded;
@@ -74,7 +76,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
       VideoSummaryStage.ready => ReadyStageWorkspace(
         highlighted: highlighted,
         videoAsset: videoAsset,
-        preferenceController: preferenceController,
+        preferenceController: readyPreferenceController,
         isGenerating: isGenerating,
         onUploadCardPressed: onUploadCardPressed,
         onStartPressed: onStartPressed,
@@ -91,7 +93,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
         highlighted: highlighted,
         videoAsset: videoAsset,
         draftResult: draftResult!,
-        preferenceController: preferenceController,
+        guidanceController: draftGuidanceController,
         draftBodyController: draftBodyController,
         isDraftEditMode: isDraftEditMode,
         isGenerating: isGenerating,

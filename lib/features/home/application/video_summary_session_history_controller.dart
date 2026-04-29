@@ -71,12 +71,14 @@ class VideoSummarySessionHistoryEntry {
 class VideoSummarySessionSnapshot {
   const VideoSummarySessionSnapshot({
     required this.flowSnapshot,
-    required this.preferenceText,
+    required this.readyPreferenceText,
+    required this.draftGuidanceText,
     required this.draftBodyText,
   });
 
   final VideoSummaryFlowSnapshot flowSnapshot;
-  final String preferenceText;
+  final String readyPreferenceText;
+  final String draftGuidanceText;
   final String draftBodyText;
 }
 
@@ -97,7 +99,8 @@ class VideoSummarySessionHistoryController
         snapshot: VideoSummarySessionSnapshot(
           flowSnapshot:
               ref.read(videoSummaryFlowControllerProvider.notifier).captureSnapshot(),
-          preferenceText: '',
+          readyPreferenceText: '',
+          draftGuidanceText: '',
           draftBodyText: '',
         ),
       ),
@@ -232,7 +235,8 @@ class VideoSummarySessionHistoryController
         finalSummaryData: null,
         chatMessages: [],
       ),
-      preferenceText: '先整理关键结论，再补充可执行动作。',
+      readyPreferenceText: '先整理关键结论，再补充可执行动作。',
+      draftGuidanceText: '',
       draftBodyText: '',
     );
   }
@@ -259,7 +263,8 @@ class VideoSummarySessionHistoryController
         finalSummaryData: null,
         chatMessages: [],
       ),
-      preferenceText: '保留原结论，但把执行建议写得更明确。',
+        readyPreferenceText: '',
+        draftGuidanceText: '保留原结论，但把执行建议写得更明确。',
       draftBodyText:
           '这段竞品分析主要围绕用户分层、内容抓手和转化动作展开，前半段聚焦目标用户的需求切片，后半段则落到产品策略和执行节奏。\n\n当前结构稿已经整理完主线、亮点和风险项，适合继续补充面向团队同步的版本。',
     );
@@ -301,7 +306,8 @@ class VideoSummarySessionHistoryController
         ),
         chatMessages: [],
       ),
-      preferenceText: '重点保留行动建议与里程碑。',
+      readyPreferenceText: '',
+      draftGuidanceText: '重点保留行动建议与里程碑。',
       draftBodyText: '产品方案讲解已经覆盖目标问题、用户路径和价值验证。',
     );
   }

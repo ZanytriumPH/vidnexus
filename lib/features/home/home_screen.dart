@@ -166,7 +166,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _generateFinalSummary() {
     final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
     return ref.read(videoSummaryFlowControllerProvider.notifier).generateFinalSummary(
-      guidance: textEditing.preferenceText.trim(),
+      guidance: textEditing.draftGuidanceText.trim(),
       draftBodyText: textEditing.draftBodyText,
     );
   }
@@ -196,7 +196,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       draftResult: flowState.draftResult,
       finalSummaryData: flowState.finalSummaryData,
       chatMessages: flowState.chatMessages,
-      preferenceController: textEditing.preferenceController,
+      readyPreferenceController: textEditing.readyPreferenceController,
+      draftGuidanceController: textEditing.draftGuidanceController,
       chatController: textEditing.chatController,
       draftBodyController: textEditing.draftBodyController,
       processingExpanded: flowState.processingExpanded,

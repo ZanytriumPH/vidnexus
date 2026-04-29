@@ -20,19 +20,22 @@ final videoSummaryTextEditingControllerProvider =
 /// 统一管理首页内多个 TextEditingController，并负责把文本状态同步进 session snapshot。
 class VideoSummaryTextEditingController {
   VideoSummaryTextEditingController(this._ref) {
-    preferenceController.addListener(_syncEditableSnapshot);
+    readyPreferenceController.addListener(_syncEditableSnapshot);
+    draftGuidanceController.addListener(_syncEditableSnapshot);
     draftBodyController.addListener(_syncEditableSnapshot);
   }
 
   final Ref _ref;
 
-  final TextEditingController preferenceController = TextEditingController();
+  final TextEditingController readyPreferenceController = TextEditingController();
+  final TextEditingController draftGuidanceController = TextEditingController();
   final TextEditingController chatController = TextEditingController();
   final TextEditingController draftBodyController = TextEditingController();
 
   bool _syncPaused = false;
 
-  String get preferenceText => preferenceController.text;
+  String get readyPreferenceText => readyPreferenceController.text;
+  String get draftGuidanceText => draftGuidanceController.text;
   String get draftBodyText => draftBodyController.text;
 
   /// 发送后直接清空聊天输入框，页面层只拿消费后的消息结果。
@@ -47,7 +50,8 @@ class VideoSummaryTextEditingController {
 
   void clearForNewSession() {
     runWithoutSync(() {
-      preferenceController.clear();
+      readyPreferenceController.clear();
+      draftGuidanceController.clear();
       chatController.clear();
       draftBodyController.clear();
     });
@@ -55,7 +59,8 @@ class VideoSummaryTextEditingController {
 
   void applySessionSnapshot(VideoSummarySessionSnapshot snapshot) {
     runWithoutSync(() {
-      preferenceController.text = snapshot.preferenceText;
+      readyPreferenceController.text = snapshot.readyPreferenceText;
+      draftGuidanceController.text = snapshot.draftGuidanceText;
       draftBodyController.text = snapshot.draftBodyText;
       chatController.clear();
     });
@@ -65,7 +70,8 @@ class VideoSummaryTextEditingController {
     return VideoSummarySessionSnapshot(
       flowSnapshot:
           _ref.read(videoSummaryFlowControllerProvider.notifier).captureSnapshot(),
-      preferenceText: preferenceController.text,
+      readyPreferenceText: readyPreferenceController.text,
+      draftGuidanceText: draftGuidanceController.text,
       draftBodyText: draftBodyController.text,
     );
   }
@@ -101,7 +107,8 @@ class VideoSummaryTextEditingController {
   }
 
   void dispose() {
-    preferenceController.dispose();
+    readyPreferenceController.dispose();
+    draftGuidanceController.dispose();
     chatController.dispose();
     draftBodyController.dispose();
   }
