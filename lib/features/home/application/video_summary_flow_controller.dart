@@ -228,7 +228,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       isGenerating: true,
       stage: VideoSummaryStage.processing,
       processingExpanded: settings.defaultProcessingExpanded,
-      processingSnapshot: null,
+      processingSnapshot: buildInitialProcessingSnapshot(),
       draftResult: null,
       finalSummaryData: null,
       chatMessages: const [],

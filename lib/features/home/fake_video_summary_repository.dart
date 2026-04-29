@@ -1,10 +1,9 @@
-import 'dart:async';
-
 import 'domain/video_summary_domain_models.dart';
+import 'fake_video_summary_processing_event_source.dart';
+import 'stream_backed_video_summary_repository.dart';
 import 'video_summary_models.dart';
-import 'video_summary_repository.dart';
 
-class FakeVideoSummaryRepository extends VideoSummaryRepository {
+class FakeVideoSummaryRepository extends StreamBackedVideoSummaryRepository {
   const FakeVideoSummaryRepository();
 
   @override
@@ -18,41 +17,8 @@ class FakeVideoSummaryRepository extends VideoSummaryRepository {
   }
 
   @override
-  Stream<VideoSummaryProcessingData> startDraftGeneration() async* {
-    const totalFrames = 11;
-
-    for (var frame = 0; frame <= totalFrames; frame++) {
-      final progress = frame / totalFrames;
-      final stepOneProgress = (progress * 160).round().clamp(0, 100);
-      final stepTwoProgress = ((progress - 0.18) * 145).round().clamp(0, 100);
-      final stepThreeProgress = ((progress - 0.42) * 175).round().clamp(0, 100);
-
-      yield VideoSummaryProcessingData(
-        progress: progress,
-        steps: [
-          VideoSummaryProcessingStepData(
-            phase: VideoSummaryProcessingPhase.transcription,
-            progress: stepOneProgress,
-            completedUnits: 142,
-            totalUnits: 142,
-          ),
-          VideoSummaryProcessingStepData(
-            phase: VideoSummaryProcessingPhase.alignment,
-            progress: stepTwoProgress,
-            completedUnits: stepTwoProgress >= 100 ? 96 : 0,
-            totalUnits: 96,
-          ),
-          VideoSummaryProcessingStepData(
-            phase: VideoSummaryProcessingPhase.summary,
-            progress: stepThreeProgress,
-            completedUnits: stepThreeProgress >= 100 ? 1 : 0,
-            totalUnits: 1,
-          ),
-        ],
-      );
-
-      await Future<void>.delayed(const Duration(milliseconds: 550));
-    }
+  FakeVideoSummaryProcessingEventSource createProcessingEventSource() {
+    return FakeVideoSummaryProcessingEventSource();
   }
 
   @override

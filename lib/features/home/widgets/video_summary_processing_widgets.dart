@@ -610,23 +610,16 @@ class AnimatedProgressBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeValue = value.clamp(0.0, 1.0);
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: safeValue),
-      duration: const Duration(milliseconds: 450),
-      curve: Curves.easeOutCubic,
-      builder: (context, animatedValue, child) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(99),
-          child: LinearProgressIndicator(
-            value: animatedValue,
-            minHeight: minHeight,
-            backgroundColor: backgroundColor,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              progressColor(animatedValue),
-            ),
-          ),
-        );
-      },
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(99),
+      child: LinearProgressIndicator(
+        value: safeValue,
+        minHeight: minHeight,
+        backgroundColor: backgroundColor,
+        valueColor: AlwaysStoppedAnimation<Color>(
+          progressColor(safeValue),
+        ),
+      ),
     );
   }
 }

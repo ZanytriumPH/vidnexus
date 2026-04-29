@@ -9,6 +9,9 @@ final videoSummaryRepositoryProvider = Provider<VideoSummaryRepository>((ref) {
 });
 
 /// repository 只暴露稳定数据 contract，不直接返回 UI 展示模型。
+///
+/// 未来真实接口接入时，推荐继续保留这个 contract，内部改为事件流驱动：
+/// SSE / WebSocket / 轮询事件源 -> repository 适配器 -> raw data -> mapper -> UI。
 abstract class VideoSummaryRepository {
   const VideoSummaryRepository();
 
