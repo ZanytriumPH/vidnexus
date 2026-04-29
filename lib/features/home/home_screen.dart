@@ -92,82 +92,148 @@ class _HomeScreenState extends State<HomeScreen> {
         behavior: HitTestBehavior.translucent,
         onHorizontalDragEnd: _handleHorizontalDragEnd,
         child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      HomeHeaderRow(
-                        currentSection: AppNavSection.videoSummary,
-                        onSectionSelected: (section) =>
-                            _handleSectionSelection(context, section),
-                        onMenuPressed: _openDrawer,
-                        onNewSessionPressed: _createNewSession,
-                      ),
-                      const SizedBox(height: 10),
-                      VideoSummaryWorkspace(
-                        stage: _stage,
-                        highlighted: _uploadHighlighted,
-                        videoAsset: _videoAsset,
-                        processingSnapshot: _processingSnapshot,
-                        draftResult: _draftResult,
-                        finalSummaryData: _finalSummaryData,
-                        chatMessages: _chatMessages,
-                        preferenceController: _preferenceController,
-                        chatController: _chatController,
-                        draftBodyController: _draftBodyController,
-                        processingExpanded: _processingExpanded,
-                        isDraftEditMode: _isDraftEditMode,
-                        isGenerating: _isGenerating,
-                        isSendingChat: _isSendingChat,
-                        isTimestampScoped: _isTimestampScoped,
-                        selectedTimestampLabel: _formatTimestampRange(
-                          _selectedTimestampStartSeconds,
-                          _selectedTimestampEndSeconds,
-                        ),
-                        totalDurationSeconds: _videoDurationInSeconds,
-                        selectedTimestampStartSeconds:
-                            _selectedTimestampStartSeconds,
-                        selectedTimestampEndSeconds: _selectedTimestampEndSeconds,
-                        onUploadCardPressed: _toggleUploadSelection,
-                        onProcessingCardPressed: _toggleProcessingExpanded,
-                        onDraftEditModeChanged: (value) {
-                          setState(() {
-                            _isDraftEditMode = value;
-                            _syncActiveSession();
-                          });
-                        },
-                        onStartPressed: _isGenerating
-                            ? null
-                            : _startDraftGeneration,
-                        onGenerateFinalPressed: _isGenerating
-                            ? null
-                            : _generateFinalSummary,
-                        onSendChatPressed: _isSendingChat
-                            ? null
-                            : _sendChatMessage,
-                        onTimestampScopeChanged: (value) {
-                          setState(() {
-                            _isTimestampScoped = value;
-                            _syncActiveSession();
-                          });
-                        },
-                        onTimestampRangeChanged: (range) {
-                          setState(() {
-                            _selectedTimestampStartSeconds = range.startSeconds;
-                            _selectedTimestampEndSeconds = range.endSeconds;
-                            _syncActiveSession();
-                          });
-                        },
-                      ),
-                    ],
-                  ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                HomeHeaderRow(
+                  currentSection: AppNavSection.videoSummary,
+                  onSectionSelected: (section) =>
+                      _handleSectionSelection(context, section),
+                  onMenuPressed: _openDrawer,
+                  onNewSessionPressed: _createNewSession,
                 ),
-              ),
-            ],
+                const SizedBox(height: 5),
+                Expanded(
+                  child: _stage == VideoSummaryStage.ready
+                      ? Column(
+                          children: [
+                            const Spacer(flex: 5),
+                            VideoSummaryWorkspace(
+                              stage: _stage,
+                              highlighted: _uploadHighlighted,
+                              videoAsset: _videoAsset,
+                              processingSnapshot: _processingSnapshot,
+                              draftResult: _draftResult,
+                              finalSummaryData: _finalSummaryData,
+                              chatMessages: _chatMessages,
+                              preferenceController: _preferenceController,
+                              chatController: _chatController,
+                              draftBodyController: _draftBodyController,
+                              processingExpanded: _processingExpanded,
+                              isDraftEditMode: _isDraftEditMode,
+                              isGenerating: _isGenerating,
+                              isSendingChat: _isSendingChat,
+                              isTimestampScoped: _isTimestampScoped,
+                              selectedTimestampLabel: _formatTimestampRange(
+                                _selectedTimestampStartSeconds,
+                                _selectedTimestampEndSeconds,
+                              ),
+                              totalDurationSeconds: _videoDurationInSeconds,
+                              selectedTimestampStartSeconds:
+                                  _selectedTimestampStartSeconds,
+                              selectedTimestampEndSeconds:
+                                  _selectedTimestampEndSeconds,
+                              onUploadCardPressed: _toggleUploadSelection,
+                              onProcessingCardPressed: _toggleProcessingExpanded,
+                              onDraftEditModeChanged: (value) {
+                                setState(() {
+                                  _isDraftEditMode = value;
+                                  _syncActiveSession();
+                                });
+                              },
+                              onStartPressed: _isGenerating
+                                  ? null
+                                  : _startDraftGeneration,
+                              onGenerateFinalPressed: _isGenerating
+                                  ? null
+                                  : _generateFinalSummary,
+                              onSendChatPressed: _isSendingChat
+                                  ? null
+                                  : _sendChatMessage,
+                              onTimestampScopeChanged: (value) {
+                                setState(() {
+                                  _isTimestampScoped = value;
+                                  _syncActiveSession();
+                                });
+                              },
+                              onTimestampRangeChanged: (range) {
+                                setState(() {
+                                  _selectedTimestampStartSeconds =
+                                      range.startSeconds;
+                                  _selectedTimestampEndSeconds =
+                                      range.endSeconds;
+                                  _syncActiveSession();
+                                });
+                              },
+                            ),
+                            const Spacer(flex: 4),
+                          ],
+                        )
+                      : SingleChildScrollView(
+                          child: VideoSummaryWorkspace(
+                            stage: _stage,
+                            highlighted: _uploadHighlighted,
+                            videoAsset: _videoAsset,
+                            processingSnapshot: _processingSnapshot,
+                            draftResult: _draftResult,
+                            finalSummaryData: _finalSummaryData,
+                            chatMessages: _chatMessages,
+                            preferenceController: _preferenceController,
+                            chatController: _chatController,
+                            draftBodyController: _draftBodyController,
+                            processingExpanded: _processingExpanded,
+                            isDraftEditMode: _isDraftEditMode,
+                            isGenerating: _isGenerating,
+                            isSendingChat: _isSendingChat,
+                            isTimestampScoped: _isTimestampScoped,
+                            selectedTimestampLabel: _formatTimestampRange(
+                              _selectedTimestampStartSeconds,
+                              _selectedTimestampEndSeconds,
+                            ),
+                            totalDurationSeconds: _videoDurationInSeconds,
+                            selectedTimestampStartSeconds:
+                                _selectedTimestampStartSeconds,
+                            selectedTimestampEndSeconds:
+                                _selectedTimestampEndSeconds,
+                            onUploadCardPressed: _toggleUploadSelection,
+                            onProcessingCardPressed: _toggleProcessingExpanded,
+                            onDraftEditModeChanged: (value) {
+                              setState(() {
+                                _isDraftEditMode = value;
+                                _syncActiveSession();
+                              });
+                            },
+                            onStartPressed: _isGenerating
+                                ? null
+                                : _startDraftGeneration,
+                            onGenerateFinalPressed: _isGenerating
+                                ? null
+                                : _generateFinalSummary,
+                            onSendChatPressed: _isSendingChat
+                                ? null
+                                : _sendChatMessage,
+                            onTimestampScopeChanged: (value) {
+                              setState(() {
+                                _isTimestampScoped = value;
+                                _syncActiveSession();
+                              });
+                            },
+                            onTimestampRangeChanged: (range) {
+                              setState(() {
+                                _selectedTimestampStartSeconds =
+                                    range.startSeconds;
+                                _selectedTimestampEndSeconds =
+                                    range.endSeconds;
+                                _syncActiveSession();
+                              });
+                            },
+                          ),
+                        ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

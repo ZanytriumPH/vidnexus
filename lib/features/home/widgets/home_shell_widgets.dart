@@ -62,20 +62,25 @@ class PreferenceCard extends StatelessWidget {
     required this.controller,
     required this.hintText,
     this.singleLine = false,
+    this.prominent = false,
     super.key,
   });
 
   final TextEditingController controller;
   final String hintText;
   final bool singleLine;
+  final bool prominent;
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      radius: 18,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      radius: prominent ? 18 : 18,
+      padding: prominent
+          ? const EdgeInsets.fromLTRB(14, 12, 14, 12)
+          : const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      borderColor: prominent ? const Color(0xFFE3E8EF) : null,
       child: SizedBox(
-        height: singleLine ? 50 : 86,
+        height: prominent ? 88 : (singleLine ? 50 : 86),
         child: TextField(
           controller: controller,
           maxLines: singleLine ? 1 : 4,
@@ -87,14 +92,17 @@ class PreferenceCard extends StatelessWidget {
             focusedBorder: InputBorder.none,
             isCollapsed: true,
             hintStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 10,
+              fontSize: prominent ? 10.5 : 10,
               color: AppColors.textHint,
               height: 1.45,
             ),
           ),
           style: Theme.of(
             context,
-          ).textTheme.bodyMedium?.copyWith(fontSize: 11, height: 1.45),
+          ).textTheme.bodyMedium?.copyWith(
+            fontSize: prominent ? 11.5 : 11,
+            height: 1.45,
+          ),
         ),
       ),
     );

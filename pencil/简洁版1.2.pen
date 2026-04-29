@@ -797,15 +797,6 @@
                   "fontWeight": "700"
                 },
                 {
-                  "type": "text",
-                  "id": "92dWm",
-                  "fill": "#000000ff",
-                  "content": "从设备选择文件",
-                  "fontFamily": "Inter",
-                  "fontSize": 13,
-                  "fontWeight": "500"
-                },
-                {
                   "type": "frame",
                   "id": "jPI1f",
                   "width": "fill_container",
@@ -821,8 +812,9 @@
                     {
                       "type": "text",
                       "id": "PssDw",
+                      "rotation": 0.01550526563061139,
                       "fill": "#6b7280",
-                      "content": "＋ 点击或拖拽视频到这里",
+                      "content": "＋ 点击从设备选择文件",
                       "fontFamily": "Inter",
                       "fontSize": 12,
                       "fontWeight": "600"

@@ -24,6 +24,15 @@ class HeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isReady = stage == VideoSummaryStage.ready;
+    if (isReady) {
+      return _ReadyUploadHeroCard(
+        highlighted: highlighted,
+        videoAsset: videoAsset,
+        onTap: onTap,
+      );
+    }
+
     final bool isProcessing = stage == VideoSummaryStage.processing;
     final bool isDraft = stage == VideoSummaryStage.draft;
     final bool isFinal = stage == VideoSummaryStage.finalChat;
@@ -107,13 +116,6 @@ class HeroCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            if (stage == VideoSummaryStage.ready)
-              WhiteButtonBar(
-                label: highlighted ? '已选中 product-review.mp4' : '点击或拖拽视频到这里',
-                leadingIcon: highlighted
-                    ? Icons.check_circle_rounded
-                    : Icons.add_rounded,
-              ),
             if (isProcessing && processingSnapshot != null) ...[
               Text(
                 '${videoAsset.fileName} · ${videoAsset.durationLabel}',
@@ -179,6 +181,103 @@ class HeroCard extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ReadyUploadHeroCard extends StatelessWidget {
+  const _ReadyUploadHeroCard({
+    required this.highlighted,
+    required this.videoAsset,
+    required this.onTap,
+  });
+
+  final bool highlighted;
+  final VideoAssetInfo videoAsset;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      radius: 18,
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+      gradient: const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFFAEDCFF), Color(0xFFF3FAFF)],
+      ),
+      borderColor: const Color(0xFFD4E7F7),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: SizedBox(
+          height: 140,
+          child: Column(
+            children: [
+              const SizedBox(height: 28),
+              Text(
+                '本地上传',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 18),
+              _ReadyUploadCallout(
+                highlighted: highlighted,
+                videoAsset: videoAsset,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReadyUploadCallout extends StatelessWidget {
+  const _ReadyUploadCallout({
+    required this.highlighted,
+    required this.videoAsset,
+  });
+
+  final bool highlighted;
+  final VideoAssetInfo videoAsset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      alignment: Alignment.center,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            highlighted ? '✓' : '+',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            highlighted ? '已选择 ${videoAsset.fileName}' : '点击从设备选择文件',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
       ),
     );
   }

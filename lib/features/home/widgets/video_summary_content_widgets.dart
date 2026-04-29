@@ -84,15 +84,24 @@ class VideoSummaryWorkspace extends StatelessWidget {
 
     if (stage == VideoSummaryStage.ready) {
       children.addAll([
-        const SizedBox(height: 18),
-        const SectionLabel(title: '总结指导（可选）', centered: false),
-        const SizedBox(height: 6),
+        const SizedBox(height: 24),
+        Text(
+          '总结偏好（可选）',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 14),
         PreferenceCard(
           controller: preferenceController,
           hintText: '例如：请先给我按行业、声线和行动建议展开。',
+          prominent: true,
         ),
-        const SizedBox(height: 16),
-        AppPrimaryButton(
+        const SizedBox(height: 24),
+        ReadyPrimaryButton(
           label: isGenerating ? '正在生成中...' : '开始生成初稿',
           onPressed: onStartPressed,
         ),
@@ -171,6 +180,56 @@ class VideoSummaryWorkspace extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: children,
+    );
+  }
+}
+
+class ReadyPrimaryButton extends StatelessWidget {
+  const ReadyPrimaryButton({
+    required this.label,
+    required this.onPressed,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x261B55D9),
+              blurRadius: 16,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: ElevatedButton(
+          onPressed: onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF2F69E8),
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: const Color(0xFF8AAEF6),
+            disabledForegroundColor: Colors.white,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          child: Text(label),
+        ),
+      ),
     );
   }
 }
