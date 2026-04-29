@@ -147,7 +147,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
         FinalSummaryCard(summary: finalSummaryData!),
         const SizedBox(height: 10),
         ChatThread(messages: chatMessages),
-        const SizedBox(height: 10),
+        const SizedBox(height: 0),
         const MessageActionRow(),
         const SizedBox(height: 12),
         TimestampSection(
@@ -763,28 +763,17 @@ class TimestampSection extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: () {
-                          onRangeChanged(
-                            TimestampRangeSelection(
-                              startSeconds: draftStart.round(),
-                              endSeconds: draftEnd.round(),
-                            ),
-                          );
-                          Navigator.of(context).pop();
-                        },
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF111827),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                    AppPrimaryButton(
+                      label: '应用这个时间区间',
+                      onPressed: () {
+                        onRangeChanged(
+                          TimestampRangeSelection(
+                            startSeconds: draftStart.round(),
+                            endSeconds: draftEnd.round(),
                           ),
-                        ),
-                        child: const Text('应用这个时间区间'),
-                      ),
+                        );
+                        Navigator.of(context).pop();
+                      },
                     ),
                   ],
                 ),

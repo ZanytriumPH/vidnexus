@@ -285,25 +285,23 @@ class _KnowledgeLibraryGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     const items = demoKnowledgeBaseLibraries;
 
-    return Column(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _KnowledgeLibraryCard(item: items[0])),
-            const SizedBox(width: 12),
-            Expanded(child: _KnowledgeLibraryCard(item: items[1])),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: SizedBox(
-            width: 185,
-            child: _KnowledgeLibraryCard(item: items[2]),
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cardWidth = (constraints.maxWidth - 12) / 2;
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: items
+              .map(
+                (item) => SizedBox(
+                  width: cardWidth,
+                  child: _KnowledgeLibraryCard(item: item),
+                ),
+              )
+              .toList(),
+        );
+      },
     );
   }
 }
