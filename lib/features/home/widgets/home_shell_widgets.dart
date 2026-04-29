@@ -1,46 +1,38 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/widgets/app_bottom_nav.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/widgets/app_card.dart';
 
 class HomeHeaderRow extends StatelessWidget {
   const HomeHeaderRow({
+    required this.currentSection,
+    required this.onSectionSelected,
     required this.onMenuPressed,
     required this.onNewSessionPressed,
     super.key,
   });
 
+  final AppNavSection currentSection;
+  final ValueChanged<AppNavSection> onSectionSelected;
   final VoidCallback onMenuPressed;
   final VoidCallback onNewSessionPressed;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: Row(
-        children: [
-          RoundGhostButton(
-            size: 44,
-            onPressed: onMenuPressed,
-            child: const Icon(Icons.menu_rounded, size: 20),
-          ),
-          Expanded(
-            child: Text(
-              '视频总结',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          RoundGhostButton(
-            outlined: true,
-            size: 35,
-            onPressed: onNewSessionPressed,
-            child: const Icon(Icons.add_rounded, size: 18),
-          ),
-        ],
+    return AppSectionHeaderBar(
+      current: currentSection,
+      onSelected: onSectionSelected,
+      leading: RoundGhostButton(
+        size: 44,
+        onPressed: onMenuPressed,
+        child: const Icon(Icons.menu_rounded, size: 20),
+      ),
+      trailing: RoundGhostButton(
+        outlined: true,
+        size: 35,
+        onPressed: onNewSessionPressed,
+        child: const Icon(Icons.add_rounded, size: 18),
       ),
     );
   }

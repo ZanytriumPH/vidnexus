@@ -6,6 +6,7 @@ import '../../app/widgets/app_card.dart';
 import '../home/home_screen.dart';
 import 'knowledge_base_models.dart';
 import 'knowledge_base_session_screen.dart';
+import 'widgets/knowledge_base_shared_widgets.dart';
 
 class KnowledgeBaseHomeScreen extends StatelessWidget {
   const KnowledgeBaseHomeScreen({super.key});
@@ -26,6 +27,9 @@ class KnowledgeBaseHomeScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _KnowledgeBaseHeader(
+                      currentSection: AppNavSection.knowledgeBase,
+                      onSectionSelected: (section) =>
+                          _handleSectionSelection(context, section),
                       onCreatePressed: () => _showCreateHint(context),
                     ),
                     const SizedBox(height: 14),
@@ -45,14 +49,6 @@ class KnowledgeBaseHomeScreen extends StatelessWidget {
                     const _KnowledgeLibraryGrid(),
                   ],
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-              child: AppBottomNav(
-                current: AppNavSection.knowledgeBase,
-                onSelected: (section) =>
-                    _handleSectionSelection(context, section),
               ),
             ),
           ],
@@ -82,62 +78,70 @@ class KnowledgeBaseHomeScreen extends StatelessWidget {
 }
 
 class _KnowledgeBaseHeader extends StatelessWidget {
-  const _KnowledgeBaseHeader({required this.onCreatePressed});
+  const _KnowledgeBaseHeader({
+    required this.currentSection,
+    required this.onSectionSelected,
+    required this.onCreatePressed,
+  });
 
+  final AppNavSection currentSection;
+  final ValueChanged<AppNavSection> onSectionSelected;
   final VoidCallback onCreatePressed;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '知识库',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '像 NotebookLM 一样管理资料与问答',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
+        KnowledgeBaseTopBar(
+          currentSection: currentSection,
+          onSectionSelected: onSectionSelected,
+          title: '知识库',
+          showTitle: false,
+          trailing: _HeaderPlusButton(onPressed: onCreatePressed),
         ),
-        const SizedBox(width: 12),
-        FilledButton(
-          onPressed: onCreatePressed,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            minimumSize: const Size(98, 40),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
-            elevation: 0,
-          ),
-          child: Text(
-            '新建知识库',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-            ),
+        const SizedBox(height: 12),
+        Text(
+          '像 NotebookLM 一样管理资料与问答',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _HeaderPlusButton extends StatelessWidget {
+  const _HeaderPlusButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(17.5),
+        side: const BorderSide(color: AppColors.borderStrong),
+      ),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(17.5),
+        child: const SizedBox(
+          width: 35,
+          height: 35,
+          child: Center(
+            child: Icon(
+              Icons.add_rounded,
+              size: 18,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

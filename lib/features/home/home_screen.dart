@@ -101,6 +101,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       HomeHeaderRow(
+                        currentSection: AppNavSection.videoSummary,
+                        onSectionSelected: (section) =>
+                            _handleSectionSelection(context, section),
                         onMenuPressed: _openDrawer,
                         onNewSessionPressed: _createNewSession,
                       ),
@@ -162,14 +165,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                child: AppBottomNav(
-                  current: AppNavSection.videoSummary,
-                  onSelected: (section) =>
-                      _handleSectionSelection(context, section),
                 ),
               ),
             ],

@@ -471,7 +471,7 @@ class _SummaryChatBubbleBody extends StatelessWidget {
         Text(
           message.text,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontSize: 11,
+            fontSize: 13,
             height: 1.55,
             color: AppColors.textPrimary,
           ),

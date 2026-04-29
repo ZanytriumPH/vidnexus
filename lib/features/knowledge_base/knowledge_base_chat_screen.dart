@@ -50,13 +50,45 @@ class _KnowledgeBaseChatScreenState extends State<KnowledgeBaseChatScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
               child: KnowledgeBaseTopBar(
+                currentSection: AppNavSection.knowledgeBase,
+                onSectionSelected: (section) {
+                  switch (section) {
+                    case AppNavSection.videoSummary:
+                      Navigator.pushNamedAndRemoveUntil(
+                        context,
+                        HomeScreen.routeName,
+                        (route) => false,
+                      );
+                    case AppNavSection.knowledgeBase:
+                      Navigator.popUntil(context, (route) => route.isFirst);
+                  }
+                },
                 title: widget.library.title,
-                onBackPressed: () => Navigator.of(context).pop(),
+                onLeadingPressed: () => Navigator.of(context).pop(),
+                trailing: InkWell(
+                  onTap: _startEmptyConversation,
+                  borderRadius: BorderRadius.circular(17.5),
+                  child: Container(
+                    width: 35,
+                    height: 35,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(17.5),
+                      border: Border.all(color: AppColors.borderStrong),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.add_rounded,
+                        size: 18,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
             Expanded(
               child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
                 itemCount: _messages.length,
                 separatorBuilder: (context, index) => const SizedBox(height: 6),
                 itemBuilder: (context, index) {
@@ -70,24 +102,6 @@ class _KnowledgeBaseChatScreenState extends State<KnowledgeBaseChatScreen> {
               child: KnowledgeBaseComposer(
                 controller: _composerController,
                 onSubmit: _sendMessage,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-              child: AppBottomNav(
-                current: AppNavSection.knowledgeBase,
-                onSelected: (section) {
-                  switch (section) {
-                    case AppNavSection.videoSummary:
-                      Navigator.pushNamedAndRemoveUntil(
-                        context,
-                        HomeScreen.routeName,
-                        (route) => false,
-                      );
-                    case AppNavSection.knowledgeBase:
-                      Navigator.popUntil(context, (route) => route.isFirst);
-                  }
-                },
               ),
             ),
           ],
@@ -114,6 +128,19 @@ class _KnowledgeBaseChatScreenState extends State<KnowledgeBaseChatScreen> {
       _composerController.clear();
     });
   }
+
+  void _startEmptyConversation() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => KnowledgeBaseChatScreen(
+          library: widget.library,
+          initialConversation: buildEmptyKnowledgeConversation(
+            libraryTitle: widget.library.title,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _KnowledgeChatBubble extends StatelessWidget {
@@ -139,7 +166,7 @@ class _KnowledgeChatBubble extends StatelessWidget {
           child: Text(
             message.text,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 12,
+              fontSize: 13,
               fontWeight: FontWeight.w500,
               color: AppColors.textPrimary,
               height: 1.35,
@@ -160,7 +187,7 @@ class _KnowledgeChatBubble extends StatelessWidget {
       child: Text(
         message.text,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: FontWeight.w500,
           color: AppColors.textPrimary,
           height: 1.35,

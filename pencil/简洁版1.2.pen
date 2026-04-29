@@ -705,6 +705,24 @@
                 },
                 {
                   "type": "frame",
+                  "id": "Y6T0W",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "X8a1j",
+                      "fill": "#111418",
+                      "content": "知识库",
+                      "fontFamily": "Inter",
+                      "fontSize": 24,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
                   "id": "NJsPn",
                   "name": "newSessionButton",
                   "width": 35,

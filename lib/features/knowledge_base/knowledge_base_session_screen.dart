@@ -42,17 +42,52 @@ class _KnowledgeBaseSessionScreenState
       body: SafeArea(
         child: Column(
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: KnowledgeBaseTopBar(
+                currentSection: AppNavSection.knowledgeBase,
+                onSectionSelected: (section) {
+                  switch (section) {
+                    case AppNavSection.videoSummary:
+                      Navigator.pushNamedAndRemoveUntil(
+                        context,
+                        HomeScreen.routeName,
+                        (route) => false,
+                      );
+                    case AppNavSection.knowledgeBase:
+                      Navigator.popUntil(context, (route) => route.isFirst);
+                  }
+                },
+                title: widget.library.title,
+                onLeadingPressed: () => Navigator.of(context).pop(),
+                trailing: InkWell(
+                  onTap: _startEmptyConversation,
+                  borderRadius: BorderRadius.circular(17.5),
+                  child: Container(
+                    width: 35,
+                    height: 35,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(17.5),
+                      border: Border.all(color: AppColors.borderStrong),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.add_rounded,
+                        size: 18,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    KnowledgeBaseTopBar(
-                      title: widget.library.title,
-                      onBackPressed: () => Navigator.of(context).pop(),
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: InkWell(
@@ -109,24 +144,6 @@ class _KnowledgeBaseSessionScreenState
                 onSubmit: _startNewConversation,
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-              child: AppBottomNav(
-                current: AppNavSection.knowledgeBase,
-                onSelected: (section) {
-                  switch (section) {
-                    case AppNavSection.videoSummary:
-                      Navigator.pushNamedAndRemoveUntil(
-                        context,
-                        HomeScreen.routeName,
-                        (route) => false,
-                      );
-                    case AppNavSection.knowledgeBase:
-                      Navigator.popUntil(context, (route) => route.isFirst);
-                  }
-                },
-              ),
-            ),
           ],
         ),
       ),
@@ -174,6 +191,12 @@ class _KnowledgeBaseSessionScreenState
     );
 
     _openConversation(newConversation);
+  }
+
+  void _startEmptyConversation() {
+    _openConversation(
+      buildEmptyKnowledgeConversation(libraryTitle: widget.library.title),
+    );
   }
 }
 

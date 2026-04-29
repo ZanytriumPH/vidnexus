@@ -4,6 +4,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_card.dart';
 import '../home/home_screen.dart';
+import 'knowledge_base_chat_screen.dart';
 import 'knowledge_base_models.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
 
@@ -19,26 +20,52 @@ class KnowledgeBaseSourcesScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: KnowledgeBaseTopBar(
+                currentSection: AppNavSection.knowledgeBase,
+                onSectionSelected: (section) {
+                  switch (section) {
+                    case AppNavSection.videoSummary:
+                      Navigator.pushNamedAndRemoveUntil(
+                        context,
+                        HomeScreen.routeName,
+                        (route) => false,
+                      );
+                    case AppNavSection.knowledgeBase:
+                      Navigator.popUntil(context, (route) => route.isFirst);
+                  }
+                },
+                title: '来源',
+                onLeadingPressed: () => Navigator.of(context).pop(),
+                trailing: InkWell(
+                  onTap: () => _openNewConversation(context),
+                  borderRadius: BorderRadius.circular(17.5),
+                  child: Container(
+                    width: 35,
+                    height: 35,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(17.5),
+                      border: Border.all(color: AppColors.borderStrong),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.add_rounded,
+                        size: 18,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    KnowledgeBaseTopBar(
-                      title: '来源',
-                      onBackPressed: () => Navigator.of(context).pop(),
-                      trailing: Text(
-                        '+',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              fontSize: 33,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textPrimary,
-                            ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 8),
                     Text(
                       '管理当前知识库中可被引用的资料',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -59,25 +86,20 @@ class KnowledgeBaseSourcesScreen extends StatelessWidget {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-              child: AppBottomNav(
-                current: AppNavSection.knowledgeBase,
-                onSelected: (section) {
-                  switch (section) {
-                    case AppNavSection.videoSummary:
-                      Navigator.pushNamedAndRemoveUntil(
-                        context,
-                        HomeScreen.routeName,
-                        (route) => false,
-                      );
-                    case AppNavSection.knowledgeBase:
-                      Navigator.popUntil(context, (route) => route.isFirst);
-                  }
-                },
-              ),
-            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _openNewConversation(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => KnowledgeBaseChatScreen(
+          library: library,
+          initialConversation: buildEmptyKnowledgeConversation(
+            libraryTitle: library.title,
+          ),
         ),
       ),
     );
