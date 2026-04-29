@@ -1,3 +1,4 @@
+/// 这些模型专门服务 UI 展示，通常由 application 层 mapper 产出。
 enum SummaryChatSender { system, user }
 
 class ProcessingBadge {

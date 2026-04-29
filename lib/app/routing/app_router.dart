@@ -9,6 +9,7 @@ import '../../features/knowledge_base/knowledge_base_session_screen.dart';
 import '../../features/knowledge_base/knowledge_base_sources_screen.dart';
 import 'app_routes.dart';
 
+/// 统一处理命名路由到页面实例的映射。
 class AppRouter {
   const AppRouter._();
 
@@ -73,6 +74,7 @@ class AppRouter {
   }
 }
 
+/// 统一封装 Route 构建，确保所有页面都能拿到原始 RouteSettings。
 MaterialPageRoute<void> _buildRoute({
   required RouteSettings settings,
   required WidgetBuilder builder,
@@ -91,6 +93,7 @@ MaterialPageRoute<void> _buildRouteError({
   );
 }
 
+/// 参数化页面统一在这里做类型检查，避免页面层自己兜底猜参数。
 T _requireArguments<T>(RouteSettings settings) {
   final arguments = settings.arguments;
   if (arguments is T) {
@@ -103,6 +106,7 @@ T _requireArguments<T>(RouteSettings settings) {
   );
 }
 
+/// 页面层只调用这里的语义化导航方法，不直接关心 pushNamed 细节。
 class AppNavigator {
   const AppNavigator._();
 

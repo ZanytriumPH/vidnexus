@@ -13,6 +13,7 @@ import 'widgets/session_settings_sheet.dart';
 import 'widgets/video_summary_content_widgets.dart';
 import 'widgets/video_summary_drawer_widgets.dart';
 
+/// 首页现在主要承担页面壳和装配职责，复杂状态迁移已下沉到 application 层。
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -106,6 +107,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  // 新建会话需要同时重置流程状态、文本状态和 session 历史，因此在这里做一次协调调用。
   void _createNewSession() {
     final flowController = ref.read(videoSummaryFlowControllerProvider.notifier);
     final sessionHistoryController = ref.read(
@@ -135,6 +137,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     AppNavigator.popCurrent(context);
     final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
     textEditing.runWithoutSync(() {
+      // 恢复顺序很重要：先回填文本，再恢复流程快照，最后切 active session。
       textEditing.applySessionSnapshot(session.snapshot);
       ref.read(videoSummaryFlowControllerProvider.notifier).restoreSnapshot(
         session.snapshot.flowSnapshot,
@@ -184,6 +187,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     VideoSummaryFlowState flowState,
     VideoSummaryTextEditingController textEditing,
   ) {
+    // 这里统一把 controller 状态和回调接到各 stage workspace，避免子组件直接读多个 provider。
     return VideoSummaryWorkspace(
       stage: flowState.stage,
       highlighted: flowState.uploadHighlighted,

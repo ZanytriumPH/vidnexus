@@ -1,5 +1,6 @@
 import '../video_summary_models.dart';
 
+/// 这里只放 repository 可稳定返回的业务结果数据，不放界面展示结构。
 enum VideoSummaryProcessingPhase { transcription, alignment, summary }
 
 class VideoSummaryProcessingStepData {

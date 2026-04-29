@@ -12,6 +12,7 @@ final videoSummaryFlowControllerProvider =
       VideoSummaryFlowController.new,
     );
 
+/// 主流程状态：页面只关心“当前展示什么”，具体状态切换由 controller 驱动。
 class VideoSummaryFlowState {
   const VideoSummaryFlowState({
     required this.videoAsset,
@@ -65,6 +66,7 @@ class VideoSummaryFlowState {
     );
   }
 
+  // 用 sentinel 区分“保持原值”和“显式置空”，否则 copyWith 无法安全处理 nullable 字段。
   static const _unset = Object();
 
   VideoSummaryFlowState copyWith({
@@ -110,6 +112,7 @@ class VideoSummaryFlowState {
   }
 }
 
+/// 用于 session 恢复的轻量快照，和实时 state 分开，避免把运行时控制字段直接序列化思维化。
 class VideoSummaryFlowSnapshot {
   const VideoSummaryFlowSnapshot({
     required this.stage,
@@ -138,6 +141,7 @@ class VideoSummaryFlowSnapshot {
   final List<ChatMessage> chatMessages;
 }
 
+/// 视频总结主状态机，负责把 ready -> processing -> draft -> finalChat 串起来。
 class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   static const int minimumTimestampRangeSeconds = 10;
 
@@ -219,6 +223,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
     final settings = ref.read(videoSummarySettingsProvider);
 
+    // 每次重新生成草稿，都要清掉后续阶段结果，确保流程重新从 processing 开始推进。
     state = state.copyWith(
       isGenerating: true,
       stage: VideoSummaryStage.processing,
@@ -236,6 +241,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         );
       }
 
+      // repository 返回的是 raw draft data，进入页面前统一转换成 presentation model。
       final draft = mapDraftDataToResult(await _repository.fetchDraftResult());
       state = state.copyWith(
         draftResult: draft,
@@ -257,6 +263,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       return;
     }
 
+    // 最终稿生成基于“当前可编辑文本框中的内容”，而不是仅基于最初草稿结果。
     final editedParagraphs = draftBodyText
         .split(RegExp(r'\n\s*\n'))
         .map((paragraph) => paragraph.trim())
@@ -276,6 +283,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         draftParagraphs: effectiveDraft.paragraphs,
       );
       final summaryData = mapFinalResultDataToSummary(summary);
+      // 进入 finalChat 时，会用总结中的首个时间片段给时间旅行功能提供默认范围。
       final seededRange = _buildRangeFromSummary(summaryData);
       state = state.copyWith(
         finalSummaryData: summaryData,
@@ -296,6 +304,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       return;
     }
 
+    // 时间旅行模式开启时，把当前时间范围一起附着到用户消息上，便于 UI 回显上下文。
     final timestampLabel = state.isTimestampScoped
       ? formatVideoSummaryTimestampRange(
             state.selectedTimestampStartSeconds,
@@ -320,6 +329,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       state = state.copyWith(
         chatMessages: [
           ...state.chatMessages,
+          // 系统回复保留当前发送时的时间标签，这样聊天记录就能看出它基于哪个范围回答。
           ChatMessage(
             sender: replyMessage.sender,
             text: replyMessage.text,
@@ -392,6 +402,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     return _sanitizeTimestampRange(seeded ?? _buildDefaultTimestampRange(state.videoAsset.durationLabel));
   }
 
+  // 所有进入 state 的时间范围都要过一次收口，避免 UI 或 demo 数据带来非法区间。
   TimestampRangeSelection _sanitizeTimestampRange(TimestampRangeSelection range) {
     final total = videoDurationInSeconds;
     final maxStart = (total - minimumTimestampRangeSeconds).clamp(0, total);

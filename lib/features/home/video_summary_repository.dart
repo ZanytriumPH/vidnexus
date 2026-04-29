@@ -8,6 +8,7 @@ final videoSummaryRepositoryProvider = Provider<VideoSummaryRepository>((ref) {
   return const FakeVideoSummaryRepository();
 });
 
+/// repository 只暴露稳定数据 contract，不直接返回 UI 展示模型。
 abstract class VideoSummaryRepository {
   const VideoSummaryRepository();
 

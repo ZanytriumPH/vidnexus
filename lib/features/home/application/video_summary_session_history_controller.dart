@@ -11,6 +11,7 @@ final videoSummarySessionHistoryProvider = NotifierProvider<
   VideoSummarySessionHistoryController.new,
 );
 
+/// 管理历史会话列表，以及“当前页面状态如何保存/恢复”为一个可切换的 session。
 class VideoSummarySessionHistoryState {
   const VideoSummarySessionHistoryState({
     required this.sessions,
@@ -86,6 +87,7 @@ class VideoSummarySessionHistoryController
   @override
   VideoSummarySessionHistoryState build() {
     final videoAsset = _repository.getVideoAsset();
+    // 第一项始终代表当前正在编辑的主会话，后面几项是用于演示恢复能力的 seeded session。
     final sessions = [
       VideoSummarySessionHistoryEntry(
         id: 'session-1',
@@ -180,6 +182,7 @@ class VideoSummarySessionHistoryController
     state = state.copyWith(sessions: sessions);
   }
 
+  // 抽屉里展示的说明文案由当前阶段推导出来，而不是额外保存一份平行状态。
   String _detailForSnapshot(VideoSummarySessionSnapshot snapshot) {
     return switch (snapshot.flowSnapshot.stage) {
       VideoSummaryStage.ready => '新会话已创建，等待选择视频并生成总结。',
@@ -189,6 +192,7 @@ class VideoSummarySessionHistoryController
     };
   }
 
+  // 这些 seeded snapshot 走和正式数据同样的 mapper 链路，避免 demo 数据污染分层边界。
   VideoSummarySessionSnapshot _buildSeededProcessingSnapshot() {
     return VideoSummarySessionSnapshot(
       flowSnapshot: VideoSummaryFlowSnapshot(

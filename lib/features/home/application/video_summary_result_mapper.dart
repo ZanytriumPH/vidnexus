@@ -2,6 +2,7 @@ import '../domain/video_summary_domain_models.dart';
 import '../domain/video_summary_time_utils.dart';
 import '../video_summary_presentation_models.dart';
 
+/// 把稳定的 processing 数据翻译成当前 UI 需要的展示结构和文案。
 ProcessingSnapshot mapProcessingDataToSnapshot(VideoSummaryProcessingData data) {
   return ProcessingSnapshot(
     progress: data.progress,
@@ -60,6 +61,7 @@ ProcessingStep mapProcessingStepToUiStep(VideoSummaryProcessingStepData step) {
   };
 }
 
+/// draft 数据本身只包含段落，页面提示文案在这里补成完整展示模型。
 DraftResult mapDraftDataToResult(VideoSummaryDraftData data) {
   return DraftResult(
     overview: '初稿已生成，处理详情已自动折叠',
@@ -68,6 +70,7 @@ DraftResult mapDraftDataToResult(VideoSummaryDraftData data) {
   );
 }
 
+/// 最终稿需要额外组合标题、时间片段标签和 chip 数据，这些都属于展示层。
 FinalSummaryData mapFinalResultDataToSummary(VideoSummaryFinalResultData data) {
   final primaryReference = data.references.firstOrNull;
   return FinalSummaryData(
@@ -91,6 +94,7 @@ FinalSummaryData mapFinalResultDataToSummary(VideoSummaryFinalResultData data) {
   );
 }
 
+/// 追问回复会被翻译成统一的聊天消息结构，便于页面复用同一套渲染逻辑。
 ChatMessage mapChatReplyDataToMessage(VideoSummaryChatReplyData data) {
   return ChatMessage(
     sender: SummaryChatSender.system,

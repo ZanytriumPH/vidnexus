@@ -7,6 +7,7 @@ import 'video_summary_final_chat_stage_workspace.dart';
 import 'video_summary_processing_stage_workspace.dart';
 import 'video_summary_ready_stage_workspace.dart';
 
+/// 这是页面内部的“阶段分发器”，只根据 stage 决定显示哪个 workspace。
 class VideoSummaryWorkspace extends StatelessWidget {
   const VideoSummaryWorkspace({
     required this.stage,

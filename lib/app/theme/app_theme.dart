@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 
+/// 统一收口应用主题，避免各页面直接散写颜色、圆角和输入框样式。
 abstract final class AppTheme {
   static ThemeData light() {
     final base = ThemeData(
@@ -17,6 +18,7 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: AppColors.pageBackground,
     );
 
+    // 文本层级在这里一次性定义，后续页面尽量直接复用主题语义名。
     final textTheme = base.textTheme.copyWith(
       headlineMedium: const TextStyle(
         fontSize: 28,

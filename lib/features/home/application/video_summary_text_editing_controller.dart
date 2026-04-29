@@ -17,6 +17,7 @@ final videoSummaryTextEditingControllerProvider =
       return controller;
     });
 
+/// 统一管理首页内多个 TextEditingController，并负责把文本状态同步进 session snapshot。
 class VideoSummaryTextEditingController {
   VideoSummaryTextEditingController(this._ref) {
     preferenceController.addListener(_syncEditableSnapshot);
@@ -34,6 +35,7 @@ class VideoSummaryTextEditingController {
   String get preferenceText => preferenceController.text;
   String get draftBodyText => draftBodyController.text;
 
+  /// 发送后直接清空聊天输入框，页面层只拿消费后的消息结果。
   String? consumeChatMessage() {
     final message = chatController.text.trim();
     if (message.isEmpty) {
@@ -68,6 +70,7 @@ class VideoSummaryTextEditingController {
     );
   }
 
+  /// 批量写入文本时暂时关闭同步，避免“恢复会话”又被误判为用户手动编辑。
   T runWithoutSync<T>(T Function() action) {
     _syncPaused = true;
     try {
@@ -81,6 +84,7 @@ class VideoSummaryTextEditingController {
     VideoSummaryFlowState? previous,
     VideoSummaryFlowState next,
   ) {
+    // 草稿第一次生成出来时，把结果注入可编辑文本框，后续用户就编辑这份文本。
     if (previous?.draftResult == null && next.draftResult != null) {
       runWithoutSync(() {
         draftBodyController.text = next.draftResult!.paragraphs.join('\n\n');
