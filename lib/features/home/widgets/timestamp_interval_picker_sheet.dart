@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/routing/app_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/widgets/app_buttons.dart';
+import '../domain/video_summary_time_utils.dart';
 import '../video_summary_models.dart';
 
 Future<void> showTimestampIntervalPickerSheet({
@@ -63,7 +65,10 @@ Future<void> showTimestampIntervalPickerSheet({
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${_formatClockLabel(draftStart.round())} - ${_formatClockLabel(draftEnd.round())}',
+                          formatVideoSummaryTimestampRange(
+                            draftStart.round(),
+                            draftEnd.round(),
+                          ),
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
@@ -72,7 +77,7 @@ Future<void> showTimestampIntervalPickerSheet({
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '当前区间长度 ${_formatRangeLength(currentSeconds)}',
+                          '当前区间长度 ${formatVideoSummaryRangeLength(currentSeconds)}',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             fontSize: 10.5,
                             color: AppColors.textSecondary,
@@ -87,8 +92,8 @@ Future<void> showTimestampIntervalPickerSheet({
                           activeColor: const Color(0xFF2B63EB),
                           inactiveColor: const Color(0xFFDCE6FA),
                           labels: RangeLabels(
-                            _formatClockLabel(draftStart.round()),
-                            _formatClockLabel(draftEnd.round()),
+                            formatVideoSummaryClockLabel(draftStart.round()),
+                            formatVideoSummaryClockLabel(draftEnd.round()),
                           ),
                           onChanged: (values) {
                             var nextStart = values.start.round();
@@ -123,14 +128,18 @@ Future<void> showTimestampIntervalPickerSheet({
                             Expanded(
                               child: _RangeValueTile(
                                 label: '开始',
-                                value: _formatClockLabel(draftStart.round()),
+                                value: formatVideoSummaryClockLabel(
+                                  draftStart.round(),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: _RangeValueTile(
                                 label: '结束',
-                                value: _formatClockLabel(draftEnd.round()),
+                                value: formatVideoSummaryClockLabel(
+                                  draftEnd.round(),
+                                ),
                               ),
                             ),
                           ],
@@ -148,7 +157,7 @@ Future<void> showTimestampIntervalPickerSheet({
                           endSeconds: draftEnd.round(),
                         ),
                       );
-                      Navigator.of(context).pop();
+                      AppNavigator.popCurrent(context);
                     },
                   ),
                 ],
@@ -159,28 +168,6 @@ Future<void> showTimestampIntervalPickerSheet({
       );
     },
   );
-}
-
-String _formatClockLabel(int totalSeconds) {
-  final hours = totalSeconds ~/ 3600;
-  final minutes = (totalSeconds % 3600) ~/ 60;
-  final seconds = totalSeconds % 60;
-  if (hours > 0) {
-    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
-  return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-}
-
-String _formatRangeLength(int totalSeconds) {
-  final minutes = totalSeconds ~/ 60;
-  final seconds = totalSeconds % 60;
-  if (minutes == 0) {
-    return '$seconds秒';
-  }
-  if (seconds == 0) {
-    return '$minutes分';
-  }
-  return '$minutes分$seconds秒';
 }
 
 class _RangeValueTile extends StatelessWidget {

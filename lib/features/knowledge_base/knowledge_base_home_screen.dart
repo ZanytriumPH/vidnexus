@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../../app/routing/app_route_arguments.dart';
+import '../../app/routing/app_router.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_card.dart';
-import '../home/home_screen.dart';
 import 'knowledge_base_models.dart';
-import 'knowledge_base_session_screen.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
 
 class KnowledgeBaseHomeScreen extends StatelessWidget {
   const KnowledgeBaseHomeScreen({super.key});
-
-  static const routeName = '/knowledge-base';
 
   @override
   Widget build(BuildContext context) {
@@ -60,11 +58,7 @@ class KnowledgeBaseHomeScreen extends StatelessWidget {
   void _handleSectionSelection(BuildContext context, AppNavSection section) {
     switch (section) {
       case AppNavSection.videoSummary:
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          HomeScreen.routeName,
-          (route) => false,
-        );
+        AppNavigator.goToHomeRoot(context);
       case AppNavSection.knowledgeBase:
         return;
     }
@@ -319,10 +313,9 @@ class _KnowledgeLibraryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => KnowledgeBaseSessionScreen(library: item),
-          ),
+        AppNavigator.openKnowledgeBaseSession(
+          context,
+          arguments: KnowledgeBaseSessionRouteArguments(library: item),
         );
       },
       borderRadius: BorderRadius.circular(20),

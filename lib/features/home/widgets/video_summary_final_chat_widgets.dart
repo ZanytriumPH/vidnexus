@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/widgets/app_card.dart';
 import '../video_summary_models.dart';
+import '../video_summary_presentation_models.dart';
 import 'timestamp_interval_picker_sheet.dart';
 
 class FinalSummaryCard extends StatelessWidget {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../video_summary_models.dart';
+import '../video_summary_presentation_models.dart';
 import 'video_summary_draft_stage_workspace.dart';
 import 'video_summary_final_chat_stage_workspace.dart';
 import 'video_summary_processing_stage_workspace.dart';

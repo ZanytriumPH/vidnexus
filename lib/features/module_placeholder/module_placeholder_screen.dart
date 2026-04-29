@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../app/routing/app_router.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_buttons.dart';
 import '../../app/widgets/app_card.dart';
 import '../../app/widgets/app_page_scaffold.dart';
-import '../home/home_screen.dart';
 
 class ModulePlaceholderScreen extends StatelessWidget {
   const ModulePlaceholderScreen({
@@ -23,8 +23,6 @@ class ModulePlaceholderScreen extends StatelessWidget {
       currentSection = AppNavSection.knowledgeBase,
       items = const ['3. 首页', '3.1 会话', '3.2 聊天', '3.3 来源'],
       primaryActionLabel = '返回视频入口';
-
-  static const knowledgeRouteName = '/knowledge-base';
 
   final String title;
   final String subtitle;
@@ -95,11 +93,7 @@ class ModulePlaceholderScreen extends StatelessWidget {
           const SizedBox(height: 8),
           AppPrimaryButton(
             label: primaryActionLabel,
-            onPressed: () => Navigator.pushNamedAndRemoveUntil(
-              context,
-              HomeScreen.routeName,
-              (route) => false,
-            ),
+            onPressed: () => AppNavigator.goToHomeRoot(context),
           ),
         ],
       ),
@@ -109,18 +103,10 @@ class ModulePlaceholderScreen extends StatelessWidget {
   void _handleSectionSelection(BuildContext context, AppNavSection section) {
     switch (section) {
       case AppNavSection.videoSummary:
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          HomeScreen.routeName,
-          (route) => false,
-        );
+        AppNavigator.goToHomeRoot(context);
       case AppNavSection.knowledgeBase:
         if (currentSection != AppNavSection.knowledgeBase) {
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            knowledgeRouteName,
-            (route) => false,
-          );
+          AppNavigator.goToKnowledgeBaseHome(context);
         }
     }
   }

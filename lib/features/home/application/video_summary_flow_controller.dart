@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'video_summary_result_mapper.dart';
+import '../domain/video_summary_time_utils.dart';
 import '../video_summary_models.dart';
+import '../video_summary_presentation_models.dart';
 import '../video_summary_repository.dart';
 import 'video_summary_settings_controller.dart';
 
@@ -152,9 +155,12 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   }
 
   int get videoDurationInSeconds =>
-      _parseVideoDurationLabel(state.videoAsset.durationLabel);
+      parseVideoSummaryDurationLabel(
+        label: state.videoAsset.durationLabel,
+        minimumSeconds: minimumTimestampRangeSeconds,
+      );
 
-  String get selectedTimestampLabel => formatTimestampRange(
+  String get selectedTimestampLabel => formatVideoSummaryTimestampRange(
         state.selectedTimestampStartSeconds,
         state.selectedTimestampEndSeconds,
       );
@@ -224,11 +230,13 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     );
 
     try {
-      await for (final snapshot in _repository.startDraftGeneration()) {
-        state = state.copyWith(processingSnapshot: snapshot);
+      await for (final processingData in _repository.startDraftGeneration()) {
+        state = state.copyWith(
+          processingSnapshot: mapProcessingDataToSnapshot(processingData),
+        );
       }
 
-      final draft = await _repository.fetchDraftResult();
+      final draft = mapDraftDataToResult(await _repository.fetchDraftResult());
       state = state.copyWith(
         draftResult: draft,
         stage: VideoSummaryStage.draft,
@@ -265,12 +273,13 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     try {
       final summary = await _repository.generateFinalSummary(
         guidance: guidance,
-        draft: effectiveDraft,
+        draftParagraphs: effectiveDraft.paragraphs,
       );
-      final seededRange = _buildRangeFromSummary(summary);
+      final summaryData = mapFinalResultDataToSummary(summary);
+      final seededRange = _buildRangeFromSummary(summaryData);
       state = state.copyWith(
-        finalSummaryData: summary,
-        chatMessages: List<ChatMessage>.from(summary.messages),
+        finalSummaryData: summaryData,
+        chatMessages: List<ChatMessage>.from(summaryData.messages),
         draftResult: effectiveDraft,
         stage: VideoSummaryStage.finalChat,
         selectedTimestampStartSeconds: seededRange.startSeconds,
@@ -288,7 +297,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     }
 
     final timestampLabel = state.isTimestampScoped
-        ? formatTimestampRange(
+      ? formatVideoSummaryTimestampRange(
             state.selectedTimestampStartSeconds,
             state.selectedTimestampEndSeconds,
           )
@@ -307,12 +316,13 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
     try {
       final reply = await _repository.sendSummaryChatMessage(message);
+      final replyMessage = mapChatReplyDataToMessage(reply);
       state = state.copyWith(
         chatMessages: [
           ...state.chatMessages,
           ChatMessage(
-            sender: reply.sender,
-            text: reply.text,
+            sender: replyMessage.sender,
+            text: replyMessage.text,
             timestampLabel: timestampLabel,
           ),
         ],
@@ -356,28 +366,33 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     );
   }
 
-  String formatTimestampRange(int startSeconds, int endSeconds) {
-    return '${_formatClock(startSeconds)} - ${_formatClock(endSeconds)}';
-  }
-
-  _TimestampRange _buildDefaultTimestampRange(String durationLabel) {
-    final total = _parseVideoDurationLabel(durationLabel);
+  TimestampRangeSelection _buildDefaultTimestampRange(String durationLabel) {
+    final total = parseVideoSummaryDurationLabel(
+      label: durationLabel,
+      minimumSeconds: minimumTimestampRangeSeconds,
+    );
     final defaultLength = total >= 30 ? 30 : total;
     final safeLength = defaultLength >= minimumTimestampRangeSeconds
         ? defaultLength
         : minimumTimestampRangeSeconds;
     final end = safeLength.clamp(minimumTimestampRangeSeconds, total);
-    return _TimestampRange(startSeconds: 0, endSeconds: end);
+    return TimestampRangeSelection(startSeconds: 0, endSeconds: end);
   }
 
-  _TimestampRange _buildRangeFromSummary(FinalSummaryData summary) {
+  TimestampRangeSelection _buildRangeFromSummary(FinalSummaryData summary) {
     final seeded = summary.timestampChips.isNotEmpty
-        ? _tryParseTimestampRange(summary.timestampChips.first.label)
-        : _tryParseTimestampRange(summary.summaryTimestampLabel);
+        ? tryParseVideoSummaryTimestampRange(
+            raw: summary.timestampChips.first.label,
+            minimumSeconds: minimumTimestampRangeSeconds,
+          )
+        : tryParseVideoSummaryTimestampRange(
+            raw: summary.summaryTimestampLabel,
+            minimumSeconds: minimumTimestampRangeSeconds,
+          );
     return _sanitizeTimestampRange(seeded ?? _buildDefaultTimestampRange(state.videoAsset.durationLabel));
   }
 
-  _TimestampRange _sanitizeTimestampRange(_TimestampRange range) {
+  TimestampRangeSelection _sanitizeTimestampRange(TimestampRangeSelection range) {
     final total = videoDurationInSeconds;
     final maxStart = (total - minimumTimestampRangeSeconds).clamp(0, total);
     final start = range.startSeconds.clamp(0, maxStart);
@@ -386,65 +401,6 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       total,
     );
     final end = range.endSeconds.clamp(minEnd, total);
-    return _TimestampRange(startSeconds: start, endSeconds: end);
+    return TimestampRangeSelection(startSeconds: start, endSeconds: end);
   }
-
-  _TimestampRange? _tryParseTimestampRange(String raw) {
-    final matches = RegExp(r'(\d{2}:\d{2}(?::\d{2})?)').allMatches(raw).toList();
-    if (matches.length < 2) {
-      return null;
-    }
-
-    final start = _parseClockLabel(matches.first.group(0)!);
-    final end = _parseClockLabel(matches[1].group(0)!);
-    if (end - start < minimumTimestampRangeSeconds) {
-      return null;
-    }
-
-    return _TimestampRange(startSeconds: start, endSeconds: end);
-  }
-
-  int _parseClockLabel(String value) {
-    final parts = value.split(':').map(int.parse).toList();
-    if (parts.length == 2) {
-      return parts[0] * 60 + parts[1];
-    }
-    return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  }
-
-  int _parseVideoDurationLabel(String label) {
-    final compact = label.trim();
-    if (compact.contains(':')) {
-      return _parseClockLabel(compact);
-    }
-
-    final minuteMatch = RegExp(r'(\d+)\s*m').firstMatch(compact);
-    final secondMatch = RegExp(r'(\d+)\s*s').firstMatch(compact);
-    final minutes = int.tryParse(minuteMatch?.group(1) ?? '0') ?? 0;
-    final seconds = int.tryParse(secondMatch?.group(1) ?? '0') ?? 0;
-    final total = minutes * 60 + seconds;
-    return total >= minimumTimestampRangeSeconds
-        ? total
-        : minimumTimestampRangeSeconds;
-  }
-
-  String _formatClock(int totalSeconds) {
-    final hours = totalSeconds ~/ 3600;
-    final minutes = (totalSeconds % 3600) ~/ 60;
-    final seconds = totalSeconds % 60;
-    if (hours > 0) {
-      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-    }
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
-}
-
-class _TimestampRange {
-  const _TimestampRange({
-    required this.startSeconds,
-    required this.endSeconds,
-  });
-
-  final int startSeconds;
-  final int endSeconds;
 }

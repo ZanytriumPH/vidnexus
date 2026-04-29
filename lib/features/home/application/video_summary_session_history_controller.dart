@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/video_summary_domain_models.dart';
 import '../video_summary_models.dart';
 import '../video_summary_repository.dart';
 import 'video_summary_flow_controller.dart';
+import 'video_summary_result_mapper.dart';
 
 final videoSummarySessionHistoryProvider = NotifierProvider<
     VideoSummarySessionHistoryController, VideoSummarySessionHistoryState>(
@@ -188,7 +190,7 @@ class VideoSummarySessionHistoryController
   }
 
   VideoSummarySessionSnapshot _buildSeededProcessingSnapshot() {
-    return const VideoSummarySessionSnapshot(
+    return VideoSummarySessionSnapshot(
       flowSnapshot: VideoSummaryFlowSnapshot(
         stage: VideoSummaryStage.processing,
         uploadHighlighted: true,
@@ -197,33 +199,30 @@ class VideoSummarySessionHistoryController
         selectedTimestampStartSeconds: 0,
         selectedTimestampEndSeconds: 30,
         isDraftEditMode: true,
-        processingSnapshot: ProcessingSnapshot(
-          progress: 0.58,
-          statusLabel: '处理中',
-          headline: '正在生成结构化初稿',
-          etaLabel: '当前主步骤：融合语音、关键词和版面信息，准备输出第一版结构梳理。',
-          badges: [
-            ProcessingBadge(label: '语音转写 已完成', active: true),
-            ProcessingBadge(label: '多轮融合 进行中', active: true),
-            ProcessingBadge(label: '总结卡片可视化 处理中', active: false),
-          ],
-          steps: [
-            ProcessingStep(
-              label: '语音转写与切片',
-              detail: '142 秒文本已完成校准。',
-              progress: 100,
-            ),
-            ProcessingStep(
-              label: '关键词归因与对齐',
-              detail: '96 处关键点正在归入片段，质检线继续进行中。',
-              progress: 61,
-            ),
-            ProcessingStep(
-              label: '章节整合与摘要初稿',
-              detail: '正在组织段间跳转语句与第一版总括。',
-              progress: 28,
-            ),
-          ],
+        processingSnapshot: mapProcessingDataToSnapshot(
+          const VideoSummaryProcessingData(
+            progress: 0.58,
+            steps: [
+              VideoSummaryProcessingStepData(
+                phase: VideoSummaryProcessingPhase.transcription,
+                progress: 100,
+                completedUnits: 142,
+                totalUnits: 142,
+              ),
+              VideoSummaryProcessingStepData(
+                phase: VideoSummaryProcessingPhase.alignment,
+                progress: 61,
+                completedUnits: 0,
+                totalUnits: 96,
+              ),
+              VideoSummaryProcessingStepData(
+                phase: VideoSummaryProcessingPhase.summary,
+                progress: 28,
+                completedUnits: 0,
+                totalUnits: 1,
+              ),
+            ],
+          ),
         ),
         draftResult: null,
         finalSummaryData: null,
@@ -235,7 +234,7 @@ class VideoSummarySessionHistoryController
   }
 
   VideoSummarySessionSnapshot _buildSeededDraftSnapshot() {
-    return const VideoSummarySessionSnapshot(
+    return VideoSummarySessionSnapshot(
       flowSnapshot: VideoSummaryFlowSnapshot(
         stage: VideoSummaryStage.draft,
         uploadHighlighted: true,
@@ -245,13 +244,13 @@ class VideoSummarySessionHistoryController
         selectedTimestampEndSeconds: 30,
         isDraftEditMode: true,
         processingSnapshot: null,
-        draftResult: DraftResult(
-          overview: '初稿已生成，处理详情已自动折叠',
-          paragraphs: [
-            '这段竞品分析主要围绕用户分层、内容抓手和转化动作展开，前半段聚焦目标用户的需求切片，后半段则落到产品策略和执行节奏。',
-            '当前结构稿已经整理完主线、亮点和风险项，适合继续补充面向团队同步的版本。',
-          ],
-          suggestionHint: '例如：把差异点和行动建议拆成更容易会议讨论的条目。',
+        draftResult: mapDraftDataToResult(
+          const VideoSummaryDraftData(
+            paragraphs: [
+              '这段竞品分析主要围绕用户分层、内容抓手和转化动作展开，前半段聚焦目标用户的需求切片，后半段则落到产品策略和执行节奏。',
+              '当前结构稿已经整理完主线、亮点和风险项，适合继续补充面向团队同步的版本。',
+            ],
+          ),
         ),
         finalSummaryData: null,
         chatMessages: [],
@@ -263,7 +262,7 @@ class VideoSummarySessionHistoryController
   }
 
   VideoSummarySessionSnapshot _buildSeededFinalSnapshot() {
-    return const VideoSummarySessionSnapshot(
+    return VideoSummarySessionSnapshot(
       flowSnapshot: VideoSummaryFlowSnapshot(
         stage: VideoSummaryStage.finalChat,
         uploadHighlighted: true,
@@ -273,21 +272,28 @@ class VideoSummarySessionHistoryController
         selectedTimestampEndSeconds: 420,
         isDraftEditMode: false,
         processingSnapshot: null,
-        draftResult: DraftResult(
-          overview: '初稿已生成，处理详情已自动折叠',
-          paragraphs: ['产品方案讲解已经覆盖目标问题、用户路径和价值验证。'],
-          suggestionHint: '继续补充差异化价值和风险边界。',
+        draftResult: mapDraftDataToResult(
+          const VideoSummaryDraftData(
+            paragraphs: ['产品方案讲解已经覆盖目标问题、用户路径和价值验证。'],
+          ),
         ),
-        finalSummaryData: FinalSummaryData(
-          summaryTitle: '最终稿',
-          summaryBody:
-              '该视频聚焦产品方案讲解，先梳理问题场景与目标用户，再展开方案结构、交付节奏和验证路径。整体结论已经可用于评审同步，并适合继续按时间戳展开追问。',
-          summaryTimestampLabel: '汇总片段 00:05:10 - 00:07:00',
-          timestampChips: [
-            TimestampChipData(label: '00:05:10 - 00:07:00', note: '方案价值与验证'),
-            TimestampChipData(label: '00:10:20 - 00:12:10', note: '交付节奏与风险'),
-          ],
-          messages: [],
+        finalSummaryData: mapFinalResultDataToSummary(
+          const VideoSummaryFinalResultData(
+            body:
+                '该视频聚焦产品方案讲解，先梳理问题场景与目标用户，再展开方案结构、交付节奏和验证路径。整体结论已经可用于评审同步，并适合继续按时间戳展开追问。',
+            references: [
+              VideoSummaryReferenceRange(
+                startSeconds: 5 * 60 + 10,
+                endSeconds: 7 * 60,
+                topic: '方案价值与验证',
+              ),
+              VideoSummaryReferenceRange(
+                startSeconds: 10 * 60 + 20,
+                endSeconds: 12 * 60 + 10,
+                topic: '交付节奏与风险',
+              ),
+            ],
+          ),
         ),
         chatMessages: [],
       ),

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../app/routing/app_route_arguments.dart';
+import '../../app/routing/app_router.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_card.dart';
-import '../home/home_screen.dart';
-import 'knowledge_base_chat_screen.dart';
 import 'knowledge_base_models.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
 
@@ -27,17 +27,13 @@ class KnowledgeBaseSourcesScreen extends StatelessWidget {
                 onSectionSelected: (section) {
                   switch (section) {
                     case AppNavSection.videoSummary:
-                      Navigator.pushNamedAndRemoveUntil(
-                        context,
-                        HomeScreen.routeName,
-                        (route) => false,
-                      );
+                      AppNavigator.goToHomeRoot(context);
                     case AppNavSection.knowledgeBase:
-                      Navigator.popUntil(context, (route) => route.isFirst);
+                      AppNavigator.popToKnowledgeBaseHome(context);
                   }
                 },
                 title: '来源',
-                onLeadingPressed: () => Navigator.of(context).pop(),
+                onLeadingPressed: () => AppNavigator.popCurrent(context),
                 trailing: InkWell(
                   onTap: () => _openNewConversation(context),
                   borderRadius: BorderRadius.circular(17.5),
@@ -93,13 +89,12 @@ class KnowledgeBaseSourcesScreen extends StatelessWidget {
   }
 
   void _openNewConversation(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => KnowledgeBaseChatScreen(
-          library: library,
-          initialConversation: buildEmptyKnowledgeConversation(
-            libraryTitle: library.title,
-          ),
+    AppNavigator.openKnowledgeBaseChat(
+      context,
+      arguments: KnowledgeBaseChatRouteArguments(
+        library: library,
+        initialConversation: buildEmptyKnowledgeConversation(
+          libraryTitle: library.title,
         ),
       ),
     );

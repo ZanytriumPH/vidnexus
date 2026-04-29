@@ -4,6 +4,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/widgets/app_buttons.dart';
 import '../../../app/widgets/app_card.dart';
 import '../video_summary_models.dart';
+import '../video_summary_presentation_models.dart';
 import 'home_shell_widgets.dart';
 import 'video_summary_processing_widgets.dart';
 

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'domain/video_summary_domain_models.dart';
 import 'fake_video_summary_repository.dart';
 import 'video_summary_models.dart';
 
@@ -12,14 +13,14 @@ abstract class VideoSummaryRepository {
 
   VideoAssetInfo getVideoAsset();
 
-  Stream<ProcessingSnapshot> startDraftGeneration();
+  Stream<VideoSummaryProcessingData> startDraftGeneration();
 
-  Future<DraftResult> fetchDraftResult();
+  Future<VideoSummaryDraftData> fetchDraftResult();
 
-  Future<FinalSummaryData> generateFinalSummary({
+  Future<VideoSummaryFinalResultData> generateFinalSummary({
     required String guidance,
-    required DraftResult draft,
+    required List<String> draftParagraphs,
   });
 
-  Future<ChatMessage> sendSummaryChatMessage(String message);
+  Future<VideoSummaryChatReplyData> sendSummaryChatMessage(String message);
 }

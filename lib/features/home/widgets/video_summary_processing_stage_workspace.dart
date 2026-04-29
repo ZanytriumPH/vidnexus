@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../video_summary_models.dart';
+import '../video_summary_presentation_models.dart';
 import 'video_summary_processing_widgets.dart';
 
 class ProcessingStageWorkspace extends StatelessWidget {

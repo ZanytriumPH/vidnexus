@@ -333,6 +333,11 @@ lib/
 - 清理 repository 返回对象中的展示层文案
 - 为 processing / draft / final result 建立更稳定的数据模型
 
+约定：
+
+- repository 只能返回 domain data / raw result data，不直接返回 `ProcessingSnapshot`、`DraftResult`、`FinalSummaryData` 等 presentation model。
+- presentation model 只能由 application 层 mapper 产出，UI 与 seeded demo 数据都应复用同一条映射链路。
+
 收益：
 
 - 为真实 API 接入做准备

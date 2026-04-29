@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../app/routing/app_route_arguments.dart';
+import '../../app/routing/app_router.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_card.dart';
-import '../home/home_screen.dart';
-import 'knowledge_base_chat_screen.dart';
 import 'knowledge_base_models.dart';
-import 'knowledge_base_sources_screen.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
 
 class KnowledgeBaseSessionScreen extends StatefulWidget {
@@ -49,17 +48,13 @@ class _KnowledgeBaseSessionScreenState
                 onSectionSelected: (section) {
                   switch (section) {
                     case AppNavSection.videoSummary:
-                      Navigator.pushNamedAndRemoveUntil(
-                        context,
-                        HomeScreen.routeName,
-                        (route) => false,
-                      );
+                      AppNavigator.goToHomeRoot(context);
                     case AppNavSection.knowledgeBase:
-                      Navigator.popUntil(context, (route) => route.isFirst);
+                      AppNavigator.popToKnowledgeBaseHome(context);
                   }
                 },
                 title: widget.library.title,
-                onLeadingPressed: () => Navigator.of(context).pop(),
+                onLeadingPressed: () => AppNavigator.popCurrent(context),
                 trailing: InkWell(
                   onTap: _startEmptyConversation,
                   borderRadius: BorderRadius.circular(17.5),
@@ -151,21 +146,19 @@ class _KnowledgeBaseSessionScreenState
   }
 
   void _openConversation(KnowledgeConversationPreview conversation) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => KnowledgeBaseChatScreen(
-          library: widget.library,
-          initialConversation: conversation,
-        ),
+    AppNavigator.openKnowledgeBaseChat(
+      context,
+      arguments: KnowledgeBaseChatRouteArguments(
+        library: widget.library,
+        initialConversation: conversation,
       ),
     );
   }
 
   void _openSources() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => KnowledgeBaseSourcesScreen(library: widget.library),
-      ),
+    AppNavigator.openKnowledgeBaseSources(
+      context,
+      arguments: KnowledgeBaseSourcesRouteArguments(library: widget.library),
     );
   }
 

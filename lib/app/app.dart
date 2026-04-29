@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../features/home/home_screen.dart';
-import '../features/knowledge_base/knowledge_base_home_screen.dart';
+import 'routing/app_router.dart';
+import 'routing/app_routes.dart';
 import 'theme/app_theme.dart';
 
 class VidNexusApp extends StatelessWidget {
@@ -13,12 +13,9 @@ class VidNexusApp extends StatelessWidget {
       title: 'VidNexus',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
-      initialRoute: HomeScreen.routeName,
-      routes: {
-        HomeScreen.routeName: (_) => const HomeScreen(),
-        KnowledgeBaseHomeScreen.routeName: (_) =>
-            const KnowledgeBaseHomeScreen(),
-      },
+      initialRoute: AppRoutes.home,
+      onGenerateRoute: AppRouter.onGenerateRoute,
+      onUnknownRoute: AppRouter.onUnknownRoute,
     );
   }
 }
