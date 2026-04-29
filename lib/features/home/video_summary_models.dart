@@ -72,6 +72,16 @@ class TimestampChipData {
   final String note;
 }
 
+class TimestampRangeSelection {
+  const TimestampRangeSelection({
+    required this.startSeconds,
+    required this.endSeconds,
+  });
+
+  final int startSeconds;
+  final int endSeconds;
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.sender,
