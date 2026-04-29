@@ -136,8 +136,8 @@ class HeroCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Text(
-                    '${(processingSnapshot!.progress * 100).round()}%',
+                  AnimatedPercentLabel(
+                    value: processingSnapshot!.progress * 100,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
@@ -561,8 +561,8 @@ class ProcessingStepTile extends StatelessWidget {
               const SizedBox(width: 8),
               SizedBox(
                 width: 48,
-                child: Text(
-                  '${step.progress}%',
+                child: AnimatedPercentLabel(
+                  value: step.progress.toDouble(),
                   textAlign: TextAlign.right,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontSize: 10,
@@ -610,16 +610,81 @@ class AnimatedProgressBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeValue = value.clamp(0.0, 1.0);
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(99),
-      child: LinearProgressIndicator(
-        value: safeValue,
-        minHeight: minHeight,
-        backgroundColor: backgroundColor,
-        valueColor: AlwaysStoppedAnimation<Color>(
-          progressColor(safeValue),
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 0.0;
+        final targetWidth = maxWidth * safeValue;
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(99),
+          child: Stack(
+            children: [
+              Container(
+                height: minHeight,
+                width: double.infinity,
+                color: backgroundColor,
+              ),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 420),
+                curve: Curves.easeOutCubic,
+                height: minHeight,
+                width: targetWidth,
+                decoration: BoxDecoration(
+                  color: progressColor(safeValue),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class AnimatedPercentLabel extends ImplicitlyAnimatedWidget {
+  const AnimatedPercentLabel({
+    required this.value,
+    required this.style,
+    this.textAlign = TextAlign.left,
+    super.key,
+    super.curve = Curves.easeOutCubic,
+    super.duration = const Duration(milliseconds: 420),
+  });
+
+  final double value;
+  final TextStyle? style;
+  final TextAlign textAlign;
+
+  @override
+  ImplicitlyAnimatedWidgetState<AnimatedPercentLabel> createState() =>
+      _AnimatedPercentLabelState();
+}
+
+class _AnimatedPercentLabelState
+    extends ImplicitlyAnimatedWidgetState<AnimatedPercentLabel> {
+  Tween<double>? _valueTween;
+
+  @override
+  void forEachTween(TweenVisitor<dynamic> visitor) {
+    _valueTween = visitor(
+          _valueTween,
+          widget.value,
+          (dynamic value) => Tween<double>(begin: value as double),
+        )
+        as Tween<double>?;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final animatedValue = _valueTween?.evaluate(animation) ?? widget.value;
+
+    return Text(
+      '${animatedValue.round()}%',
+      textAlign: widget.textAlign,
+      style: widget.style,
     );
   }
 }
