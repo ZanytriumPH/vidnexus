@@ -94,14 +94,14 @@ class PreferenceCard extends StatelessWidget {
             hintStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
               fontSize: 13,
               color: AppColors.textHint,
-              height: 2.5,
+              height: 2.45,
             ),
           ),
           style: Theme.of(
             context,
           ).textTheme.bodyMedium?.copyWith(
             fontSize: 13,
-            height: 2.5,
+            height: 1.45,
           ),
         ),
       ),
