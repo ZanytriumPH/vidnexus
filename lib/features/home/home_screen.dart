@@ -29,6 +29,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final flowState = ref.watch(videoSummaryFlowControllerProvider);
     final sessionHistory = ref.watch(videoSummarySessionHistoryProvider);
     final textEditing = ref.watch(videoSummaryTextEditingControllerProvider);
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final useBoundedStageLayout =
+        flowState.stage == VideoSummaryStage.ready ||
+        flowState.stage == VideoSummaryStage.draft ||
+        flowState.stage == VideoSummaryStage.finalChat;
+
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Colors.white,
@@ -54,7 +60,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onHorizontalDragEnd: _handleHorizontalDragEnd,
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            padding: EdgeInsets.fromLTRB(20, 12, 20, keyboardVisible ? 8 : 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -67,14 +73,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 const SizedBox(height: 5),
                 Expanded(
-                  child: flowState.stage == VideoSummaryStage.ready
-                      ? Column(
-                          children: [
-                            const Spacer(flex: 5),
-                            _buildWorkspace(flowState, textEditing),
-                            const Spacer(flex: 4),
-                          ],
-                        )
+                  child: useBoundedStageLayout
+                      ? _buildWorkspace(flowState, textEditing)
                       : SingleChildScrollView(
                           child: _buildWorkspace(flowState, textEditing),
                         ),
@@ -109,7 +109,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   // 新建会话需要同时重置流程状态、文本状态和 session 历史，因此在这里做一次协调调用。
   void _createNewSession() {
-    final flowController = ref.read(videoSummaryFlowControllerProvider.notifier);
+    final flowController = ref.read(
+      videoSummaryFlowControllerProvider.notifier,
+    );
     final sessionHistoryController = ref.read(
       videoSummarySessionHistoryProvider.notifier,
     );
@@ -139,12 +141,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     textEditing.runWithoutSync(() {
       // 恢复顺序很重要：先回填文本，再恢复流程快照，最后切 active session。
       textEditing.applySessionSnapshot(session.snapshot);
-      ref.read(videoSummaryFlowControllerProvider.notifier).restoreSnapshot(
-        session.snapshot.flowSnapshot,
-      );
-      ref.read(videoSummarySessionHistoryProvider.notifier).activateSession(
-        session.id,
-      );
+      ref
+          .read(videoSummaryFlowControllerProvider.notifier)
+          .restoreSnapshot(session.snapshot.flowSnapshot);
+      ref
+          .read(videoSummarySessionHistoryProvider.notifier)
+          .activateSession(session.id);
     });
   }
 
@@ -165,10 +167,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _generateFinalSummary() {
     final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
-    return ref.read(videoSummaryFlowControllerProvider.notifier).generateFinalSummary(
-      guidance: textEditing.draftGuidanceText.trim(),
-      draftBodyText: textEditing.draftBodyText,
-    );
+    return ref
+        .read(videoSummaryFlowControllerProvider.notifier)
+        .generateFinalSummary(
+          guidance: textEditing.draftGuidanceText.trim(),
+          draftBodyText: textEditing.draftBodyText,
+        );
   }
 
   Future<void> _sendChatMessage() async {
@@ -178,9 +182,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
 
-    await ref.read(videoSummaryFlowControllerProvider.notifier).sendChatMessage(
-      message,
-    );
+    await ref
+        .read(videoSummaryFlowControllerProvider.notifier)
+        .sendChatMessage(message);
   }
 
   VideoSummaryWorkspace _buildWorkspace(
@@ -205,28 +209,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       isGenerating: flowState.isGenerating,
       isSendingChat: flowState.isSendingChat,
       isTimestampScoped: flowState.isTimestampScoped,
-      selectedTimestampLabel:
-          ref.read(videoSummaryFlowControllerProvider.notifier).selectedTimestampLabel,
-      totalDurationSeconds:
-          ref.read(videoSummaryFlowControllerProvider.notifier).videoDurationInSeconds,
+      selectedTimestampLabel: ref
+          .read(videoSummaryFlowControllerProvider.notifier)
+          .selectedTimestampLabel,
+      totalDurationSeconds: ref
+          .read(videoSummaryFlowControllerProvider.notifier)
+          .videoDurationInSeconds,
       selectedTimestampStartSeconds: flowState.selectedTimestampStartSeconds,
       selectedTimestampEndSeconds: flowState.selectedTimestampEndSeconds,
-      onUploadCardPressed:
-          ref.read(videoSummaryFlowControllerProvider.notifier).toggleUploadSelection,
-      onProcessingCardPressed:
-          ref.read(videoSummaryFlowControllerProvider.notifier).toggleProcessingExpanded,
-      onDraftEditModeChanged:
-          ref.read(videoSummaryFlowControllerProvider.notifier).setDraftEditMode,
+      onUploadCardPressed: ref
+          .read(videoSummaryFlowControllerProvider.notifier)
+          .toggleUploadSelection,
+      onProcessingCardPressed: ref
+          .read(videoSummaryFlowControllerProvider.notifier)
+          .toggleProcessingExpanded,
+      onDraftEditModeChanged: ref
+          .read(videoSummaryFlowControllerProvider.notifier)
+          .setDraftEditMode,
       onStartPressed: flowState.isGenerating
           ? null
-          : ref.read(videoSummaryFlowControllerProvider.notifier).startDraftGeneration,
-      onGenerateFinalPressed:
-          flowState.isGenerating ? null : _generateFinalSummary,
+          : ref
+                .read(videoSummaryFlowControllerProvider.notifier)
+                .startDraftGeneration,
+      onGenerateFinalPressed: flowState.isGenerating
+          ? null
+          : _generateFinalSummary,
       onSendChatPressed: flowState.isSendingChat ? null : _sendChatMessage,
-      onTimestampScopeChanged:
-          ref.read(videoSummaryFlowControllerProvider.notifier).setTimestampScope,
-      onTimestampRangeChanged:
-          ref.read(videoSummaryFlowControllerProvider.notifier).setTimestampRange,
+      onTimestampScopeChanged: ref
+          .read(videoSummaryFlowControllerProvider.notifier)
+          .setTimestampScope,
+      onTimestampRangeChanged: ref
+          .read(videoSummaryFlowControllerProvider.notifier)
+          .setTimestampRange,
     );
   }
 }

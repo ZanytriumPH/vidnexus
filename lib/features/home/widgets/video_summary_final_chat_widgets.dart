@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../app/widgets/app_buttons.dart';
 import '../../../app/widgets/app_header_add_button.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
@@ -237,7 +238,7 @@ class ChatComposer extends StatelessWidget {
                   hintText: '继续追问这段总结...',
                   filled: false,
                   isDense: true,
-                  contentPadding: EdgeInsets.fromLTRB(6, 3, 6, 2),
+                  contentPadding: EdgeInsets.fromLTRB(6, 3, 6, 10),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
@@ -286,8 +287,8 @@ class ChatComposer extends StatelessWidget {
                   ),
                   if (hasInput) ...[
                     const SizedBox(width: 8),
-                    _ComposerSendButton(
-                      isSending: isSending,
+                    AppInlineSubmitButton(
+                      isLoading: isSending,
                       onPressed: onSendPressed,
                     ),
                   ],
@@ -377,43 +378,6 @@ class _ComposerAttachmentButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppHeaderAddButton(onPressed: onPressed);
-  }
-}
-
-class _ComposerSendButton extends StatelessWidget {
-  const _ComposerSendButton({required this.isSending, required this.onPressed});
-
-  final bool isSending;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: const BoxDecoration(
-        color: AppColors.primary,
-        shape: BoxShape.circle,
-      ),
-      child: IconButton(
-        onPressed: onPressed,
-        padding: EdgeInsets.zero,
-        icon: isSending
-            ? const SizedBox(
-                width: 10,
-                height: 10,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.8,
-                  color: Colors.white,
-                ),
-              )
-            : const Icon(
-                Icons.arrow_upward_rounded,
-                size: 15,
-                color: Colors.white,
-              ),
-      ),
-    );
   }
 }
 

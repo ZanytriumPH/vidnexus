@@ -25,9 +25,62 @@ class ReadyStageWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final isKeyboardVisible = keyboardInset > 0;
+
+    if (isKeyboardVisible) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Column(
+              children: [
+                const Spacer(),
+                HeroCard(
+                  stage: VideoSummaryStage.ready,
+                  highlighted: highlighted,
+                  videoAsset: videoAsset,
+                  processingSnapshot: null,
+                  processingExpanded: false,
+                  onTap: onUploadCardPressed,
+                ),
+              ],
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 12),
+                Text(
+                  '总结偏好（可选）',
+                  textAlign: TextAlign.center,
+                  style: context.appTextStyles.summarySectionTitle,
+                ),
+                const SizedBox(height: 12),
+                PreferenceCard(
+                  controller: preferenceController,
+                  hintText: '例如：请先给我按行业、声线和行动建议展开。',
+                  prominent: true,
+                ),
+                const SizedBox(height: 12),
+                ReadyPrimaryButton(
+                  label: isGenerating ? '正在生成中...' : '开始生成初稿',
+                  onPressed: onStartPressed,
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const Spacer(flex: 5),
         HeroCard(
           stage: VideoSummaryStage.ready,
           highlighted: highlighted,
@@ -53,6 +106,7 @@ class ReadyStageWorkspace extends StatelessWidget {
           label: isGenerating ? '正在生成中...' : '开始生成初稿',
           onPressed: onStartPressed,
         ),
+        const Spacer(flex: 4),
       ],
     );
   }

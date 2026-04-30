@@ -46,18 +46,28 @@ class FinalChatStageWorkspace extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        HeroCard(
-          stage: VideoSummaryStage.finalChat,
-          highlighted: highlighted,
-          videoAsset: videoAsset,
-          processingSnapshot: null,
-          processingExpanded: false,
-          onTap: onUploadCardPressed,
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                HeroCard(
+                  stage: VideoSummaryStage.finalChat,
+                  highlighted: highlighted,
+                  videoAsset: videoAsset,
+                  processingSnapshot: null,
+                  processingExpanded: false,
+                  onTap: onUploadCardPressed,
+                ),
+                const SizedBox(height: 12),
+                ChatThread(summary: finalSummaryData, messages: chatMessages),
+                const MessageActionRow(),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 12),
-        ChatThread(summary: finalSummaryData, messages: chatMessages),
-        const MessageActionRow(),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         ChatComposer(
           controller: chatController,
           isSending: isSendingChat,

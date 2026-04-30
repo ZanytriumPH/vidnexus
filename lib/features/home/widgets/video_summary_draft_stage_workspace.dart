@@ -40,29 +40,38 @@ class DraftStageWorkspace extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        HeroCard(
-          stage: VideoSummaryStage.draft,
-          highlighted: highlighted,
-          videoAsset: videoAsset,
-          processingSnapshot: null,
-          processingExpanded: false,
-          onTap: onUploadCardPressed,
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                HeroCard(
+                  stage: VideoSummaryStage.draft,
+                  highlighted: highlighted,
+                  videoAsset: videoAsset,
+                  processingSnapshot: null,
+                  processingExpanded: false,
+                  onTap: onUploadCardPressed,
+                ),
+                const SizedBox(height: 12),
+                DraftBodyCard(
+                  draftBodyController: draftBodyController,
+                  isEditMode: isDraftEditMode,
+                  onModeChanged: onDraftEditModeChanged,
+                ),
+                const SizedBox(height: 10),
+                const SectionLabel(title: '总结指导（可选）', centered: true),
+                const SizedBox(height: 6),
+                PreferenceCard(
+                  controller: guidanceController,
+                  hintText: draftResult.suggestionHint,
+                  prominent: true,
+                ),
+                const SizedBox(height: 14),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 12),
-        DraftBodyCard(
-          draftBodyController: draftBodyController,
-          isEditMode: isDraftEditMode,
-          onModeChanged: onDraftEditModeChanged,
-        ),
-        const SizedBox(height: 10),
-        const SectionLabel(title: '总结指导（可选）', centered: true),
-        const SizedBox(height: 6),
-        PreferenceCard(
-          controller: guidanceController,
-          hintText: draftResult.suggestionHint,
-          prominent: true,
-        ),
-        const SizedBox(height: 14),
         AppPrimaryButton(
           label: isGenerating ? '正在整理最终稿...' : '生成最终稿',
           labelStyle: context.appTextStyles.primaryActionButtonLabel,

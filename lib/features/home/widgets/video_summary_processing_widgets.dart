@@ -273,7 +273,7 @@ class _ReadyUploadCallout extends StatelessWidget {
           Text(
             highlighted ? '已选择 ${videoAsset.fileName}' : '点击从设备选择文件',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 10,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
               color: AppColors.textSecondary,
             ),
