@@ -82,6 +82,7 @@ class _KnowledgeBaseChatScreenState extends State<KnowledgeBaseChatScreen> {
                 },
               ),
             ),
+            const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
               child: KnowledgeBaseComposer(

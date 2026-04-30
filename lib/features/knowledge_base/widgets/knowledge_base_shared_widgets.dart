@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_bottom_nav.dart';
+import '../../../app/widgets/app_buttons.dart';
+import '../../../app/widgets/composer_attachment_button.dart';
 import '../knowledge_base_models.dart';
 
 class KnowledgeBaseTopBar extends StatelessWidget {
@@ -104,70 +107,65 @@ class KnowledgeBaseComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppColors.borderStrong),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: const Color(0xFFD7DFE7)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              isCollapsed: true,
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              hintText: hintText,
-              hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textHint,
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 20),
+            child: SizedBox(
+              width: double.infinity,
+              child: TextField(
+                controller: controller,
+                decoration: InputDecoration(
+                  hintText: hintText,
+                  filled: false,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.fromLTRB(6, 3, 6, 10),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  isCollapsed: true,
+                ),
+                style: context.appTextStyles.summaryContentBody.copyWith(
+                  height: 1.2,
+                ),
+                strutStyle: const StrutStyle(
+                  height: 1.2,
+                  leading: 0,
+                  forceStrutHeight: true,
+                ),
+                textAlignVertical: TextAlignVertical.top,
+                minLines: 1,
+                maxLines: 4,
               ),
             ),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textPrimary,
-            ),
-            maxLines: 3,
-            minLines: 1,
           ),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                '+',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              InkWell(
-                onTap: onSubmit,
-                borderRadius: BorderRadius.circular(18),
-                child: Container(
-                  width: 18,
-                  height: 18,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF1F2937),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.arrow_upward_rounded,
-                      size: 12,
-                      color: Colors.white,
+          const SizedBox(height: 8),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, child) {
+              final hasInput = value.text.trim().isNotEmpty;
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Spacer(),
+                  const ComposerAttachmentButton(),
+                  if (hasInput) ...[
+                    const SizedBox(width: 8),
+                    AppInlineSubmitButton(
+                      isLoading: false,
+                      onPressed: onSubmit,
                     ),
-                  ),
-                ),
-              ),
-            ],
+                  ],
+                ],
+              );
+            },
           ),
         ],
       ),

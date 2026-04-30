@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_buttons.dart';
-import '../../../app/widgets/app_header_add_button.dart';
+import '../../../app/widgets/composer_attachment_button.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
 import 'timestamp_interval_picker_sheet.dart';
@@ -290,9 +290,7 @@ class ChatComposer extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  _ComposerAttachmentButton(
-                    onPressed: () => _showAttachmentOptions(context),
-                  ),
+                  const ComposerAttachmentButton(),
                   if (hasInput) ...[
                     const SizedBox(width: 8),
                     AppInlineSubmitButton(
@@ -309,127 +307,6 @@ class ChatComposer extends StatelessWidget {
     );
   }
 
-  Future<void> _showAttachmentOptions(BuildContext context) async {
-    final action = await showModalBottomSheet<_AttachmentAction>(
-      context: context,
-      backgroundColor: Colors.white,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '添加内容',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _AttachmentActionTile(
-                  icon: Icons.camera_alt_outlined,
-                  label: '拍照',
-                  onTap: () =>
-                      Navigator.of(context).pop(_AttachmentAction.camera),
-                ),
-                const SizedBox(height: 8),
-                _AttachmentActionTile(
-                  icon: Icons.photo_library_outlined,
-                  label: '相册',
-                  onTap: () =>
-                      Navigator.of(context).pop(_AttachmentAction.gallery),
-                ),
-                const SizedBox(height: 8),
-                _AttachmentActionTile(
-                  icon: Icons.insert_drive_file_outlined,
-                  label: '文件',
-                  onTap: () =>
-                      Navigator.of(context).pop(_AttachmentAction.file),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (!context.mounted || action == null) {
-      return;
-    }
-
-    final message = switch (action) {
-      _AttachmentAction.camera => '拍照功能将在下一阶段接入。',
-      _AttachmentAction.gallery => '相册功能将在下一阶段接入。',
-      _AttachmentAction.file => '文件功能将在下一阶段接入。',
-    };
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-}
-
-class _ComposerAttachmentButton extends StatelessWidget {
-  const _ComposerAttachmentButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppHeaderAddButton(onPressed: onPressed);
-  }
-}
-
-class _AttachmentActionTile extends StatelessWidget {
-  const _AttachmentActionTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF7F9FC),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFD7DFE7)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: AppColors.textPrimary),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _TimestampScopeActionButton extends StatelessWidget {
@@ -631,5 +508,3 @@ class _TimestampActionTile extends StatelessWidget {
 }
 
 enum _TimestampAction { edit, disable }
-
-enum _AttachmentAction { camera, gallery, file }
