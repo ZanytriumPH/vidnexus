@@ -28,7 +28,10 @@ class AppSectionHeaderBar extends StatelessWidget {
             width: 40,
             child: Align(
               alignment: Alignment.centerLeft,
-              child: leading ?? const SizedBox.shrink(),
+              child: Transform.translate(
+                offset: const Offset(-10, 0),
+                child: leading ?? const SizedBox.shrink(),
+              ),
             ),
           ),
           const SizedBox(width: 8),
