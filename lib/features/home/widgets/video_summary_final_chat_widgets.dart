@@ -197,7 +197,12 @@ class ChatComposer extends StatelessWidget {
     required this.controller,
     required this.isSending,
     required this.isTimestampScoped,
+    required this.selectedTimestampLabel,
+    required this.totalDurationSeconds,
+    required this.selectedTimestampStartSeconds,
+    required this.selectedTimestampEndSeconds,
     required this.onTimestampScopeChanged,
+    required this.onTimestampRangeChanged,
     required this.onSendPressed,
     super.key,
   });
@@ -205,7 +210,12 @@ class ChatComposer extends StatelessWidget {
   final TextEditingController controller;
   final bool isSending;
   final bool isTimestampScoped;
+  final String selectedTimestampLabel;
+  final int totalDurationSeconds;
+  final int selectedTimestampStartSeconds;
+  final int selectedTimestampEndSeconds;
   final ValueChanged<bool> onTimestampScopeChanged;
+  final ValueChanged<TimestampRangeSelection> onTimestampRangeChanged;
   final VoidCallback? onSendPressed;
 
   @override
@@ -220,6 +230,17 @@ class ChatComposer extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (isTimestampScoped) ...[
+            TimestampRangePickerBar(
+              selectedLabel: selectedTimestampLabel,
+              totalDurationSeconds: totalDurationSeconds,
+              selectedStartSeconds: selectedTimestampStartSeconds,
+              selectedEndSeconds: selectedTimestampEndSeconds,
+              onRangeChanged: onTimestampRangeChanged,
+              embedded: true,
+            ),
+            const SizedBox(height: 8),
+          ],
           ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 34),
             child: Align(
@@ -290,6 +311,7 @@ class TimestampRangePickerBar extends StatelessWidget {
     required this.selectedStartSeconds,
     required this.selectedEndSeconds,
     required this.onRangeChanged,
+    this.embedded = false,
     super.key,
   });
 
@@ -298,6 +320,7 @@ class TimestampRangePickerBar extends StatelessWidget {
   final int selectedStartSeconds;
   final int selectedEndSeconds;
   final ValueChanged<TimestampRangeSelection> onRangeChanged;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
@@ -308,9 +331,11 @@ class TimestampRangePickerBar extends StatelessWidget {
         height: 36,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFFF6F8FB),
+          color: embedded ? const Color(0xFFEAF1FF) : const Color(0xFFF6F8FB),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFD7DFE7)),
+          border: Border.all(
+            color: embedded ? const Color(0xFFD6E3FF) : const Color(0xFFD7DFE7),
+          ),
         ),
         child: Row(
           children: [
@@ -318,14 +343,16 @@ class TimestampRangePickerBar extends StatelessWidget {
               width: 18,
               height: 18,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: embedded ? const Color(0xFFF9FBFF) : Colors.white,
                 borderRadius: BorderRadius.circular(9),
-                border: Border.all(color: const Color(0xFFD7DFE7)),
+                border: Border.all(
+                  color: embedded ? const Color(0xFFD6E3FF) : const Color(0xFFD7DFE7),
+                ),
               ),
               child: const Icon(
                 Icons.schedule_rounded,
                 size: 11,
-                color: AppColors.textSecondary,
+                color: Color(0xFF2B63EB),
               ),
             ),
             const SizedBox(width: 8),
@@ -335,6 +362,7 @@ class TimestampRangePickerBar extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: 10,
                   color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -342,13 +370,13 @@ class TimestampRangePickerBar extends StatelessWidget {
               width: 18,
               height: 18,
               decoration: BoxDecoration(
-                color: const Color(0xFF9FA8B7),
+                color: embedded ? const Color(0xFFDDE7FB) : const Color(0xFF9FA8B7),
                 borderRadius: BorderRadius.circular(9),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.chevron_right_rounded,
                 size: 14,
-                color: Colors.white,
+                color: embedded ? const Color(0xFF4567B2) : Colors.white,
               ),
             ),
           ],
