@@ -230,17 +230,6 @@ class ChatComposer extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (isTimestampScoped) ...[
-            TimestampRangePickerBar(
-              selectedLabel: selectedTimestampLabel,
-              totalDurationSeconds: totalDurationSeconds,
-              selectedStartSeconds: selectedTimestampStartSeconds,
-              selectedEndSeconds: selectedTimestampEndSeconds,
-              onRangeChanged: onTimestampRangeChanged,
-              embedded: true,
-            ),
-            const SizedBox(height: 8),
-          ],
           ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 34),
             child: Align(
@@ -265,11 +254,22 @@ class ChatComposer extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              _TimestampScopeToggleButton(
-                enabled: isTimestampScoped,
-                onTap: () => onTimestampScopeChanged(!isTimestampScoped),
+              Flexible(
+                fit: FlexFit.loose,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _TimestampScopeActionButton(
+                    enabled: isTimestampScoped,
+                    selectedLabel: selectedTimestampLabel,
+                    totalDurationSeconds: totalDurationSeconds,
+                    selectedStartSeconds: selectedTimestampStartSeconds,
+                    selectedEndSeconds: selectedTimestampEndSeconds,
+                    onEnabledChanged: onTimestampScopeChanged,
+                    onRangeChanged: onTimestampRangeChanged,
+                  ),
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Container(
                 width: 28,
                 height: 28,
@@ -304,111 +304,29 @@ class ChatComposer extends StatelessWidget {
   }
 }
 
-class TimestampRangePickerBar extends StatelessWidget {
-  const TimestampRangePickerBar({
+class _TimestampScopeActionButton extends StatelessWidget {
+  const _TimestampScopeActionButton({
+    required this.enabled,
     required this.selectedLabel,
     required this.totalDurationSeconds,
     required this.selectedStartSeconds,
     required this.selectedEndSeconds,
+    required this.onEnabledChanged,
     required this.onRangeChanged,
-    this.embedded = false,
-    super.key,
   });
 
+  final bool enabled;
   final String selectedLabel;
   final int totalDurationSeconds;
   final int selectedStartSeconds;
   final int selectedEndSeconds;
+  final ValueChanged<bool> onEnabledChanged;
   final ValueChanged<TimestampRangeSelection> onRangeChanged;
-  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => _showIntervalPicker(context),
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        height: 36,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: embedded ? const Color(0xFFEAF1FF) : const Color(0xFFF6F8FB),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: embedded ? const Color(0xFFD6E3FF) : const Color(0xFFD7DFE7),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                color: embedded ? const Color(0xFFF9FBFF) : Colors.white,
-                borderRadius: BorderRadius.circular(9),
-                border: Border.all(
-                  color: embedded ? const Color(0xFFD6E3FF) : const Color(0xFFD7DFE7),
-                ),
-              ),
-              child: const Icon(
-                Icons.schedule_rounded,
-                size: 11,
-                color: Color(0xFF2B63EB),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                selectedLabel,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 10,
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                color: embedded ? const Color(0xFFDDE7FB) : const Color(0xFF9FA8B7),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Icon(
-                Icons.chevron_right_rounded,
-                size: 14,
-                color: embedded ? const Color(0xFF4567B2) : Colors.white,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showIntervalPicker(BuildContext context) async {
-    await showTimestampIntervalPickerSheet(
-      context: context,
-      initialStartSeconds: selectedStartSeconds,
-      initialEndSeconds: selectedEndSeconds,
-      totalDurationSeconds: totalDurationSeconds,
-      onRangeChanged: onRangeChanged,
-    );
-  }
-}
-
-class _TimestampScopeToggleButton extends StatelessWidget {
-  const _TimestampScopeToggleButton({
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
+      onTap: () => _handleTap(context),
       borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
@@ -431,12 +349,142 @@ class _TimestampScopeToggleButton extends StatelessWidget {
               color: enabled ? const Color(0xFF2B63EB) : AppColors.textSecondary,
             ),
             const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                enabled ? '时间区间  $selectedLabel' : '时间区间',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: enabled ? const Color(0xFF2B63EB) : AppColors.textPrimary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleTap(BuildContext context) async {
+    if (!enabled) {
+      await _showIntervalPicker(context);
+      return;
+    }
+
+    final action = await showModalBottomSheet<_TimestampAction>(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '时间区间已启用',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  selectedLabel,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _TimestampActionTile(
+                  icon: Icons.edit_outlined,
+                  label: '修改时间区间',
+                  onTap: () => Navigator.of(context).pop(_TimestampAction.edit),
+                ),
+                const SizedBox(height: 8),
+                _TimestampActionTile(
+                  icon: Icons.close_rounded,
+                  label: '关闭时间区间',
+                  onTap: () => Navigator.of(context).pop(_TimestampAction.disable),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (action == _TimestampAction.edit) {
+      if (!context.mounted) {
+        return;
+      }
+      await _showIntervalPicker(context);
+      return;
+    }
+
+    if (action == _TimestampAction.disable) {
+      onEnabledChanged(false);
+    }
+  }
+
+  Future<void> _showIntervalPicker(BuildContext context) async {
+    await showTimestampIntervalPickerSheet(
+      context: context,
+      initialStartSeconds: selectedStartSeconds,
+      initialEndSeconds: selectedEndSeconds,
+      totalDurationSeconds: totalDurationSeconds,
+      onRangeChanged: (range) {
+        onRangeChanged(range);
+        onEnabledChanged(true);
+      },
+    );
+  }
+}
+
+class _TimestampActionTile extends StatelessWidget {
+  const _TimestampActionTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F9FC),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFD7DFE7)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: AppColors.textPrimary),
+            const SizedBox(width: 10),
             Text(
-              '时间区间',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 12,
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: enabled ? const Color(0xFF2B63EB) : AppColors.textPrimary,
+                color: AppColors.textPrimary,
               ),
             ),
           ],
@@ -445,3 +493,5 @@ class _TimestampScopeToggleButton extends StatelessWidget {
     );
   }
 }
+
+enum _TimestampAction { edit, disable }
