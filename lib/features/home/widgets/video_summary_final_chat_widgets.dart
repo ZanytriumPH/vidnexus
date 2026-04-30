@@ -192,113 +192,168 @@ class ActionIconButton extends StatelessWidget {
   }
 }
 
-class TimestampSection extends StatelessWidget {
-  const TimestampSection({
-    required this.enabled,
+class ChatComposer extends StatelessWidget {
+  const ChatComposer({
+    required this.controller,
+    required this.isSending,
+    required this.isTimestampScoped,
+    required this.onTimestampScopeChanged,
+    required this.onSendPressed,
+    super.key,
+  });
+
+  final TextEditingController controller;
+  final bool isSending;
+  final bool isTimestampScoped;
+  final ValueChanged<bool> onTimestampScopeChanged;
+  final VoidCallback? onSendPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: const Color(0xFFD7DFE7)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 34),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  hintText: '继续追问这段总结...',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  isCollapsed: true,
+                ),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontSize: 11,
+                ),
+                minLines: 1,
+                maxLines: 4,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _TimestampScopeToggleButton(
+                enabled: isTimestampScoped,
+                onTap: () => onTimestampScopeChanged(!isTimestampScoped),
+              ),
+              const Spacer(),
+              Container(
+                width: 28,
+                height: 28,
+                decoration: const BoxDecoration(
+                  color: Colors.black,
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  onPressed: onSendPressed,
+                  padding: EdgeInsets.zero,
+                  icon: isSending
+                      ? const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.arrow_upward_rounded,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class TimestampRangePickerBar extends StatelessWidget {
+  const TimestampRangePickerBar({
     required this.selectedLabel,
     required this.totalDurationSeconds,
     required this.selectedStartSeconds,
     required this.selectedEndSeconds,
-    required this.onEnabledChanged,
     required this.onRangeChanged,
     super.key,
   });
 
-  final bool enabled;
   final String selectedLabel;
   final int totalDurationSeconds;
   final int selectedStartSeconds;
   final int selectedEndSeconds;
-  final ValueChanged<bool> onEnabledChanged;
   final ValueChanged<TimestampRangeSelection> onRangeChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return InkWell(
+      onTap: () => _showIntervalPicker(context),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF6F8FB),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFD7DFE7)),
+        ),
+        child: Row(
           children: [
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: const Color(0xFFD7DFE7)),
+              ),
+              child: const Icon(
+                Icons.schedule_rounded,
+                size: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                '时间区间追问，发送时附加这段片段',
+                selectedLabel,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 10,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ),
-            Transform.scale(
-              scale: 0.8,
-              child: Switch(
-                value: enabled,
-                onChanged: onEnabledChanged,
-                activeTrackColor: const Color(0xFF2B63EB),
-                inactiveThumbColor: Colors.white,
-                inactiveTrackColor: const Color(0xFFD8DEE7),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                color: const Color(0xFF9FA8B7),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: const Icon(
+                Icons.chevron_right_rounded,
+                size: 14,
+                color: Colors.white,
               ),
             ),
           ],
         ),
-        if (enabled) ...[
-          const SizedBox(height: 8),
-          InkWell(
-            onTap: () => _showIntervalPicker(context),
-            borderRadius: BorderRadius.circular(18),
-            child: Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF6F8FB),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFD7DFE7)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(9),
-                      border: Border.all(color: const Color(0xFFD7DFE7)),
-                    ),
-                    child: const Icon(
-                      Icons.schedule_rounded,
-                      size: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      selectedLabel,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: 10,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    width: 18,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF9FA8B7),
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: const Icon(
-                      Icons.chevron_right_rounded,
-                      size: 14,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ],
+      ),
     );
   }
 
@@ -313,86 +368,51 @@ class TimestampSection extends StatelessWidget {
   }
 }
 
-class ChatComposer extends StatelessWidget {
-  const ChatComposer({
-    required this.controller,
-    required this.isSending,
-    required this.onSendPressed,
-    super.key,
+class _TimestampScopeToggleButton extends StatelessWidget {
+  const _TimestampScopeToggleButton({
+    required this.enabled,
+    required this.onTap,
   });
 
-  final TextEditingController controller;
-  final bool isSending;
-  final VoidCallback? onSendPressed;
+  final bool enabled;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 50,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(25),
-        border: Border.all(color: const Color(0xFFD7DFE7)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: const Icon(
-              Icons.add_rounded,
-              size: 18,
-              color: AppColors.textPrimary,
-            ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: enabled ? const Color(0xFFE8F0FF) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: enabled ? const Color(0xFFBFD1FF) : const Color(0xFFD7DFE7),
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                hintText: '继续追问这段总结...',
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                isCollapsed: true,
-              ),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontSize: 11,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.schedule_rounded,
+              size: 16,
+              color: enabled ? const Color(0xFF2B63EB) : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '时间区间',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: enabled ? const Color(0xFF2B63EB) : AppColors.textPrimary,
               ),
             ),
-          ),
-          Container(
-            width: 28,
-            height: 28,
-            decoration: const BoxDecoration(
-              color: Colors.black,
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              onPressed: onSendPressed,
-              padding: EdgeInsets.zero,
-              icon: isSending
-                  ? const SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(
-                      Icons.arrow_upward_rounded,
-                      size: 14,
-                      color: Colors.white,
-                    ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
