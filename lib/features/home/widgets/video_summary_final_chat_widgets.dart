@@ -481,17 +481,19 @@ class _TimestampScopeActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const buttonHeight = 28.0;
+
     return InkWell(
       onTap: () => _handleTap(context),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(buttonHeight / 2),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
-        constraints: const BoxConstraints(minHeight: 32),
-        padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
+        height: buttonHeight,
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
         decoration: BoxDecoration(
           color: enabled ? const Color(0xFFE8F0FF) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(buttonHeight / 2),
           border: Border.all(
             color: enabled ? const Color(0xFFBFD1FF) : const Color(0xFFD7DFE7),
           ),
@@ -502,18 +504,19 @@ class _TimestampScopeActionButton extends StatelessWidget {
           children: [
             Icon(
               Icons.schedule_rounded,
-              size: 16,
+              size: 15,
               color: enabled
                   ? const Color(0xFF2B63EB)
                   : AppColors.textSecondary,
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 3),
             Flexible(
               child: Text(
                 enabled ? '时间区间  $selectedLabel' : '时间区间',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  height: 1,
+                  // fontWeight: FontWeight.w700,
                   color: enabled
                       ? const Color(0xFF2B63EB)
                       : AppColors.textPrimary,

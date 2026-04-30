@@ -55,7 +55,7 @@ class DraftStageWorkspace extends StatelessWidget {
           onModeChanged: onDraftEditModeChanged,
         ),
         const SizedBox(height: 10),
-        const SectionLabel(title: '总结指导（可选）', centered: false),
+        const SectionLabel(title: '总结指导（可选）', centered: true),
         const SizedBox(height: 6),
         PreferenceCard(
           controller: guidanceController,
@@ -102,10 +102,7 @@ class DraftBodyCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   '初稿正文',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: context.appTextStyles.summarySectionTitle,
                 ),
               ),
               MiniTab(
@@ -129,11 +126,12 @@ class DraftBodyCard extends StatelessWidget {
                       focusedBorder: InputBorder.none,
                       isCollapsed: true,
                       hintText: '点击这里直接修改初稿内容',
-                      hintStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: 12,
-                        color: AppColors.textHint,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      hintStyle: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(
+                            fontSize: 12,
+                            color: AppColors.textHint,
+                            fontWeight: FontWeight.w500,
+                          ),
                     ),
                     style: context.appTextStyles.summaryContentBody,
                   )
@@ -164,19 +162,19 @@ class MiniTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(11),
+      borderRadius: BorderRadius.circular(13),
       child: Container(
-        height: 22,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        height: 26,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: active ? const Color(0xFF1E2430) : const Color(0xFFF0F2F5),
-          borderRadius: BorderRadius.circular(11),
+          borderRadius: BorderRadius.circular(13),
         ),
         alignment: Alignment.center,
         child: Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            fontSize: 12,
+            fontSize: 14,
             fontWeight: FontWeight.w700,
             color: active ? Colors.white : AppColors.textSecondary,
           ),

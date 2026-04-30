@@ -143,7 +143,7 @@ extension AppThemeContext on BuildContext {
           color: AppColors.textPrimary,
         ),
         summaryContentBody: TextStyle(
-          fontSize: 13,
+          fontSize: 14.5,
           fontWeight: FontWeight.w500,
           height: 1.55,
           color: AppColors.textPrimary,
@@ -236,7 +236,7 @@ abstract final class AppTheme {
         color: AppColors.textPrimary,
       ),
       summaryContentBody: TextStyle(
-        fontSize: 13,
+        fontSize: 14.5,
         fontWeight: FontWeight.w500,
         height: 1.55,
         color: AppColors.textPrimary,
