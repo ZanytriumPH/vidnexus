@@ -84,19 +84,12 @@ class PreferenceCard extends StatelessWidget {
             enabledBorder: InputBorder.none,
             focusedBorder: InputBorder.none,
             isDense: true,
-            contentPadding: EdgeInsets.zero,
-            hintStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 13,
+            contentPadding: const EdgeInsets.fromLTRB(0, 4, 0, 0),
+            hintStyle: context.appTextStyles.summaryContentBody.copyWith(
               color: AppColors.textHint,
-              height: 2.45,
             ),
           ),
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(
-            fontSize: 13,
-            height: 1.45,
-          ),
+          style: context.appTextStyles.summaryContentBody,
         ),
       ),
     );
