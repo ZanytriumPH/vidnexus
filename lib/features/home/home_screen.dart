@@ -32,7 +32,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final useBoundedStageLayout =
         flowState.stage == VideoSummaryStage.ready ||
-        flowState.stage == VideoSummaryStage.draft ||
         flowState.stage == VideoSummaryStage.finalChat;
 
     return Scaffold(
