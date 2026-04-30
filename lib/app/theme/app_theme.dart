@@ -1,3 +1,5 @@
+import 'dart:ui' show lerpDouble;
+
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
@@ -56,6 +58,80 @@ class AppTextStyles extends ThemeExtension<AppTextStyles> {
   }
 }
 
+class AppMessageStyles extends ThemeExtension<AppMessageStyles> {
+  const AppMessageStyles({
+    required this.draftSurface,
+    required this.finalSurface,
+    required this.systemSurface,
+    required this.userSurface,
+    required this.messageSpacing,
+    required this.draftRadius,
+    required this.chatBubbleRadius,
+    required this.draftPadding,
+    required this.finalPadding,
+    required this.bubblePadding,
+  });
+
+  final Color draftSurface;
+  final Color finalSurface;
+  final Color systemSurface;
+  final Color userSurface;
+  final double messageSpacing;
+  final double draftRadius;
+  final double chatBubbleRadius;
+  final EdgeInsets draftPadding;
+  final EdgeInsets finalPadding;
+  final EdgeInsets bubblePadding;
+
+  @override
+  AppMessageStyles copyWith({
+    Color? draftSurface,
+    Color? finalSurface,
+    Color? systemSurface,
+    Color? userSurface,
+    double? messageSpacing,
+    double? draftRadius,
+    double? chatBubbleRadius,
+    EdgeInsets? draftPadding,
+    EdgeInsets? finalPadding,
+    EdgeInsets? bubblePadding,
+  }) {
+    return AppMessageStyles(
+      draftSurface: draftSurface ?? this.draftSurface,
+      finalSurface: finalSurface ?? this.finalSurface,
+      systemSurface: systemSurface ?? this.systemSurface,
+      userSurface: userSurface ?? this.userSurface,
+      messageSpacing: messageSpacing ?? this.messageSpacing,
+      draftRadius: draftRadius ?? this.draftRadius,
+      chatBubbleRadius: chatBubbleRadius ?? this.chatBubbleRadius,
+      draftPadding: draftPadding ?? this.draftPadding,
+      finalPadding: finalPadding ?? this.finalPadding,
+      bubblePadding: bubblePadding ?? this.bubblePadding,
+    );
+  }
+
+  @override
+  AppMessageStyles lerp(ThemeExtension<AppMessageStyles>? other, double t) {
+    if (other is! AppMessageStyles) {
+      return this;
+    }
+
+    return AppMessageStyles(
+      draftSurface: Color.lerp(draftSurface, other.draftSurface, t) ?? draftSurface,
+      finalSurface: Color.lerp(finalSurface, other.finalSurface, t) ?? finalSurface,
+      systemSurface: Color.lerp(systemSurface, other.systemSurface, t) ?? systemSurface,
+      userSurface: Color.lerp(userSurface, other.userSurface, t) ?? userSurface,
+      messageSpacing: lerpDouble(messageSpacing, other.messageSpacing, t) ?? messageSpacing,
+      draftRadius: lerpDouble(draftRadius, other.draftRadius, t) ?? draftRadius,
+      chatBubbleRadius:
+          lerpDouble(chatBubbleRadius, other.chatBubbleRadius, t) ?? chatBubbleRadius,
+      draftPadding: EdgeInsets.lerp(draftPadding, other.draftPadding, t) ?? draftPadding,
+      finalPadding: EdgeInsets.lerp(finalPadding, other.finalPadding, t) ?? finalPadding,
+      bubblePadding: EdgeInsets.lerp(bubblePadding, other.bubblePadding, t) ?? bubblePadding,
+    );
+  }
+}
+
 extension AppThemeContext on BuildContext {
   AppTextStyles get appTextStyles =>
       Theme.of(this).extension<AppTextStyles>() ??
@@ -78,6 +154,21 @@ extension AppThemeContext on BuildContext {
           height: 1.2,
           color: Colors.white,
         ),
+      );
+
+  AppMessageStyles get appMessageStyles =>
+      Theme.of(this).extension<AppMessageStyles>() ??
+      const AppMessageStyles(
+        draftSurface: Color(0xFFF5F7FB),
+        finalSurface: Color(0xFFEEF4FF),
+        systemSurface: Color(0xFFF3F5F8),
+        userSurface: Color(0xFFE6F0FF),
+        messageSpacing: 8,
+        draftRadius: 20,
+        chatBubbleRadius: 20,
+        draftPadding: EdgeInsets.fromLTRB(10, 10, 10, 10),
+        finalPadding: EdgeInsets.fromLTRB(10, 10, 10, 9),
+        bubblePadding: EdgeInsets.fromLTRB(10, 10, 10, 9),
       );
 }
 
@@ -158,10 +249,23 @@ abstract final class AppTheme {
       ),
     );
 
+    const appMessageStyles = AppMessageStyles(
+      draftSurface: Color(0xFFF5F7FB),
+      finalSurface: Color(0xFFEEF4FF),
+      systemSurface: Color(0xFFF3F5F8),
+      userSurface: Color(0xFFE6F0FF),
+      messageSpacing: 8,
+      draftRadius: 20,
+      chatBubbleRadius: 20,
+      draftPadding: EdgeInsets.fromLTRB(10, 10, 10, 10),
+      finalPadding: EdgeInsets.fromLTRB(10, 10, 10, 9),
+      bubblePadding: EdgeInsets.fromLTRB(10, 10, 10, 9),
+    );
+
     return base.copyWith(
       textTheme: textTheme,
       primaryTextTheme: textTheme,
-      extensions: <ThemeExtension<dynamic>>[appTextStyles],
+      extensions: <ThemeExtension<dynamic>>[appTextStyles, appMessageStyles],
       iconTheme: const IconThemeData(color: AppColors.textPrimary),
       primaryIconTheme: const IconThemeData(color: AppColors.textPrimary),
       dividerColor: AppColors.border,

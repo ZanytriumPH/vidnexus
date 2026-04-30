@@ -18,15 +18,17 @@ class ChatThread extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final messageStyles = context.appMessageStyles;
+
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: 10),
+          padding: EdgeInsets.only(bottom: messageStyles.messageSpacing),
           child: _FinalSummaryBubble(summary: summary),
         ),
         ...messages.map(
           (message) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            padding: EdgeInsets.only(bottom: messageStyles.messageSpacing),
             child: _SummaryChatBubble(message: message),
           ),
         ),
@@ -42,13 +44,14 @@ class _FinalSummaryBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final messageStyles = context.appMessageStyles;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      padding: messageStyles.finalPadding,
       decoration: BoxDecoration(
-        color: const Color(0xFFF7FAFE),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD7DFE7)),
+        color: messageStyles.finalSurface,
+        borderRadius: BorderRadius.circular(messageStyles.chatBubbleRadius),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,7 +76,7 @@ class _FinalSummaryBubble extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: messageStyles.messageSpacing),
           Text(
             summary.summaryBody,
             style: context.appTextStyles.summaryContentBody,
@@ -92,17 +95,17 @@ class _SummaryChatBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = message.sender == SummaryChatSender.user;
+    final messageStyles = context.appMessageStyles;
 
     if (isUser) {
       return Align(
         alignment: Alignment.centerRight,
         child: Container(
           constraints: const BoxConstraints(maxWidth: 351),
-          padding: const EdgeInsets.all(12),
+          padding: messageStyles.bubblePadding,
           decoration: BoxDecoration(
-            color: const Color(0xFFE7F3FD),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.borderStrong),
+            color: messageStyles.userSurface,
+            borderRadius: BorderRadius.circular(messageStyles.chatBubbleRadius),
           ),
           child: _SummaryChatBubbleBody(message: message),
         ),
@@ -111,11 +114,10 @@ class _SummaryChatBubble extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      padding: messageStyles.bubblePadding,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderStrong),
+        color: messageStyles.systemSurface,
+        borderRadius: BorderRadius.circular(messageStyles.chatBubbleRadius),
       ),
       child: _SummaryChatBubbleBody(message: message),
     );

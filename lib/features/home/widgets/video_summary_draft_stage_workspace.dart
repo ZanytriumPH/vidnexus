@@ -87,9 +87,13 @@ class DraftBodyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final messageStyles = context.appMessageStyles;
+
     return AppCard(
-      radius: 18,
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      radius: messageStyles.draftRadius,
+      padding: messageStyles.draftPadding,
+      backgroundColor: messageStyles.draftSurface,
+      borderColor: Colors.transparent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -111,7 +115,7 @@ class DraftBodyCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: messageStyles.messageSpacing),
           ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 168),
             child: isEditMode
