@@ -8,11 +8,7 @@ import '../video_summary_presentation_models.dart';
 import 'timestamp_interval_picker_sheet.dart';
 
 class ChatThread extends StatelessWidget {
-  const ChatThread({
-    required this.summary,
-    required this.messages,
-    super.key,
-  });
+  const ChatThread({required this.summary, required this.messages, super.key});
 
   final FinalSummaryData summary;
   final List<ChatMessage> messages;
@@ -61,7 +57,10 @@ class _FinalSummaryBubble extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE7F0FF),
                   borderRadius: BorderRadius.circular(999),
@@ -135,10 +134,7 @@ class _SummaryChatBubbleBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          message.text,
-          style: context.appTextStyles.summaryContentBody,
-        ),
+        Text(message.text, style: context.appTextStyles.summaryContentBody),
         if (message.timestampLabel != null) ...[
           const SizedBox(height: 10),
           Text(
@@ -222,29 +218,39 @@ class ChatComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 5, 8, 8),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(25),
+        borderRadius: BorderRadius.circular(15),
         border: Border.all(color: const Color(0xFFD7DFE7)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 28),
+            constraints: const BoxConstraints(minHeight: 20),
             child: SizedBox(
               width: double.infinity,
               child: TextField(
                 controller: controller,
                 decoration: const InputDecoration(
                   hintText: '继续追问这段总结...',
+                  filled: false,
+                  isDense: true,
+                  contentPadding: EdgeInsets.fromLTRB(6, 3, 6, 2),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
                   isCollapsed: true,
                 ),
-                style: context.appTextStyles.summaryContentBody,
+                style: context.appTextStyles.summaryContentBody.copyWith(
+                  height: 1.2,
+                ),
+                strutStyle: const StrutStyle(
+                  height: 1.2,
+                  leading: 0,
+                  forceStrutHeight: true,
+                ),
                 textAlignVertical: TextAlignVertical.top,
                 minLines: 1,
                 maxLines: 4,
@@ -275,7 +281,9 @@ class ChatComposer extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  _ComposerAttachmentButton(onPressed: () => _showAttachmentOptions(context)),
+                  _ComposerAttachmentButton(
+                    onPressed: () => _showAttachmentOptions(context),
+                  ),
                   if (hasInput) ...[
                     const SizedBox(width: 8),
                     _ComposerSendButton(
@@ -321,19 +329,22 @@ class ChatComposer extends StatelessWidget {
                 _AttachmentActionTile(
                   icon: Icons.camera_alt_outlined,
                   label: '拍照',
-                  onTap: () => Navigator.of(context).pop(_AttachmentAction.camera),
+                  onTap: () =>
+                      Navigator.of(context).pop(_AttachmentAction.camera),
                 ),
                 const SizedBox(height: 8),
                 _AttachmentActionTile(
                   icon: Icons.photo_library_outlined,
                   label: '相册',
-                  onTap: () => Navigator.of(context).pop(_AttachmentAction.gallery),
+                  onTap: () =>
+                      Navigator.of(context).pop(_AttachmentAction.gallery),
                 ),
                 const SizedBox(height: 8),
                 _AttachmentActionTile(
                   icon: Icons.insert_drive_file_outlined,
                   label: '文件',
-                  onTap: () => Navigator.of(context).pop(_AttachmentAction.file),
+                  onTap: () =>
+                      Navigator.of(context).pop(_AttachmentAction.file),
                 ),
               ],
             ),
@@ -352,7 +363,9 @@ class ChatComposer extends StatelessWidget {
       _AttachmentAction.file => '文件功能将在下一阶段接入。',
     };
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -368,10 +381,7 @@ class _ComposerAttachmentButton extends StatelessWidget {
 }
 
 class _ComposerSendButton extends StatelessWidget {
-  const _ComposerSendButton({
-    required this.isSending,
-    required this.onPressed,
-  });
+  const _ComposerSendButton({required this.isSending, required this.onPressed});
 
   final bool isSending;
   final VoidCallback? onPressed;
@@ -493,7 +503,9 @@ class _TimestampScopeActionButton extends StatelessWidget {
             Icon(
               Icons.schedule_rounded,
               size: 16,
-              color: enabled ? const Color(0xFF2B63EB) : AppColors.textSecondary,
+              color: enabled
+                  ? const Color(0xFF2B63EB)
+                  : AppColors.textSecondary,
             ),
             const SizedBox(width: 6),
             Flexible(
@@ -502,7 +514,9 @@ class _TimestampScopeActionButton extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: enabled ? const Color(0xFF2B63EB) : AppColors.textPrimary,
+                  color: enabled
+                      ? const Color(0xFF2B63EB)
+                      : AppColors.textPrimary,
                 ),
                 softWrap: true,
               ),
@@ -561,7 +575,8 @@ class _TimestampScopeActionButton extends StatelessWidget {
                 _TimestampActionTile(
                   icon: Icons.close_rounded,
                   label: '关闭时间区间',
-                  onTap: () => Navigator.of(context).pop(_TimestampAction.disable),
+                  onTap: () =>
+                      Navigator.of(context).pop(_TimestampAction.disable),
                 ),
               ],
             ),
