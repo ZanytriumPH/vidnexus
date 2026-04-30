@@ -190,10 +190,9 @@ String _synthesisDetail(
   };
 }
 
-/// draft 数据本身只包含段落，页面提示文案在这里补成完整展示模型。
+/// draft 数据本身只包含段落，页面展示需要的交互提示在 widget 层处理。
 DraftResult mapDraftDataToResult(VideoSummaryDraftData data) {
   return DraftResult(
-    overview: '初稿已生成，处理详情已自动折叠',
     paragraphs: data.paragraphs,
     suggestionHint: '例如：请先给我按行业、声线和行动建议展开，重点扩充已结构化结论。',
   );

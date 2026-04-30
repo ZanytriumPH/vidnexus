@@ -50,7 +50,6 @@ class DraftStageWorkspace extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         DraftBodyCard(
-          draft: draftResult,
           draftBodyController: draftBodyController,
           isEditMode: isDraftEditMode,
           onModeChanged: onDraftEditModeChanged,
@@ -76,14 +75,12 @@ class DraftStageWorkspace extends StatelessWidget {
 
 class DraftBodyCard extends StatelessWidget {
   const DraftBodyCard({
-    required this.draft,
     required this.draftBodyController,
     required this.isEditMode,
     required this.onModeChanged,
     super.key,
   });
 
-  final DraftResult draft;
   final TextEditingController draftBodyController;
   final bool isEditMode;
   final ValueChanged<bool> onModeChanged;
@@ -92,7 +89,7 @@ class DraftBodyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       radius: 18,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -109,86 +106,37 @@ class DraftBodyCard extends StatelessWidget {
               ),
               MiniTab(
                 active: isEditMode,
-                label: '编辑',
-                onTap: () => onModeChanged(true),
-              ),
-              const SizedBox(width: 6),
-              MiniTab(
-                active: !isEditMode,
-                label: '预览',
-                onTap: () => onModeChanged(false),
+                label: isEditMode ? '完成' : '编辑',
+                onTap: () => onModeChanged(!isEditMode),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            '可复制出口到其它模式，连续阅读再补上下文。',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 9.5,
-              color: AppColors.textHint,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(minHeight: 120),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFD6DEE6)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (isEditMode)
-                  TextField(
+          const SizedBox(height: 12),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 168),
+            child: isEditMode
+                ? TextField(
                     controller: draftBodyController,
                     maxLines: null,
-                    minLines: 6,
-                    decoration: const InputDecoration(
+                    minLines: 8,
+                    decoration: InputDecoration(
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
                       isCollapsed: true,
+                      hintText: '点击这里直接修改初稿内容',
+                      hintStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: 12,
+                        color: AppColors.textHint,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     style: context.appTextStyles.summaryContentBody,
                   )
-                else
-                  Text(
+                : Text(
                     draftBodyController.text,
                     style: context.appTextStyles.summaryContentBody,
                   ),
-                const SizedBox(height: 12),
-                Text(
-                  draft.overview,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 9.5,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Text(
-                '当前版本：结构稿',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 9,
-                  color: AppColors.textHint,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '切换预览后自动接入几次指令细节层',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 9,
-                  color: AppColors.textHint,
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -224,7 +172,7 @@ class MiniTab extends StatelessWidget {
         child: Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            fontSize: 9.5,
+            fontSize: 12,
             fontWeight: FontWeight.w700,
             color: active ? Colors.white : AppColors.textSecondary,
           ),

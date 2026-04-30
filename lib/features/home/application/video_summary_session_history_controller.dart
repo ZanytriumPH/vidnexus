@@ -205,7 +205,7 @@ class VideoSummarySessionHistoryController
         isTimestampScoped: true,
         selectedTimestampStartSeconds: 0,
         selectedTimestampEndSeconds: 30,
-        isDraftEditMode: true,
+        isDraftEditMode: false,
         processingSnapshot: mapProcessingDataToSnapshot(
           const VideoSummaryProcessingData(
             progress: 0.58,
@@ -262,7 +262,7 @@ class VideoSummarySessionHistoryController
         isTimestampScoped: true,
         selectedTimestampStartSeconds: 0,
         selectedTimestampEndSeconds: 30,
-        isDraftEditMode: true,
+        isDraftEditMode: false,
         processingSnapshot: null,
         draftResult: mapDraftDataToResult(
           const VideoSummaryDraftData(

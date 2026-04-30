@@ -40,12 +40,10 @@ class ProcessingSnapshot {
 
 class DraftResult {
   const DraftResult({
-    required this.overview,
     required this.paragraphs,
     required this.suggestionHint,
   });
 
-  final String overview;
   final List<String> paragraphs;
   final String suggestionHint;
 }

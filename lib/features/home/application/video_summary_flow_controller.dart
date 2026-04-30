@@ -51,7 +51,7 @@ class VideoSummaryFlowState {
       videoAsset: videoAsset,
       uploadHighlighted: false,
       processingExpanded: true,
-      isDraftEditMode: true,
+      isDraftEditMode: false,
       isGenerating: false,
       isSendingChat: false,
       isTimestampScoped: false,
@@ -175,7 +175,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     state = state.copyWith(
       uploadHighlighted: false,
       processingExpanded: settings.defaultProcessingExpanded,
-      isDraftEditMode: true,
+      isDraftEditMode: false,
       isGenerating: false,
       isSendingChat: false,
       isTimestampScoped: settings.defaultTimestampScoped,
@@ -247,7 +247,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         draftResult: draft,
         stage: VideoSummaryStage.draft,
         processingExpanded: false,
-        isDraftEditMode: true,
+        isDraftEditMode: false,
       );
     } finally {
       state = state.copyWith(isGenerating: false);
@@ -270,7 +270,6 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         .where((paragraph) => paragraph.isNotEmpty)
         .toList();
     final effectiveDraft = DraftResult(
-      overview: draft.overview,
       paragraphs: editedParagraphs.isEmpty ? draft.paragraphs : editedParagraphs,
       suggestionHint: draft.suggestionHint,
     );

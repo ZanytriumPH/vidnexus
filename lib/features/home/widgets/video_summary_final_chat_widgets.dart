@@ -221,7 +221,7 @@ class TimestampSection extends StatelessWidget {
               child: Text(
                 '时间区间追问，发送时附加这段片段',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 10,
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
               ),
