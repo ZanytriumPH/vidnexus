@@ -61,7 +61,7 @@ class FinalChatStageWorkspace extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 ChatThread(summary: finalSummaryData, messages: chatMessages),
-                const MessageActionRow(),
+                if (chatMessages.isNotEmpty) const MessageActionRow(),
                 const SizedBox(height: 12),
               ],
             ),

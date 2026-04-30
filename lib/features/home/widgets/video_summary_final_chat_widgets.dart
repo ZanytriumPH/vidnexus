@@ -55,7 +55,7 @@ class _FinalSummaryBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -69,12 +69,20 @@ class _FinalSummaryBubble extends StatelessWidget {
                 child: Text(
                   summary.summaryTitle,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 10,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: const Color(0xFF275FD8),
                   ),
                 ),
               ),
+              const Spacer(),
+              const ActionIconButton(icon: Icons.copy_all_outlined),
+              const SizedBox(width: 6),
+              const ActionIconButton(icon: Icons.note_alt_outlined),
+              const SizedBox(width: 6),
+              const ActionIconButton(icon: Icons.image_outlined),
+              const SizedBox(width: 6),
+              const ActionIconButton(icon: Icons.photo_outlined),
             ],
           ),
           SizedBox(height: messageStyles.messageSpacing),
