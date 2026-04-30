@@ -12,7 +12,7 @@ class HeroCard extends StatelessWidget {
     required this.videoAsset,
     required this.processingSnapshot,
     required this.processingExpanded,
-    required this.onTap,
+    this.onTap,
     super.key,
   });
 
@@ -21,7 +21,7 @@ class HeroCard extends StatelessWidget {
   final VideoAssetInfo videoAsset;
   final ProcessingSnapshot? processingSnapshot;
   final bool processingExpanded;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +53,7 @@ class HeroCard extends StatelessWidget {
       VideoSummaryStage.ready => '从设备选择文件',
       VideoSummaryStage.processing =>
         processingSnapshot?.etaLabel ?? '正在准备处理内容。',
-      VideoSummaryStage.draft => '你现在可以调整偏好指令，再补充摘要层次。',
+      VideoSummaryStage.draft => '你现在可以按需编辑初稿与补充最终稿的总结指导。',
       VideoSummaryStage.finalChat => '先展示系统总结，再决定是否用时间范围追问。',
     };
 
@@ -75,26 +75,6 @@ class HeroCard extends StatelessWidget {
             Row(
               children: [
                 StatusPill(label: pillLabel),
-                const Spacer(),
-                if (isProcessing)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.72),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      processingExpanded ? '点击收起详情' : '点击展开详情',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: 9.5,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
               ],
             ),
             const SizedBox(height: 10),
@@ -153,27 +133,6 @@ class HeroCard extends StatelessWidget {
                     .map((badge) => ProcessingBadgeChip(badge: badge))
                     .toList(),
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Icon(
-                    processingExpanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    size: 18,
-                    color: AppColors.textSecondary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    processingExpanded ? '点击蓝色卡片可收起详细处理信息' : '点击蓝色卡片可展开详细处理信息',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 9.5,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
             ],
             if (isDraft || isFinal)
               const WhiteButtonBar(
@@ -191,12 +150,12 @@ class _ReadyUploadHeroCard extends StatelessWidget {
   const _ReadyUploadHeroCard({
     required this.highlighted,
     required this.videoAsset,
-    required this.onTap,
+    this.onTap,
   });
 
   final bool highlighted;
   final VideoAssetInfo videoAsset;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -381,18 +340,25 @@ class ProcessingBadgeChip extends StatelessWidget {
 }
 
 class ProcessingDetailCard extends StatelessWidget {
-  const ProcessingDetailCard({required this.snapshot, super.key});
+  const ProcessingDetailCard({
+    required this.snapshot,
+    this.onTap,
+    super.key,
+  });
 
   final ProcessingSnapshot snapshot;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      radius: 18,
-      padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Row(
             children: [
               Text(
@@ -473,20 +439,25 @@ class ProcessingDetailCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 }
 
 class ProcessingCollapsedHintCard extends StatelessWidget {
-  const ProcessingCollapsedHintCard({super.key});
+  const ProcessingCollapsedHintCard({this.onTap, super.key});
+
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      radius: 18,
-      padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
-      child: Row(
-        children: [
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+        child: Row(
+          children: [
           Container(
             width: 28,
             height: 28,
@@ -514,7 +485,7 @@ class ProcessingCollapsedHintCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '点击上方蓝色卡片可再次展开，查看各步骤实时进度。',
+                  '点击此处可再次展开，查看各步骤实时进度。',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontSize: 9.5,
                     color: AppColors.textSecondary,
@@ -525,7 +496,8 @@ class ProcessingCollapsedHintCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/widgets/app_card.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
 import 'video_summary_processing_widgets.dart';
@@ -31,19 +32,42 @@ class ProcessingStageWorkspace extends StatelessWidget {
           videoAsset: videoAsset,
           processingSnapshot: processingSnapshot,
           processingExpanded: processingExpanded,
-          onTap: onProcessingCardPressed,
+          onTap: null,
         ),
         const SizedBox(height: 12),
-        AnimatedCrossFade(
-          duration: const Duration(milliseconds: 220),
-          firstCurve: Curves.easeOutCubic,
-          secondCurve: Curves.easeOutCubic,
-          sizeCurve: Curves.easeOutCubic,
-          crossFadeState: processingExpanded
-              ? CrossFadeState.showFirst
-              : CrossFadeState.showSecond,
-          firstChild: ProcessingDetailCard(snapshot: processingSnapshot),
-          secondChild: const ProcessingCollapsedHintCard(),
+        AppCard(
+          radius: 18,
+          padding: EdgeInsets.zero,
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            clipBehavior: Clip.hardEdge,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              switchInCurve: Curves.easeIn,
+              switchOutCurve: Curves.easeOut,
+              layoutBuilder: (currentChild, previousChildren) {
+                return Stack(
+                  alignment: Alignment.topCenter,
+                  children: [
+                    ...previousChildren,
+                    if (currentChild != null) currentChild,
+                  ],
+                );
+              },
+              child: processingExpanded
+                  ? ProcessingDetailCard(
+                      key: const ValueKey('expanded'),
+                      snapshot: processingSnapshot,
+                      onTap: onProcessingCardPressed,
+                    )
+                  : ProcessingCollapsedHintCard(
+                      key: const ValueKey('collapsed'),
+                      onTap: onProcessingCardPressed,
+                    ),
+            ),
+          ),
         ),
       ],
     );
