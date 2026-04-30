@@ -92,7 +92,7 @@ KnowledgeConversationPreview buildEmptyKnowledgeConversation({
   );
 }
 
-class KnowledgeBaseComposer extends StatelessWidget {
+class KnowledgeBaseComposer extends StatefulWidget {
   const KnowledgeBaseComposer({
     required this.controller,
     required this.onSubmit,
@@ -105,70 +105,106 @@ class KnowledgeBaseComposer extends StatelessWidget {
   final String hintText;
 
   @override
+  State<KnowledgeBaseComposer> createState() => _KnowledgeBaseComposerState();
+}
+
+class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer> {
+  final FocusNode _focusNode = FocusNode();
+  bool _hasFocus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      setState(() {
+        _hasFocus = _focusNode.hasFocus;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xFFD7DFE7)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 20),
-            child: SizedBox(
-              width: double.infinity,
-              child: TextField(
-                controller: controller,
-                decoration: InputDecoration(
-                  hintText: hintText,
-                  filled: false,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.fromLTRB(6, 3, 6, 10),
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  isCollapsed: true,
-                ),
-                style: context.appTextStyles.summaryContentBody.copyWith(
-                  height: 1.2,
-                ),
-                strutStyle: const StrutStyle(
-                  height: 1.2,
-                  leading: 0,
-                  forceStrutHeight: true,
-                ),
-                textAlignVertical: TextAlignVertical.top,
-                minLines: 1,
-                maxLines: 4,
-              ),
-            ),
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: widget.controller,
+      builder: (context, value, child) {
+        final hasInput = value.text.trim().isNotEmpty;
+        final expanded = _hasFocus || hasInput;
+
+        return Container(
+          padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: const Color(0xFFD7DFE7)),
           ),
-          const SizedBox(height: 8),
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (context, value, child) {
-              final hasInput = value.text.trim().isNotEmpty;
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Spacer(),
-                  const ComposerAttachmentButton(),
-                  if (hasInput) ...[
-                    const SizedBox(width: 8),
-                    AppInlineSubmitButton(
-                      isLoading: false,
-                      onPressed: onSubmit,
+                  Expanded(
+                    child: TextField(
+                      controller: widget.controller,
+                      focusNode: _focusNode,
+                      decoration: InputDecoration(
+                        hintText: widget.hintText,
+                        filled: false,
+                        isDense: true,
+                        contentPadding: expanded
+                            ? const EdgeInsets.fromLTRB(6, 3, 6, 10)
+                            : const EdgeInsets.fromLTRB(6, 0, 6, 0),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        isCollapsed: true,
+                      ),
+                      style: context.appTextStyles.summaryContentBody
+                          .copyWith(height: 1.2),
+                      strutStyle: const StrutStyle(
+                        height: 1.2,
+                        leading: 0,
+                        forceStrutHeight: true,
+                      ),
+                      textAlignVertical: TextAlignVertical.top,
+                      minLines: 1,
+                      maxLines: expanded ? 4 : 1,
                     ),
-                  ],
+                  ),
+                  if (!expanded) const ComposerAttachmentButton(),
                 ],
-              );
-            },
+              ),
+              if (expanded) ...[
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Spacer(),
+                    const ComposerAttachmentButton(),
+                    if (hasInput) ...[
+                      const SizedBox(width: 8),
+                      AppInlineSubmitButton(
+                        isLoading: false,
+                        onPressed: widget.onSubmit,
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
+
+  Widget _buildCollapsed(BuildContext context) => const SizedBox.shrink();
+  Widget _buildExpanded(BuildContext context, bool hasInput) =>
+      const SizedBox.shrink();
 }
