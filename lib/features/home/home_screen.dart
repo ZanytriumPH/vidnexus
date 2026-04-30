@@ -59,7 +59,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onHorizontalDragEnd: _handleHorizontalDragEnd,
         child: SafeArea(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(20, 12, 20, keyboardVisible ? 8 : 20),
+            padding: EdgeInsets.fromLTRB(12, 12, 12, keyboardVisible ? 8 : 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

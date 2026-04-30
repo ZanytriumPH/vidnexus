@@ -37,14 +37,14 @@ class AppPageScaffold extends StatelessWidget {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
                 child: AppBottomNav(
                   current: currentSection,
                   onSelected: onSectionSelected,
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 6, 20, 8),
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -71,7 +71,7 @@ class AppPageScaffold extends StatelessWidget {
               ),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
                   child: body,
                 ),
               ),
