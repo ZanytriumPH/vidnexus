@@ -66,6 +66,7 @@ class DraftStageWorkspace extends StatelessWidget {
         const SizedBox(height: 14),
         AppPrimaryButton(
           label: isGenerating ? '正在整理最终稿...' : '生成最终稿',
+          labelStyle: context.appTextStyles.primaryActionButtonLabel,
           onPressed: onGenerateFinalPressed,
         ),
       ],

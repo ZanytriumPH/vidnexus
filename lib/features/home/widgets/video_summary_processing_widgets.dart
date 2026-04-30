@@ -221,7 +221,7 @@ class _ReadyUploadHeroCard extends StatelessWidget {
                 '本地上传',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontSize: 16,
+                  fontSize: 18,
                   fontWeight: FontWeight.w800,
                   color: AppColors.textPrimary,
                 ),

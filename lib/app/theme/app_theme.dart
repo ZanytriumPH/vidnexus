@@ -6,19 +6,24 @@ class AppTextStyles extends ThemeExtension<AppTextStyles> {
   const AppTextStyles({
     required this.summarySectionTitle,
     required this.summaryContentBody,
+    required this.primaryActionButtonLabel,
   });
 
   final TextStyle summarySectionTitle;
   final TextStyle summaryContentBody;
+  final TextStyle primaryActionButtonLabel;
 
   @override
   AppTextStyles copyWith({
     TextStyle? summarySectionTitle,
     TextStyle? summaryContentBody,
+    TextStyle? primaryActionButtonLabel,
   }) {
     return AppTextStyles(
       summarySectionTitle: summarySectionTitle ?? this.summarySectionTitle,
       summaryContentBody: summaryContentBody ?? this.summaryContentBody,
+      primaryActionButtonLabel:
+          primaryActionButtonLabel ?? this.primaryActionButtonLabel,
     );
   }
 
@@ -41,6 +46,12 @@ class AppTextStyles extends ThemeExtension<AppTextStyles> {
             t,
           ) ??
           summaryContentBody,
+      primaryActionButtonLabel: TextStyle.lerp(
+            primaryActionButtonLabel,
+            other.primaryActionButtonLabel,
+            t,
+          ) ??
+          primaryActionButtonLabel,
     );
   }
 }
@@ -60,6 +71,12 @@ extension AppThemeContext on BuildContext {
           fontWeight: FontWeight.w500,
           height: 1.55,
           color: AppColors.textPrimary,
+        ),
+        primaryActionButtonLabel: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w800,
+          height: 1.2,
+          color: Colors.white,
         ),
       );
 }
@@ -132,6 +149,12 @@ abstract final class AppTheme {
         fontWeight: FontWeight.w500,
         height: 1.55,
         color: AppColors.textPrimary,
+      ),
+      primaryActionButtonLabel: TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w800,
+        height: 1.2,
+        color: Colors.white,
       ),
     );
 

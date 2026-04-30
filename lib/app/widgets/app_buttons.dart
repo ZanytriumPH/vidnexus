@@ -4,17 +4,32 @@ class AppPrimaryButton extends StatelessWidget {
   const AppPrimaryButton({
     required this.label,
     required this.onPressed,
+    this.labelStyle,
     super.key,
   });
 
   final String label;
   final VoidCallback? onPressed;
+  final TextStyle? labelStyle;
 
   @override
   Widget build(BuildContext context) {
+    final buttonStyle = labelStyle == null
+        ? null
+        : Theme.of(context).elevatedButtonTheme.style?.copyWith(
+              textStyle: WidgetStatePropertyAll<TextStyle?>(labelStyle),
+            ) ??
+            ButtonStyle(
+              textStyle: WidgetStatePropertyAll<TextStyle?>(labelStyle),
+            );
+
     return SizedBox(
       width: double.infinity,
-      child: ElevatedButton(onPressed: onPressed, child: Text(label)),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: buttonStyle,
+        child: Text(label),
+      ),
     );
   }
 }

@@ -96,10 +96,7 @@ class ReadyPrimaryButton extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),
-            textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
+            textStyle: context.appTextStyles.primaryActionButtonLabel,
           ),
           child: Text(label),
         ),
