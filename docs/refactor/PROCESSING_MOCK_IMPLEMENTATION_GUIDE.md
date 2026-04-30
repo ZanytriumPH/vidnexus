@@ -1,5 +1,14 @@
 # 视频总结处理态真实 Mock 实施文档
 
+## 当前完成度
+
+截至当前代码状态：
+
+- 已完成：processing raw data 扩展、mapper 文案映射、seeded session 对齐、Fake 事件源、事件适配器、流式仓储基类、processing 首帧占位、进度条与百分比平滑过渡。
+- 已完成：字段级接口草案，见 `PROCESSING_EVENT_FIELD_MAPPING_DRAFT.md`。
+- 已完成：为 mapper 与事件适配器补处理态测试，锁定当前处理链路的展示与聚合规则。
+- 当前不作为必做项：第二组和第三组 processing mock 场景（短视频 / 长视频）。这项工作更适合作为联调前或 UI 打磨前的覆盖增强，而不是当前主链路必须项。
+
 ## 1. 目标
 
 本次实现的目标不是接入真实后端，而是在不破坏当前 Flutter 分层边界的前提下，把“处理中”阶段从占位式动画升级为更贴近上游 `video_summarizer` 第一阶段处理链路的真实 mock。
@@ -218,6 +227,11 @@ raw message 存在 domain data 中，UI message 由 mapper 输出。
 4. seeded session 恢复到 processing 时不会报错。
 5. `flutter analyze` 通过。
 
+当前补充验证：
+
+6. `video_summary_result_mapper_test.dart` 验证初始占位、并行分析态和待进入初稿态的展示文案映射。
+7. `video_summary_processing_event_adapter_test.dart` 验证事件流到 raw data 的聚合规则，包括 review ready 完成态。
+
 ## 8. 不在本次范围内的内容
 
 以下内容暂不纳入这一轮实现：
@@ -227,11 +241,79 @@ raw message 存在 domain data 中，UI message 由 mapper 输出。
 - processing 日志流独立面板
 - SSE/WebSocket 客户端封装
 
-## 9. 下一步建议
+## 9. 文档与文件管理判断
+
+### 9.1 这批 mock 文档是否需要和之前重构文档拆到不同文件夹
+
+当前判断：**暂时没有必要**。
+
+原因：
+
+- 这次 mock 工作并不是脱离既有重构边界的独立主题，而是沿着 `features/home` 的现有分层继续推进。
+- 当前 `docs/refactor/` 下的文档数量仍然可控，而且这两份 processing 文档本身就属于“在既有重构约束下继续落地”的延伸说明。
+- 如果现在为了 mock 单独再开一个文档目录，会让“架构边界文档”和“基于边界的实现文档”被人为拆散，反而增加查找成本。
+
+因此当前建议是：
+
+- 继续把这次 processing mock 相关文档保留在 `docs/refactor/` 下管理。
+- 在该目录内通过文件命名区分“指南 / 接口草案 / 实施说明”，而不是再新开子文件夹。
+
+### 9.2 什么时候才值得把文档拆到单独文件夹
+
+只有在以下情况同时出现时，才建议把 processing mock 或后续真实接口文档拆到子目录：
+
+1. processing 相关文档数量继续增长到 4 篇以上。
+2. 文档开始覆盖多个子主题，例如：mock、接口联调、SSE 协议、测试计划、异常恢复。
+3. `docs/refactor/` 顶层开始因为单主题文档过多而变得难以检索。
+
+如果以后满足这些条件，建议再整理成：
+
+- `docs/refactor/video-summary-processing/implementation-guide.md`
+- `docs/refactor/video-summary-processing/event-field-mapping.md`
+- `docs/refactor/video-summary-processing/integration-checklist.md`
+
+但在当前阶段，不建议为了“看起来更规整”而提前拆分。
+
+### 9.3 本次 mock 新增加的代码文件是否需要再单独建文件夹
+
+当前判断：**也暂时没有必要**。
+
+目前新增的 processing mock 相关文件主要是：
+
+- `video_summary_processing_event_source.dart`
+- `video_summary_processing_event_adapter.dart`
+- `fake_video_summary_processing_event_source.dart`
+- `stream_backed_video_summary_repository.dart`
+
+这些文件都还是 `features/home` 这一 feature 的内部实现细节，而且数量不多，职责也紧密围绕 repository 与 processing 事件流。现阶段把它们直接放在 `lib/features/home/` 根下，有两个好处：
+
+- 和 `video_summary_repository.dart`、`fake_video_summary_repository.dart` 紧邻，阅读路径清晰。
+- 避免为了少量文件再引入一个新的目录层级，增加跳转成本。
+
+### 9.4 什么时候代码层值得新建子文件夹
+
+当以下任一情况出现时，再考虑新建子文件夹更合适：
+
+1. processing 事件流相关文件扩展到 6 个以上。
+2. 出现 `HttpVideoSummaryRepository`、`SseVideoSummaryProcessingEventSource`、DTO、解析器、错误恢复器等一组并列实现。
+3. `lib/features/home/` 顶层开始因为 repository 周边文件过多而失去可读性。
+
+如果后续需要拆分，建议优先采用这一种结构，而不是随机再开目录：
+
+- `lib/features/home/data/processing/`
+  - `video_summary_processing_event_source.dart`
+  - `video_summary_processing_event_adapter.dart`
+  - `fake_video_summary_processing_event_source.dart`
+  - `sse_video_summary_processing_event_source.dart`
+  - `http_video_summary_repository.dart`
+
+也就是说，**当前保持扁平，后续在“事件源 + 仓储实现”真正扩张时再整体搬迁**，比现在提前拆目录更稳妥。
+
+## 10. 下一步建议
 
 建议按以下顺序继续推进：
 
-1. 增加第二组与第三组 processing mock 场景（短视频 / 长视频）。
-2. 为 mapper 补处理态单元测试。
+1. 优先推进真实 `HttpVideoSummaryRepository` 骨架和事件源占位实现，而不是立即补短视频 / 长视频 mock。
+2. 与后端对齐真实 processing 事件字段名、枚举值和 `event_type` / `stage_key` 设计。
 3. 在 presentation model 中考虑增加更显式的 chunk 统计字段。
-4. 与后端对齐真实 processing 事件字段名和枚举值。
+4. 等进入联调前或 UI 打磨阶段，再决定是否补短视频 / 长视频两组 mock 场景。
