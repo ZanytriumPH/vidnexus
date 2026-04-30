@@ -52,17 +52,7 @@ class VideoSummaryHistoryDrawer extends StatelessWidget {
                   color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                '历史会话与设置收纳在这里，避免和主流程抢导航层级。',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 12,
-                  height: 1.35,
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 20),
               InkWell(
                 onTap: onNewSessionPressed,
                 borderRadius: BorderRadius.circular(16),

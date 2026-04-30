@@ -49,12 +49,12 @@ class HeroCard extends StatelessWidget {
       VideoSummaryStage.draft => '初稿已生成，处理详情已自动折叠',
       VideoSummaryStage.finalChat => '当前会话已切换为可追问对话窗口',
     };
-    final String subtitle = switch (stage) {
+    final String? subtitle = switch (stage) {
       VideoSummaryStage.ready => '从设备选择文件',
       VideoSummaryStage.processing =>
         processingSnapshot?.etaLabel ?? '正在准备处理内容。',
       VideoSummaryStage.draft => '你现在可以按需编辑初稿与补充终稿的总结指导。',
-      VideoSummaryStage.finalChat => '先展示系统总结，再决定是否用时间范围追问。',
+      VideoSummaryStage.finalChat => null,
     };
 
     return AppCard(
@@ -86,16 +86,18 @@ class HeroCard extends StatelessWidget {
                 color: AppColors.textPrimary,
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 10,
-                color: const Color(0xFF384A59),
-                fontWeight: FontWeight.w600,
-                height: 1.45,
+            if (subtitle != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 10,
+                  color: const Color(0xFF384A59),
+                  fontWeight: FontWeight.w600,
+                  height: 1.45,
+                ),
               ),
-            ),
+            ],
             const SizedBox(height: 8),
             if (isProcessing && processingSnapshot != null) ...[
               Text(
