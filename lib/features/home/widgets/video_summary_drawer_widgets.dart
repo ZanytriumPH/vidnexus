@@ -336,37 +336,85 @@ class _VideoSummarySearchScreenState extends State<_VideoSummarySearchScreen> {
         surfaceTintColor: Colors.white,
         elevation: 0,
         automaticallyImplyLeading: false,
-        title: TextField(
-          controller: _searchController,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: '搜索历史会话...',
-            border: InputBorder.none,
-            hintStyle: TextStyle(
-              fontSize: 16,
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w500,
-            ),
+        title: Container(
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey[300]!, width: 1),
           ),
-          style: const TextStyle(
-            fontSize: 16,
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w600,
+          child: TextField(
+            controller: _searchController,
+            autofocus: true,
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 10),
+                prefixIconConstraints: const BoxConstraints(minWidth: 28, minHeight: 24),
+              prefixIcon: const Padding(
+                  padding: EdgeInsets.only(left: 8, right: 4),
+                child: Icon(Icons.search_rounded, color: AppColors.textSecondary, size: 18),
+              ),
+              suffixIconConstraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          _searchController.clear();
+                        },
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFDCE2EB),
+                            shape: BoxShape.circle,
+                            border: Border.fromBorderSide(
+                              BorderSide(color: Color(0xFFC8D0DC), width: 0.8),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.clear_rounded,
+                            color: AppColors.textSecondary,
+                            size: 14,
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox(width: 4),
+              hintText: '搜索历史会话...',
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              hintStyle: const TextStyle(
+                fontSize: 15,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            style: const TextStyle(
+              fontSize: 15,
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+            cursorColor: AppColors.textPrimary,
           ),
         ),
         actions: [
-          if (_searchController.text.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.clear_rounded, color: AppColors.textSecondary),
-              onPressed: () {
-                _searchController.clear();
-              },
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('取消', style: TextStyle(color: AppColors.textSecondary, fontSize: 15, fontWeight: FontWeight.w500)),
             ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w500)),
           ),
-          const SizedBox(width: 8),
         ],
       ),
       body: _searchController.text.isEmpty
