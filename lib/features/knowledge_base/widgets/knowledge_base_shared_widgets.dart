@@ -111,29 +111,25 @@ class KnowledgeBaseComposer extends StatefulWidget {
 class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
     with WidgetsBindingObserver {
   final FocusNode _focusNode = FocusNode();
-  bool _hasFocus = false;
+  bool _keyboardVisible = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _focusNode.addListener(() {
-      setState(() {
-        _hasFocus = _focusNode.hasFocus;
-      });
-    });
   }
-
-  bool _keyboardWasVisible = false;
 
   @override
   void didChangeMetrics() {
     if (!mounted) return;
     final isKeyboardVisible = View.of(context).viewInsets.bottom > 0;
-    if (_keyboardWasVisible && !isKeyboardVisible) {
+    if (isKeyboardVisible == _keyboardVisible) return;
+    setState(() {
+      _keyboardVisible = isKeyboardVisible;
+    });
+    if (!isKeyboardVisible) {
       _focusNode.unfocus();
     }
-    _keyboardWasVisible = isKeyboardVisible;
   }
 
   @override
@@ -149,7 +145,7 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
       valueListenable: widget.controller,
       builder: (context, value, child) {
         final hasInput = value.text.trim().isNotEmpty;
-        final expanded = _hasFocus || hasInput;
+        final expanded = _keyboardVisible || hasInput;
 
         return Container(
           padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
