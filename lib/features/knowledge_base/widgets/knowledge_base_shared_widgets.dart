@@ -170,7 +170,7 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
                         isDense: true,
                         contentPadding: expanded
                             ? const EdgeInsets.fromLTRB(6, 3, 6, 10)
-                            : const EdgeInsets.fromLTRB(6, 0, 6, 0),
+                            : const EdgeInsets.fromLTRB(6, 7, 6, 11),
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
