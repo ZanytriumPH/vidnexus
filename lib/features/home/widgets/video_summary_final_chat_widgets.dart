@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../app/widgets/app_header_add_button.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
 import 'timestamp_interval_picker_sheet.dart';
@@ -221,7 +222,7 @@ class ChatComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      padding: const EdgeInsets.fromLTRB(8, 5, 8, 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(25),
@@ -231,9 +232,9 @@ class ChatComposer extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 34),
-            child: Align(
-              alignment: Alignment.centerLeft,
+            constraints: const BoxConstraints(minHeight: 28),
+            child: SizedBox(
+              width: double.infinity,
               child: TextField(
                 controller: controller,
                 decoration: const InputDecoration(
@@ -243,62 +244,207 @@ class ChatComposer extends StatelessWidget {
                   focusedBorder: InputBorder.none,
                   isCollapsed: true,
                 ),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontSize: 11,
-                ),
+                style: context.appTextStyles.summaryContentBody,
+                textAlignVertical: TextAlignVertical.top,
                 minLines: 1,
                 maxLines: 4,
               ),
             ),
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Flexible(
-                fit: FlexFit.loose,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: _TimestampScopeActionButton(
-                    enabled: isTimestampScoped,
-                    selectedLabel: selectedTimestampLabel,
-                    totalDurationSeconds: totalDurationSeconds,
-                    selectedStartSeconds: selectedTimestampStartSeconds,
-                    selectedEndSeconds: selectedTimestampEndSeconds,
-                    onEnabledChanged: onTimestampScopeChanged,
-                    onRangeChanged: onTimestampRangeChanged,
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, child) {
+              final hasInput = value.text.trim().isNotEmpty;
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _TimestampScopeActionButton(
+                        enabled: isTimestampScoped,
+                        selectedLabel: selectedTimestampLabel,
+                        totalDurationSeconds: totalDurationSeconds,
+                        selectedStartSeconds: selectedTimestampStartSeconds,
+                        selectedEndSeconds: selectedTimestampEndSeconds,
+                        onEnabledChanged: onTimestampScopeChanged,
+                        onRangeChanged: onTimestampRangeChanged,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                width: 28,
-                height: 28,
-                decoration: const BoxDecoration(
-                  color: Colors.black,
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  onPressed: onSendPressed,
-                  padding: EdgeInsets.zero,
-                  icon: isSending
-                      ? const SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(
-                          Icons.arrow_upward_rounded,
-                          size: 14,
-                          color: Colors.white,
-                        ),
-                ),
-              ),
-            ],
+                  const SizedBox(width: 8),
+                  _ComposerAttachmentButton(onPressed: () => _showAttachmentOptions(context)),
+                  if (hasInput) ...[
+                    const SizedBox(width: 8),
+                    _ComposerSendButton(
+                      isSending: isSending,
+                      onPressed: onSendPressed,
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _showAttachmentOptions(BuildContext context) async {
+    final action = await showModalBottomSheet<_AttachmentAction>(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '添加内容',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _AttachmentActionTile(
+                  icon: Icons.camera_alt_outlined,
+                  label: '拍照',
+                  onTap: () => Navigator.of(context).pop(_AttachmentAction.camera),
+                ),
+                const SizedBox(height: 8),
+                _AttachmentActionTile(
+                  icon: Icons.photo_library_outlined,
+                  label: '相册',
+                  onTap: () => Navigator.of(context).pop(_AttachmentAction.gallery),
+                ),
+                const SizedBox(height: 8),
+                _AttachmentActionTile(
+                  icon: Icons.insert_drive_file_outlined,
+                  label: '文件',
+                  onTap: () => Navigator.of(context).pop(_AttachmentAction.file),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!context.mounted || action == null) {
+      return;
+    }
+
+    final message = switch (action) {
+      _AttachmentAction.camera => '拍照功能将在下一阶段接入。',
+      _AttachmentAction.gallery => '相册功能将在下一阶段接入。',
+      _AttachmentAction.file => '文件功能将在下一阶段接入。',
+    };
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _ComposerAttachmentButton extends StatelessWidget {
+  const _ComposerAttachmentButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppHeaderAddButton(onPressed: onPressed);
+  }
+}
+
+class _ComposerSendButton extends StatelessWidget {
+  const _ComposerSendButton({
+    required this.isSending,
+    required this.onPressed,
+  });
+
+  final bool isSending;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 24,
+      height: 24,
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        onPressed: onPressed,
+        padding: EdgeInsets.zero,
+        icon: isSending
+            ? const SizedBox(
+                width: 10,
+                height: 10,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.8,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(
+                Icons.arrow_upward_rounded,
+                size: 15,
+                color: Colors.white,
+              ),
+      ),
+    );
+  }
+}
+
+class _AttachmentActionTile extends StatelessWidget {
+  const _AttachmentActionTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F9FC),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFD7DFE7)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: AppColors.textPrimary),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -331,8 +477,8 @@ class _TimestampScopeActionButton extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
-        height: 32,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        constraints: const BoxConstraints(minHeight: 32),
+        padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
         decoration: BoxDecoration(
           color: enabled ? const Color(0xFFE8F0FF) : Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -342,6 +488,7 @@ class _TimestampScopeActionButton extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Icon(
               Icons.schedule_rounded,
@@ -357,8 +504,7 @@ class _TimestampScopeActionButton extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                   color: enabled ? const Color(0xFF2B63EB) : AppColors.textPrimary,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                softWrap: true,
               ),
             ),
           ],
@@ -495,3 +641,5 @@ class _TimestampActionTile extends StatelessWidget {
 }
 
 enum _TimestampAction { edit, disable }
+
+enum _AttachmentAction { camera, gallery, file }
