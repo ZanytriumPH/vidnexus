@@ -39,8 +39,16 @@ void main() {
 
     expect(find.text('正在生成结构化初稿'), findsOneWidget);
     expect(find.text('正在获取并保存视频文件，准备进入本地预处理。'), findsWidgets);
+    
+    // ProcessingDetailCard is visible by default (defaultProcessingExpanded = true)
     expect(find.text('详细处理信息'), findsOneWidget);
-    expect(find.text('实时刷新'), findsOneWidget);
+    
+    // Tap to collapse
+    await tester.tap(find.text('详细处理信息'));
+    await tester.pumpAndSettle();
+    
+    // ProcessingCollapsedHintCard is visible after clicking
+    expect(find.text('详细处理信息已收起'), findsOneWidget);
   });
 }
 

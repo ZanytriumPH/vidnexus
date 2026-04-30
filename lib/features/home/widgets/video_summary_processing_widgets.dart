@@ -125,14 +125,6 @@ class HeroCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: processingSnapshot!.badges
-                    .map((badge) => ProcessingBadgeChip(badge: badge))
-                    .toList(),
-              ),
             ],
             if (isDraft || isFinal)
               const WhiteButtonBar(
@@ -309,35 +301,6 @@ class WhiteButtonBar extends StatelessWidget {
   }
 }
 
-class ProcessingBadgeChip extends StatelessWidget {
-  const ProcessingBadgeChip({required this.badge, super.key});
-
-  final ProcessingBadge badge;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: badge.active ? const Color(0xFF1F5BEA) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: badge.active
-              ? const Color(0xFF1F5BEA)
-              : const Color(0xFFD7E0E8),
-        ),
-      ),
-      child: Text(
-        badge.label,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontSize: 9.5,
-          fontWeight: FontWeight.w700,
-          color: badge.active ? Colors.white : AppColors.textPrimary,
-        ),
-      ),
-    );
-  }
-}
 
 class ProcessingDetailCard extends StatelessWidget {
   const ProcessingDetailCard({
@@ -364,7 +327,7 @@ class ProcessingDetailCard extends StatelessWidget {
               Text(
                 '详细处理信息',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -376,9 +339,9 @@ class ProcessingDetailCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  '实时刷新',
+                  '点击收起',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 9,
+                    fontSize: 12,
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.w700,
                   ),
@@ -390,7 +353,7 @@ class ProcessingDetailCard extends StatelessWidget {
           Text(
             '展开后显示实时任务进度',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 9.5,
+              fontSize: 11,
               color: AppColors.textHint,
             ),
           ),
@@ -428,7 +391,7 @@ class ProcessingDetailCard extends StatelessWidget {
                   child: Text(
                     '完成后自动进入总结草稿\n展示摘要、结构大纲和建议指令入口',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 9.5,
+                      fontSize: 11,
                       color: AppColors.textPrimary,
                       height: 1.3,
                     ),
@@ -479,7 +442,7 @@ class ProcessingCollapsedHintCard extends StatelessWidget {
                 Text(
                   '详细处理信息已收起',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 11,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -487,7 +450,7 @@ class ProcessingCollapsedHintCard extends StatelessWidget {
                 Text(
                   '点击此处可再次展开，查看各步骤实时进度。',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 9.5,
+                    fontSize: 11,
                     color: AppColors.textSecondary,
                   ),
                 ),
@@ -525,7 +488,7 @@ class ProcessingStepTile extends StatelessWidget {
                 child: Text(
                   step.label,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 11,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -537,7 +500,7 @@ class ProcessingStepTile extends StatelessWidget {
                   value: step.progress.toDouble(),
                   textAlign: TextAlign.right,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 10,
+                    fontSize: 12,
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.w700,
                   ),
@@ -555,7 +518,7 @@ class ProcessingStepTile extends StatelessWidget {
           Text(
             step.detail,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 9.5,
+              fontSize: 11,
               color: AppColors.textSecondary,
               height: 1.3,
             ),

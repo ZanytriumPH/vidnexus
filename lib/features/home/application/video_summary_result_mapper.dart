@@ -6,13 +6,7 @@ ProcessingSnapshot buildInitialProcessingSnapshot() {
   return const ProcessingSnapshot(
     progress: 0,
     statusLabel: '处理中',
-    headline: '正在准备处理任务',
     etaLabel: '正在连接处理事件流并初始化第一阶段。',
-    badges: [
-      ProcessingBadge(label: '素材预处理 处理中', active: true),
-      ProcessingBadge(label: '分片并行分析 处理中', active: false),
-      ProcessingBadge(label: '融合输出 处理中', active: false),
-    ],
     steps: [
       ProcessingStep(
         label: '素材预处理',
@@ -38,9 +32,7 @@ ProcessingSnapshot mapProcessingDataToSnapshot(VideoSummaryProcessingData data) 
   return ProcessingSnapshot(
     progress: data.progress,
     statusLabel: _statusLabelForProcessing(data),
-    headline: _headlineForProcessing(data),
     etaLabel: _etaLabelForProcessing(data),
-    badges: data.steps.map(mapProcessingStepToBadge).toList(),
     steps: data.steps.map((step) => mapProcessingStepToUiStep(step, data)).toList(),
   );
 }
@@ -51,23 +43,6 @@ String _statusLabelForProcessing(VideoSummaryProcessingData data) {
   }
 
   return data.progress >= 1 ? '处理完成' : '处理中';
-}
-
-String _headlineForProcessing(VideoSummaryProcessingData data) {
-  return switch (data.currentStage) {
-    VideoSummaryProcessingStage.acquiringVideo ||
-    VideoSummaryProcessingStage.extractingAudio ||
-    VideoSummaryProcessingStage.extractingFrames ||
-    VideoSummaryProcessingStage.transcribingAudio => '正在整理视频素材与转录文本',
-    VideoSummaryProcessingStage.bootingWorkflow ||
-    VideoSummaryProcessingStage.planningChunks ||
-    VideoSummaryProcessingStage.dispatchingChunks ||
-    VideoSummaryProcessingStage.analyzingAudioChunks ||
-    VideoSummaryProcessingStage.analyzingVisionChunks => '正在并行分析分片证据',
-    VideoSummaryProcessingStage.synthesizingChunks ||
-    VideoSummaryProcessingStage.aggregatingChunks ||
-    VideoSummaryProcessingStage.waitingHumanReview => '正在汇总分片并整理待审初稿',
-  };
 }
 
 String _etaLabelForProcessing(VideoSummaryProcessingData data) {
@@ -82,25 +57,6 @@ String _etaLabelForProcessing(VideoSummaryProcessingData data) {
       '融合 ${chunkProgress.synthesisDone}/${chunkProgress.totalChunks}';
 
   return '${data.currentMessage} 当前分片进度：$progressLine。';
-}
-
-ProcessingBadge mapProcessingStepToBadge(VideoSummaryProcessingStepData step) {
-  final phaseLabel = switch (step.phase) {
-    VideoSummaryProcessingPhase.preprocessing => '素材预处理',
-    VideoSummaryProcessingPhase.analysis => '分片并行分析',
-    VideoSummaryProcessingPhase.synthesis => '融合输出',
-  };
-
-  final suffix = step.progress >= 100
-      ? '已完成'
-      : step.progress > 0
-      ? '进行中'
-      : '处理中';
-
-  return ProcessingBadge(
-    label: '$phaseLabel $suffix',
-    active: step.progress > 0 && step.progress < 100,
-  );
 }
 
 ProcessingStep mapProcessingStepToUiStep(

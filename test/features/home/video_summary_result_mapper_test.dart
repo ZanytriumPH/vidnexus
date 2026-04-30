@@ -9,17 +9,14 @@ void main() {
 
       expect(snapshot.progress, 0);
       expect(snapshot.statusLabel, '处理中');
-      expect(snapshot.headline, '正在准备处理任务');
-      expect(snapshot.badges, hasLength(3));
       expect(snapshot.steps, hasLength(3));
-      expect(snapshot.badges.first.active, isTrue);
     });
 
     test('maps chunk analysis processing data into mobile-facing labels', () {
       const data = VideoSummaryProcessingData(
         progress: 0.58,
         currentStage: VideoSummaryProcessingStage.analyzingVisionChunks,
-        currentMessage: '视觉 worker 正在补齐画面证据和关键帧检索结果。',
+        currentMessage: '视觉 worker 正在补齐画面...',
         chunkProgress: VideoSummaryChunkProgressData(
           stage: VideoSummaryChunkProgressStage.running,
           totalChunks: 8,
@@ -55,10 +52,7 @@ void main() {
       final snapshot = mapProcessingDataToSnapshot(data);
 
       expect(snapshot.statusLabel, '处理中');
-      expect(snapshot.headline, '正在并行分析分片证据');
       expect(snapshot.etaLabel, contains('音频 5/8 · 视觉 3/8 · 融合 1/8'));
-      expect(snapshot.badges[0].label, '素材预处理 已完成');
-      expect(snapshot.badges[1].active, isTrue);
       expect(snapshot.steps[1].detail, contains('视觉分片已完成 3/8'));
     });
 
@@ -66,7 +60,7 @@ void main() {
       const data = VideoSummaryProcessingData(
         progress: 1,
         currentStage: VideoSummaryProcessingStage.waitingHumanReview,
-        currentMessage: '待审稿已封装完成。',
+        currentMessage: '待审稿',
         chunkProgress: VideoSummaryChunkProgressData(
           stage: VideoSummaryChunkProgressStage.finished,
           totalChunks: 8,
@@ -102,7 +96,6 @@ void main() {
       final snapshot = mapProcessingDataToSnapshot(data);
 
       expect(snapshot.statusLabel, '待进入初稿');
-      expect(snapshot.headline, '正在汇总分片并整理待审初稿');
       expect(snapshot.steps[2].detail, '聚合稿已整理完成，准备进入待审阅初稿阶段。');
     });
   });

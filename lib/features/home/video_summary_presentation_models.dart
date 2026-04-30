@@ -1,13 +1,6 @@
 /// 这些模型专门服务 UI 展示，通常由 application 层 mapper 产出。
 enum SummaryChatSender { system, user }
 
-class ProcessingBadge {
-  const ProcessingBadge({required this.label, required this.active});
-
-  final String label;
-  final bool active;
-}
-
 class ProcessingStep {
   const ProcessingStep({
     required this.label,
@@ -24,17 +17,13 @@ class ProcessingSnapshot {
   const ProcessingSnapshot({
     required this.progress,
     required this.statusLabel,
-    required this.headline,
     required this.etaLabel,
-    required this.badges,
     required this.steps,
   });
 
   final double progress;
   final String statusLabel;
-  final String headline;
   final String etaLabel;
-  final List<ProcessingBadge> badges;
   final List<ProcessingStep> steps;
 }
 
