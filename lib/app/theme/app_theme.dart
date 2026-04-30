@@ -2,6 +2,68 @@ import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
 
+class AppTextStyles extends ThemeExtension<AppTextStyles> {
+  const AppTextStyles({
+    required this.summarySectionTitle,
+    required this.summaryContentBody,
+  });
+
+  final TextStyle summarySectionTitle;
+  final TextStyle summaryContentBody;
+
+  @override
+  AppTextStyles copyWith({
+    TextStyle? summarySectionTitle,
+    TextStyle? summaryContentBody,
+  }) {
+    return AppTextStyles(
+      summarySectionTitle: summarySectionTitle ?? this.summarySectionTitle,
+      summaryContentBody: summaryContentBody ?? this.summaryContentBody,
+    );
+  }
+
+  @override
+  AppTextStyles lerp(ThemeExtension<AppTextStyles>? other, double t) {
+    if (other is! AppTextStyles) {
+      return this;
+    }
+
+    return AppTextStyles(
+      summarySectionTitle: TextStyle.lerp(
+            summarySectionTitle,
+            other.summarySectionTitle,
+            t,
+          ) ??
+          summarySectionTitle,
+      summaryContentBody: TextStyle.lerp(
+            summaryContentBody,
+            other.summaryContentBody,
+            t,
+          ) ??
+          summaryContentBody,
+    );
+  }
+}
+
+extension AppThemeContext on BuildContext {
+  AppTextStyles get appTextStyles =>
+      Theme.of(this).extension<AppTextStyles>() ??
+      const AppTextStyles(
+        summarySectionTitle: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w800,
+          height: 1.2,
+          color: AppColors.textPrimary,
+        ),
+        summaryContentBody: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          height: 1.55,
+          color: AppColors.textPrimary,
+        ),
+      );
+}
+
 /// 统一收口应用主题，避免各页面直接散写颜色、圆角和输入框样式。
 abstract final class AppTheme {
   static ThemeData light() {
@@ -58,9 +120,25 @@ abstract final class AppTheme {
       ),
     );
 
+    const appTextStyles = AppTextStyles(
+      summarySectionTitle: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w800,
+        height: 1.2,
+        color: AppColors.textPrimary,
+      ),
+      summaryContentBody: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+        height: 1.55,
+        color: AppColors.textPrimary,
+      ),
+    );
+
     return base.copyWith(
       textTheme: textTheme,
       primaryTextTheme: textTheme,
+      extensions: <ThemeExtension<dynamic>>[appTextStyles],
       iconTheme: const IconThemeData(color: AppColors.textPrimary),
       primaryIconTheme: const IconThemeData(color: AppColors.textPrimary),
       dividerColor: AppColors.border,

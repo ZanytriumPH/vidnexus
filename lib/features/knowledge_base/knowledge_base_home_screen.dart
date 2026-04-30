@@ -32,8 +32,6 @@ class KnowledgeBaseHomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                     const _KnowledgeSearchBar(),
-                    const SizedBox(height: 14),
-                    const _KnowledgeHeroCard(),
                     const SizedBox(height: 18),
                     Text(
                       '我的知识库',
@@ -170,107 +168,6 @@ class _KnowledgeSearchBar extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _KnowledgeHeroCard extends StatelessWidget {
-  const _KnowledgeHeroCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      radius: 24,
-      padding: const EdgeInsets.all(20),
-      gradient: const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color(0xFFB0E1FF), Color(0xFFF6FCFF)],
-      ),
-      borderColor: const Color(0xFFD7EAFB),
-      child: Stack(
-        children: [
-          SizedBox(
-            width: double.infinity,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '知识资产主屏',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '资料导入、结构化梳理、对话追问，全部围绕知识库对象而不是单次视频任务。',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontSize: 20,
-                    height: 1.2,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: const [
-                    _KnowledgeTag(label: '资料导入'),
-                    _KnowledgeTag(label: '结构化梳理'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            top: 7,
-            right: 7,
-            child: Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: const Color(0x80111418),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.close_rounded,
-                size: 14,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _KnowledgeTag extends StatelessWidget {
-  const _KnowledgeTag({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFCBE5FF),
-        borderRadius: BorderRadius.circular(15),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: AppColors.textPrimary,
-        ),
       ),
     );
   }

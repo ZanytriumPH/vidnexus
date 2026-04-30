@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_card.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
@@ -40,10 +41,7 @@ class FinalSummaryCard extends StatelessWidget {
               children: [
                 Text(
                   summary.summaryBody,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 11,
-                    height: 1.55,
-                  ),
+                  style: context.appTextStyles.summaryContentBody,
                 ),
                 const SizedBox(height: 12),
                 Align(
@@ -135,11 +133,7 @@ class _SummaryChatBubbleBody extends StatelessWidget {
       children: [
         Text(
           message.text,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontSize: 13,
-            height: 1.55,
-            color: AppColors.textPrimary,
-          ),
+          style: context.appTextStyles.summaryContentBody,
         ),
         if (message.timestampLabel != null) ...[
           const SizedBox(height: 10),

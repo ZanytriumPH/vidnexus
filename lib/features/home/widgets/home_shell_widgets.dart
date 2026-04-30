@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_bottom_nav.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/widgets/app_card.dart';
@@ -49,10 +50,7 @@ class SectionLabel extends StatelessWidget {
     return Text(
       title,
       textAlign: centered ? TextAlign.center : TextAlign.left,
-      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-        fontSize: 13,
-        fontWeight: FontWeight.w800,
-      ),
+      style: context.appTextStyles.summarySectionTitle,
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_buttons.dart';
 import '../../../app/widgets/app_card.dart';
 import '../video_summary_models.dart';
@@ -150,19 +151,12 @@ class DraftBodyCard extends StatelessWidget {
                       focusedBorder: InputBorder.none,
                       isCollapsed: true,
                     ),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontSize: 11,
-                      height: 1.55,
-                      color: AppColors.textPrimary,
-                    ),
+                    style: context.appTextStyles.summaryContentBody,
                   )
                 else
                   Text(
                     draftBodyController.text,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontSize: 11,
-                      height: 1.55,
-                    ),
+                    style: context.appTextStyles.summaryContentBody,
                   ),
                 const SizedBox(height: 12),
                 Text(

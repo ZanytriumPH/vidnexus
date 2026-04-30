@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_theme.dart';
 import '../video_summary_models.dart';
 import 'home_shell_widgets.dart';
 import 'video_summary_processing_widgets.dart';
@@ -40,11 +40,7 @@ class ReadyStageWorkspace extends StatelessWidget {
         Text(
           '总结偏好（可选）',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-          ),
+          style: context.appTextStyles.summarySectionTitle,
         ),
         const SizedBox(height: 14),
         PreferenceCard(
