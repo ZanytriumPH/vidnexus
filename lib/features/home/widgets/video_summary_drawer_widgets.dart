@@ -354,30 +354,19 @@ class _VideoSummarySearchScreenState extends State<_VideoSummarySearchScreen> {
                   padding: EdgeInsets.only(left: 8, right: 4),
                 child: Icon(Icons.search_rounded, color: AppColors.textSecondary, size: 18),
               ),
-              suffixIconConstraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+              suffixIconConstraints: const BoxConstraints(minWidth: 20, minHeight: 20),
               suffixIcon: _searchController.text.isNotEmpty
                   ? Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
+                      padding: const EdgeInsets.only(right: 2),
+                      child: InkResponse(
+                        radius: 12,
                         onTap: () {
                           _searchController.clear();
                         },
-                        child: Container(
-                          width: 18,
-                          height: 18,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFDCE2EB),
-                            shape: BoxShape.circle,
-                            border: Border.fromBorderSide(
-                              BorderSide(color: Color(0xFFC8D0DC), width: 0.8),
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.clear_rounded,
-                            color: AppColors.textSecondary,
-                            size: 14,
-                          ),
+                        child: const Icon(
+                          Icons.cancel_rounded,
+                          color: Color(0xFFBFC7D3),
+                          size: 18,
                         ),
                       ),
                     )
@@ -391,13 +380,13 @@ class _VideoSummarySearchScreenState extends State<_VideoSummarySearchScreen> {
               hintStyle: const TextStyle(
                 fontSize: 15,
                 color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
               ),
             ),
             style: const TextStyle(
               fontSize: 15,
               color: AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
             cursorColor: AppColors.textPrimary,
           ),
