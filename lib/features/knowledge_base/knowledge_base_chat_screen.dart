@@ -25,6 +25,7 @@ class KnowledgeBaseChatScreen extends StatefulWidget {
 
 class _KnowledgeBaseChatScreenState extends State<KnowledgeBaseChatScreen> {
   late final TextEditingController _composerController;
+  final ScrollController _scrollController = ScrollController();
   late List<KnowledgeChatMessage> _messages;
 
   @override
@@ -39,6 +40,7 @@ class _KnowledgeBaseChatScreenState extends State<KnowledgeBaseChatScreen> {
   @override
   void dispose() {
     _composerController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -68,6 +70,7 @@ class _KnowledgeBaseChatScreenState extends State<KnowledgeBaseChatScreen> {
             ),
             Expanded(
               child: ListView.separated(
+                controller: _scrollController,
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
                 itemCount: _messages.length,
                 separatorBuilder: (context, index) => SizedBox(
@@ -98,16 +101,26 @@ class _KnowledgeBaseChatScreenState extends State<KnowledgeBaseChatScreen> {
       return;
     }
 
+    FocusScope.of(context).unfocus();
     setState(() {
       _messages = [
         ..._messages,
         KnowledgeChatMessage(sender: KnowledgeChatSender.user, text: text),
         KnowledgeChatMessage(
           sender: KnowledgeChatSender.system,
-          text: '我会基于“${widget.library.title}”里的资料继续回答：$text',
+          text: '我会基于"${widget.library.title}"里的资料继续回答：$text',
         ),
       ];
       _composerController.clear();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
     });
   }
 

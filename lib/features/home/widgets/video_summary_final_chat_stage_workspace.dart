@@ -5,7 +5,7 @@ import '../video_summary_presentation_models.dart';
 import 'video_summary_final_chat_widgets.dart';
 import 'video_summary_processing_widgets.dart';
 
-class FinalChatStageWorkspace extends StatelessWidget {
+class FinalChatStageWorkspace extends StatefulWidget {
   const FinalChatStageWorkspace({
     required this.highlighted,
     required this.videoAsset,
@@ -42,26 +42,65 @@ class FinalChatStageWorkspace extends StatelessWidget {
   final ValueChanged<TimestampRangeSelection> onTimestampRangeChanged;
 
   @override
+  State<FinalChatStageWorkspace> createState() =>
+      _FinalChatStageWorkspaceState();
+}
+
+class _FinalChatStageWorkspaceState extends State<FinalChatStageWorkspace> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void didUpdateWidget(FinalChatStageWorkspace oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.chatMessages.length != oldWidget.chatMessages.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _handleSend() {
+    FocusScope.of(context).unfocus();
+    widget.onSendChatPressed?.call();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
           child: SingleChildScrollView(
+            controller: _scrollController,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 HeroCard(
                   stage: VideoSummaryStage.finalChat,
-                  highlighted: highlighted,
-                  videoAsset: videoAsset,
+                  highlighted: widget.highlighted,
+                  videoAsset: widget.videoAsset,
                   processingSnapshot: null,
                   processingExpanded: false,
-                  onTap: onUploadCardPressed,
+                  onTap: widget.onUploadCardPressed,
                 ),
                 const SizedBox(height: 12),
-                ChatThread(summary: finalSummaryData, messages: chatMessages),
-                if (chatMessages.isNotEmpty) const MessageActionRow(),
+                ChatThread(
+                  summary: widget.finalSummaryData,
+                  messages: widget.chatMessages,
+                ),
+                if (widget.chatMessages.isNotEmpty) const MessageActionRow(),
                 const SizedBox(height: 12),
               ],
             ),
@@ -69,16 +108,16 @@ class FinalChatStageWorkspace extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         ChatComposer(
-          controller: chatController,
-          isSending: isSendingChat,
-          isTimestampScoped: isTimestampScoped,
-          selectedTimestampLabel: selectedTimestampLabel,
-          totalDurationSeconds: totalDurationSeconds,
-          selectedTimestampStartSeconds: selectedTimestampStartSeconds,
-          selectedTimestampEndSeconds: selectedTimestampEndSeconds,
-          onTimestampScopeChanged: onTimestampScopeChanged,
-          onTimestampRangeChanged: onTimestampRangeChanged,
-          onSendPressed: onSendChatPressed,
+          controller: widget.chatController,
+          isSending: widget.isSendingChat,
+          isTimestampScoped: widget.isTimestampScoped,
+          selectedTimestampLabel: widget.selectedTimestampLabel,
+          totalDurationSeconds: widget.totalDurationSeconds,
+          selectedTimestampStartSeconds: widget.selectedTimestampStartSeconds,
+          selectedTimestampEndSeconds: widget.selectedTimestampEndSeconds,
+          onTimestampScopeChanged: widget.onTimestampScopeChanged,
+          onTimestampRangeChanged: widget.onTimestampRangeChanged,
+          onSendPressed: widget.onSendChatPressed != null ? _handleSend : null,
         ),
       ],
     );

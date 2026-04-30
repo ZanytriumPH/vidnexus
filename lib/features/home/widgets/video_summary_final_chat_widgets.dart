@@ -464,7 +464,7 @@ class _TimestampScopeActionButton extends StatelessWidget {
         height: buttonHeight,
         padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
         decoration: BoxDecoration(
-          color: enabled ? const Color(0xFFE8F0FF) : Colors.white,
+          color: enabled ? const Color(0xFFE8F0FF) : const Color(0xFFF4F5F7),
           borderRadius: BorderRadius.circular(buttonHeight / 2),
           border: Border.all(
             color: enabled ? const Color(0xFFBFD1FF) : const Color(0xFFD7DFE7),
