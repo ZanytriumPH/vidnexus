@@ -53,7 +53,7 @@ class HeroCard extends StatelessWidget {
       VideoSummaryStage.ready => '从设备选择文件',
       VideoSummaryStage.processing =>
         processingSnapshot?.etaLabel ?? '正在准备处理内容。',
-      VideoSummaryStage.draft => '你现在可以按需编辑初稿与补充最终稿的总结指导。',
+      VideoSummaryStage.draft => '你现在可以按需编辑初稿与补充终稿的总结指导。',
       VideoSummaryStage.finalChat => '先展示系统总结，再决定是否用时间范围追问。',
     };
 
@@ -389,7 +389,7 @@ class ProcessingDetailCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '完成后自动进入总结草稿\n展示摘要、结构大纲和建议指令入口',
+                    '完成后自动进入总结初稿页\n后续可按需编辑初稿与补充终稿总结指导',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       fontSize: 11,
                       color: AppColors.textPrimary,
