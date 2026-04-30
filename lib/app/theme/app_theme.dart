@@ -160,7 +160,7 @@ extension AppThemeContext on BuildContext {
       Theme.of(this).extension<AppMessageStyles>() ??
       const AppMessageStyles(
         draftSurface: Color(0xFFF5F7FB),
-        finalSurface: Color(0xFFEEF4FF),
+        finalSurface: Color(0xFFF3F5F8),
         systemSurface: Color(0xFFF3F5F8),
         userSurface: Color(0xFFE6F0FF),
         messageSpacing: 8,
@@ -251,7 +251,7 @@ abstract final class AppTheme {
 
     const appMessageStyles = AppMessageStyles(
       draftSurface: Color(0xFFF5F7FB),
-      finalSurface: Color(0xFFEEF4FF),
+      finalSurface: Color(0xFFF3F5F8),
       systemSurface: Color(0xFFF3F5F8),
       userSurface: Color(0xFFE6F0FF),
       messageSpacing: 8,

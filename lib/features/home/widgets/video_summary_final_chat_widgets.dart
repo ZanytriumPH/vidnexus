@@ -149,7 +149,7 @@ class _SummaryChatBubbleBody extends StatelessWidget {
           Text(
             message.timestampLabel!,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 9,
+              fontSize: 12.5,
               color: AppColors.textHint,
             ),
           ),
