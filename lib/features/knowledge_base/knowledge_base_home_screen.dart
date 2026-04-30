@@ -5,6 +5,7 @@ import '../../app/routing/app_router.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_card.dart';
+import '../../app/widgets/app_header_add_button.dart';
 import 'knowledge_base_models.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
 
@@ -90,7 +91,7 @@ class _KnowledgeBaseHeader extends StatelessWidget {
           onSectionSelected: onSectionSelected,
           title: '知识库',
           showTitle: false,
-          trailing: _HeaderPlusButton(onPressed: onCreatePressed),
+          trailing: AppHeaderAddButton(onPressed: onCreatePressed),
         ),
         const SizedBox(height: 12),
         Text(
@@ -102,38 +103,6 @@ class _KnowledgeBaseHeader extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _HeaderPlusButton extends StatelessWidget {
-  const _HeaderPlusButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(17.5),
-        side: const BorderSide(color: AppColors.borderStrong),
-      ),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(17.5),
-        child: const SizedBox(
-          width: 35,
-          height: 35,
-          child: Center(
-            child: Icon(
-              Icons.add_rounded,
-              size: 18,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

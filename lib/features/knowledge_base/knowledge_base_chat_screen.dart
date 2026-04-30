@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../app/routing/app_route_arguments.dart';
 import '../../app/routing/app_router.dart';
-import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme.dart';
 import '../../app/widgets/app_bottom_nav.dart';
+import '../../app/widgets/app_header_add_button.dart';
 import 'knowledge_base_models.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
 
@@ -63,25 +63,7 @@ class _KnowledgeBaseChatScreenState extends State<KnowledgeBaseChatScreen> {
                 },
                 title: widget.library.title,
                 onLeadingPressed: () => AppNavigator.popCurrent(context),
-                trailing: InkWell(
-                  onTap: _startEmptyConversation,
-                  borderRadius: BorderRadius.circular(17.5),
-                  child: Container(
-                    width: 35,
-                    height: 35,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(17.5),
-                      border: Border.all(color: AppColors.borderStrong),
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.add_rounded,
-                        size: 18,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                ),
+                trailing: AppHeaderAddButton(onPressed: _startEmptyConversation),
               ),
             ),
             Expanded(

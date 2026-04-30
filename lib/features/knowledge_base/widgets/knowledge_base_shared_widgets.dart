@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/widgets/app_bottom_nav.dart';
 import '../../../app/theme/app_colors.dart';
+import '../../../app/widgets/app_bottom_nav.dart';
 import '../knowledge_base_models.dart';
 
 class KnowledgeBaseTopBar extends StatelessWidget {

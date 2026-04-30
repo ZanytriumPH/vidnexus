@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_bottom_nav.dart';
+import '../../../app/widgets/app_header_add_button.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/widgets/app_card.dart';
 
@@ -29,12 +30,7 @@ class HomeHeaderRow extends StatelessWidget {
         onPressed: onMenuPressed,
         child: const Icon(Icons.menu_rounded, size: 20),
       ),
-      trailing: RoundGhostButton(
-        outlined: true,
-        size: 35,
-        onPressed: onNewSessionPressed,
-        child: const Icon(Icons.add_rounded, size: 18),
-      ),
+      trailing: AppHeaderAddButton(onPressed: onNewSessionPressed),
     );
   }
 }
