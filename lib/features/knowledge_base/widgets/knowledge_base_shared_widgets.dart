@@ -108,13 +108,15 @@ class KnowledgeBaseComposer extends StatefulWidget {
   State<KnowledgeBaseComposer> createState() => _KnowledgeBaseComposerState();
 }
 
-class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer> {
+class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
+    with WidgetsBindingObserver {
   final FocusNode _focusNode = FocusNode();
   bool _hasFocus = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _focusNode.addListener(() {
       setState(() {
         _hasFocus = _focusNode.hasFocus;
@@ -122,8 +124,21 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer> {
     });
   }
 
+  bool _keyboardWasVisible = false;
+
+  @override
+  void didChangeMetrics() {
+    if (!mounted) return;
+    final isKeyboardVisible = View.of(context).viewInsets.bottom > 0;
+    if (_keyboardWasVisible && !isKeyboardVisible) {
+      _focusNode.unfocus();
+    }
+    _keyboardWasVisible = isKeyboardVisible;
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _focusNode.dispose();
     super.dispose();
   }
@@ -203,8 +218,4 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer> {
       },
     );
   }
-
-  Widget _buildCollapsed(BuildContext context) => const SizedBox.shrink();
-  Widget _buildExpanded(BuildContext context, bool hasInput) =>
-      const SizedBox.shrink();
 }

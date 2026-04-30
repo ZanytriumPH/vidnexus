@@ -46,8 +46,27 @@ class FinalChatStageWorkspace extends StatefulWidget {
       _FinalChatStageWorkspaceState();
 }
 
-class _FinalChatStageWorkspaceState extends State<FinalChatStageWorkspace> {
+class _FinalChatStageWorkspaceState extends State<FinalChatStageWorkspace>
+    with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  bool _keyboardWasVisible = false;
+
+  @override
+  void didChangeMetrics() {
+    if (!mounted) return;
+    final isKeyboardVisible = View.of(context).viewInsets.bottom > 0;
+    if (_keyboardWasVisible && !isKeyboardVisible) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
+    _keyboardWasVisible = isKeyboardVisible;
+  }
 
   @override
   void didUpdateWidget(FinalChatStageWorkspace oldWidget) {
@@ -67,6 +86,7 @@ class _FinalChatStageWorkspaceState extends State<FinalChatStageWorkspace> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scrollController.dispose();
     super.dispose();
   }
