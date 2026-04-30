@@ -55,9 +55,7 @@ class FinalChatStageWorkspace extends StatelessWidget {
           onTap: onUploadCardPressed,
         ),
         const SizedBox(height: 12),
-        FinalSummaryCard(summary: finalSummaryData),
-        const SizedBox(height: 10),
-        ChatThread(messages: chatMessages),
+        ChatThread(summary: finalSummaryData, messages: chatMessages),
         const MessageActionRow(),
         const SizedBox(height: 12),
         TimestampSection(

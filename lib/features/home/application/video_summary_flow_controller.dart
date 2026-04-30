@@ -395,10 +395,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
             raw: summary.timestampChips.first.label,
             minimumSeconds: minimumTimestampRangeSeconds,
           )
-        : tryParseVideoSummaryTimestampRange(
-            raw: summary.summaryTimestampLabel,
-            minimumSeconds: minimumTimestampRangeSeconds,
-          );
+        : null;
     return _sanitizeTimestampRange(seeded ?? _buildDefaultTimestampRange(state.videoAsset.durationLabel));
   }
 

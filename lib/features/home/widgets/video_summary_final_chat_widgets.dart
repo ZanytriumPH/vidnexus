@@ -2,83 +2,84 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme.dart';
-import '../../../app/widgets/app_card.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
 import 'timestamp_interval_picker_sheet.dart';
 
-class FinalSummaryCard extends StatelessWidget {
-  const FinalSummaryCard({required this.summary, super.key});
+class ChatThread extends StatelessWidget {
+  const ChatThread({
+    required this.summary,
+    required this.messages,
+    super.key,
+  });
 
   final FinalSummaryData summary;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      radius: 18,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            summary.summaryTitle,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFD7DFE7)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  summary.summaryBody,
-                  style: context.appTextStyles.summaryContentBody,
-                ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    summary.summaryTimestampLabel,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 9,
-                      color: AppColors.textHint,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class ChatThread extends StatelessWidget {
-  const ChatThread({required this.messages, super.key});
-
   final List<ChatMessage> messages;
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: messages
-          .map(
-            (message) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _SummaryChatBubble(message: message),
-            ),
-          )
-          .toList(),
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _FinalSummaryBubble(summary: summary),
+        ),
+        ...messages.map(
+          (message) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _SummaryChatBubble(message: message),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FinalSummaryBubble extends StatelessWidget {
+  const _FinalSummaryBubble({required this.summary});
+
+  final FinalSummaryData summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FAFE),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD7DFE7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE7F0FF),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  summary.summaryTitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF275FD8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            summary.summaryBody,
+            style: context.appTextStyles.summaryContentBody,
+          ),
+        ],
+      ),
     );
   }
 }

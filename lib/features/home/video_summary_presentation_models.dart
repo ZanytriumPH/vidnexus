@@ -73,14 +73,12 @@ class FinalSummaryData {
   const FinalSummaryData({
     required this.summaryTitle,
     required this.summaryBody,
-    required this.summaryTimestampLabel,
     required this.timestampChips,
     required this.messages,
   });
 
   final String summaryTitle;
   final String summaryBody;
-  final String summaryTimestampLabel;
   final List<TimestampChipData> timestampChips;
   final List<ChatMessage> messages;
 }

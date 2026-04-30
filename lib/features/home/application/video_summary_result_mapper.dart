@@ -201,13 +201,9 @@ DraftResult mapDraftDataToResult(VideoSummaryDraftData data) {
 
 /// 最终稿需要额外组合标题、时间片段标签和 chip 数据，这些都属于展示层。
 FinalSummaryData mapFinalResultDataToSummary(VideoSummaryFinalResultData data) {
-  final primaryReference = data.references.firstOrNull;
   return FinalSummaryData(
     summaryTitle: '最终稿',
     summaryBody: data.body,
-    summaryTimestampLabel: primaryReference == null
-        ? '暂无时间片段'
-        : '汇总片段 ${formatVideoSummaryTimestampRange(primaryReference.startSeconds, primaryReference.endSeconds)}',
     timestampChips: data.references
         .map(
           (reference) => TimestampChipData(
