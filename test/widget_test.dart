@@ -7,6 +7,7 @@ import 'dart:async';
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -49,6 +50,32 @@ void main() {
     
     // ProcessingCollapsedHintCard is visible after clicking
     expect(find.text('详细处理信息已收起'), findsOneWidget);
+  });
+
+  testWidgets('drawer search button opens the search page', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          videoSummaryRepositoryProvider.overrideWithValue(
+            _WidgetTestVideoSummaryRepository(),
+          ),
+        ],
+        child: const MyApp(),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.menu_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text('会话中心'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.search_rounded).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('搜索历史会话...'), findsOneWidget);
+    expect(find.text('取消'), findsOneWidget);
   });
 }
 

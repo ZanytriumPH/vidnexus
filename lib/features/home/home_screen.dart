@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/routing/app_router.dart';
+import '../../app/routing/app_route_arguments.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import 'application/video_summary_flow_controller.dart';
 import 'application/video_summary_session_history_controller.dart';
@@ -11,6 +12,7 @@ import 'video_summary_models.dart';
 import 'widgets/home_shell_widgets.dart';
 import 'widgets/session_settings_sheet.dart';
 import 'widgets/video_summary_content_widgets.dart';
+import 'widgets/video_summary_drawer_shared.dart';
 import 'widgets/video_summary_drawer_widgets.dart';
 
 /// 首页现在主要承担页面壳和装配职责，复杂状态迁移已下沉到 application 层。
@@ -53,6 +55,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onNewSessionPressed: _createNewSessionFromDrawer,
         onSessionSelected: _restoreSessionFromDrawer,
         onSettingsPressed: _openSettingsFromDrawer,
+        onSearchPressed: _openSearchFromDrawer,
       ),
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
@@ -127,6 +130,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _createNewSession();
   }
 
+  Future<void> _openSearchFromDrawer() async {
+    final sessionHistory = ref.read(videoSummarySessionHistoryProvider);
+    final sessions = sessionHistory.sessions
+        .map(
+          (session) => VideoSummaryDrawerSessionItem(
+            id: session.id,
+            title: session.title,
+            durationLabel: session.durationLabel,
+            detail: session.detail,
+            isActive: session.id == sessionHistory.activeSessionId,
+          ),
+        )
+        .toList();
+
+    final shouldRestoreDrawer = _scaffoldKey.currentState?.isDrawerOpen ?? false;
+    if (shouldRestoreDrawer) {
+      AppNavigator.popCurrent(context);
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+    }
+
+    final selectedSessionId = await AppNavigator.openVideoSummarySearch(
+      context,
+      arguments: VideoSummarySearchRouteArguments(sessions: sessions),
+    );
+
+    if (!mounted) return;
+
+    if (selectedSessionId != null) {
+      _restoreSessionFromDrawer(selectedSessionId);
+      return;
+    }
+
+    if (shouldRestoreDrawer) {
+      _openDrawer();
+    }
+  }
+
   void _restoreSessionFromDrawer(String sessionId) {
     final session = ref
         .read(videoSummarySessionHistoryProvider.notifier)
@@ -135,7 +176,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
 
-    AppNavigator.popCurrent(context);
+    // 从抽屉直接选会话时需要先关闭抽屉；从搜索页回调过来时抽屉已关闭，但 pop 一个已关闭的 navigator 是安全的
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+      AppNavigator.popCurrent(context);
+    }
     final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
     textEditing.runWithoutSync(() {
       // 恢复顺序很重要：先回填文本，再恢复流程快照，最后切 active session。

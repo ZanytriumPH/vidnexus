@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_route_arguments.dart';
 import 'app_route_error_screen.dart';
 import '../../features/home/home_screen.dart';
+import '../../features/home/video_summary_search_screen.dart';
 import '../../features/knowledge_base/knowledge_base_chat_screen.dart';
 import '../../features/knowledge_base/knowledge_base_home_screen.dart';
 import '../../features/knowledge_base/knowledge_base_session_screen.dart';
@@ -20,6 +21,14 @@ class AppRouter {
           return _buildRoute(
             settings: settings,
             builder: (_) => const HomeScreen(),
+          );
+        case AppRoutes.videoSummarySearch:
+          final args = _requireArguments<VideoSummarySearchRouteArguments>(
+            settings,
+          );
+          return _buildRoute<String?>(
+            settings: settings,
+            builder: (_) => VideoSummarySearchScreen(sessions: args.sessions),
           );
         case AppRoutes.knowledgeBaseHome:
           return _buildRoute(
@@ -75,11 +84,11 @@ class AppRouter {
 }
 
 /// 统一封装 Route 构建，确保所有页面都能拿到原始 RouteSettings。
-MaterialPageRoute<void> _buildRoute({
+MaterialPageRoute<T> _buildRoute<T extends Object?>({
   required RouteSettings settings,
   required WidgetBuilder builder,
 }) {
-  return MaterialPageRoute<void>(builder: builder, settings: settings);
+  return MaterialPageRoute<T>(builder: builder, settings: settings);
 }
 
 MaterialPageRoute<void> _buildRouteError({
@@ -159,4 +168,15 @@ class AppNavigator {
       arguments: arguments,
     );
   }
+
+  static Future<String?> openVideoSummarySearch(
+    BuildContext context, {
+    required VideoSummarySearchRouteArguments arguments,
+  }) {
+    return Navigator.of(context).pushNamed<String>(
+      AppRoutes.videoSummarySearch,
+      arguments: arguments,
+    );
+  }
+
 }
