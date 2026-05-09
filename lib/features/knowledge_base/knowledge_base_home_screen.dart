@@ -93,15 +93,6 @@ class _KnowledgeBaseHeader extends StatelessWidget {
           showTitle: false,
           trailing: AppHeaderAddButton(onPressed: onCreatePressed),
         ),
-        const SizedBox(height: 12),
-        Text(
-          '像 NotebookLM 一样管理资料与问答',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            fontSize: 12,
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
       ],
     );
   }
