@@ -315,4 +315,94 @@ const List<KnowledgeBaseLibrary> demoKnowledgeBaseLibraries = [
       ),
     ],
   ),
+  KnowledgeBaseLibrary(
+    id: 'kb-cs50x-2025',
+    title: 'CS50x-2025课程库',
+    meta: '4 个视频来源 · 最近追问“Minimax 算法为什么能保证不败？”',
+    description: '收集课程视频，支持按讲次回看知识点与历史问答。',
+    sourceCount: 4,
+    sources: [
+      KnowledgeSourceItem(
+        id: 'cs50x-src-1',
+        title: 'CS50x-2025-Artificial-Intelligence.mp4',
+        subtitle: '视频资料 · AI 课程讲解 · 56:00',
+        kindLabel: '视频',
+      ),
+      KnowledgeSourceItem(
+        id: 'cs50x-src-2',
+        title: 'CS50x 2025 - Lecture 1 - C.mp4',
+        subtitle: '视频资料 · Week 1 · 2:34:31',
+        kindLabel: '视频',
+      ),
+      KnowledgeSourceItem(
+        id: 'cs50x-src-3',
+        title: 'CS50x 2025 - Lecture 2 - Arrays.mp4',
+        subtitle: '视频资料 · Week 2 · 2:10:18',
+        kindLabel: '视频',
+      ),
+      KnowledgeSourceItem(
+        id: 'cs50x-src-4',
+        title: 'CS50x 2025 - Lecture 3 - Algorithms.mp4',
+        subtitle: '视频资料 · Week 3 · 2:06:35',
+        kindLabel: '视频',
+      ),
+    ],
+    conversations: [
+      KnowledgeConversationPreview(
+        id: 'cs50x-conv-1',
+        title: 'Minimax 算法为什么能保证最差情况下不输？',
+        preview: '已结合 AI 课程视频解释极大极小值回推逻辑，并说明“不败”来自最优对抗假设。',
+        dateLabel: '今天',
+        messages: [
+          KnowledgeChatMessage(
+            sender: KnowledgeChatSender.user,
+            text: 'Minimax 算法为什么能保证最差情况下不输？',
+          ),
+          KnowledgeChatMessage(
+            sender: KnowledgeChatSender.system,
+            text: '''核心原因是：算法会先把所有可达终局映射成分数，再假设对手总会做出**对你最不利**的选择。
+
+### 推理过程
+- 对当前玩家来说，每一步都不是看“最好结果”，而是看这一步在**最坏回应**下还能拿到什么结果。
+- 然后它会从这些“最坏结果”里，再挑出相对**最优**的那一步。
+
+### 结论
+这样就能主动避开那些一定会导致失败的走法。在井字棋这类可以穷举状态空间的博弈里，Minimax 对应的效果就是：**最差也能逼平，所以不会输。**''',
+          ),
+        ],
+      ),
+      KnowledgeConversationPreview(
+        id: 'cs50x-conv-2',
+        title: 'Lecture 2 里数组和链表的取舍该怎么理解？',
+        preview: '已从访问效率、插入删除成本和内存连续性三方面对比两种结构。',
+        dateLabel: '昨天',
+        messages: [
+          KnowledgeChatMessage(
+            sender: KnowledgeChatSender.user,
+            text: 'Lecture 2 里数组和链表的取舍该怎么理解？',
+          ),
+          KnowledgeChatMessage(
+            sender: KnowledgeChatSender.system,
+            text: '这节课的核心取舍是“读快写慢”和“写灵活读跳转”。数组依赖连续内存，随机访问快，但中间插入或删除需要整体移动；链表插入删除更灵活，不过访问第 n 个元素必须顺着指针逐步走。课程里想强调的是，数据结构选择取决于操作模式，而不是谁绝对更先进。',
+          ),
+        ],
+      ),
+      KnowledgeConversationPreview(
+        id: 'cs50x-conv-3',
+        title: 'Lecture 3 的排序算法部分适合怎么复习？',
+        preview: '已按“思路、复杂度、适用场景”整理为复习顺序，并区分选择排序与归并排序。',
+        dateLabel: '5月2日',
+        messages: [
+          KnowledgeChatMessage(
+            sender: KnowledgeChatSender.user,
+            text: 'Lecture 3 的排序算法部分适合怎么复习？',
+          ),
+          KnowledgeChatMessage(
+            sender: KnowledgeChatSender.system,
+            text: '可以按三步复习：先记住每种排序如何移动元素，再对照最好/平均/最坏时间复杂度，最后补上适用场景。比如选择排序易理解但总要反复扫描，归并排序利用分治把复杂度稳定在 O(n log n)，更适合作为“为什么算法设计会改变规模成本”的代表例子。',
+          ),
+        ],
+      ),
+    ],
+  ),
 ];

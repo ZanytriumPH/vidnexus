@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/routing/app_route_arguments.dart';
 import '../../app/routing/app_router.dart';
 import '../../app/theme/app_theme.dart';
+import '../../app/widgets/app_markdown_body.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_header_add_button.dart';
 import 'knowledge_base_models.dart';
@@ -173,10 +174,7 @@ class _KnowledgeChatBubble extends StatelessWidget {
         color: messageStyles.systemSurface,
         borderRadius: BorderRadius.circular(messageStyles.chatBubbleRadius),
       ),
-      child: Text(
-        message.text,
-        style: context.appTextStyles.summaryContentBody,
-      ),
+      child: AppMarkdownBody(data: message.text),
     );
   }
 }
