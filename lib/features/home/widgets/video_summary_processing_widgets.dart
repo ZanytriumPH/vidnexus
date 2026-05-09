@@ -102,6 +102,7 @@ class HeroCard extends StatelessWidget {
             if (isProcessing && processingSnapshot != null) ...[
               Text(
                 '${videoAsset.fileName} · ${videoAsset.durationLabel}',
+                softWrap: true,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: 10,
                   color: const Color(0xFF51606D),
@@ -205,30 +206,37 @@ class _ReadyUploadCallout extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      height: 44,
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
       ),
-      alignment: Alignment.center,
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            highlighted ? '✓' : '+',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textSecondary,
+          if (highlighted) ...[
+            Text(
+              '✓',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textSecondary,
+              ),
             ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            highlighted ? '已选择 ${videoAsset.fileName}' : '点击从设备选择文件',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
+            const SizedBox(width: 4),
+          ],
+          Expanded(
+            child: Text(
+              highlighted ? '已选择 ${videoAsset.fileName}' : '点击从设备选择文件',
+              textAlign: TextAlign.center,
+              softWrap: true,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
         ],

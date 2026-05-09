@@ -8,6 +8,7 @@ import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
 import 'home_shell_widgets.dart';
 import 'video_summary_processing_widgets.dart';
+import 'video_summary_markdown_body.dart';
 
 class DraftStageWorkspace extends StatelessWidget {
   const DraftStageWorkspace({
@@ -137,9 +138,8 @@ class DraftBodyCard extends StatelessWidget {
                     ),
                     style: context.appTextStyles.summaryContentBody,
                   )
-                : Text(
-                    draftBodyController.text,
-                    style: context.appTextStyles.summaryContentBody,
+                : VideoSummaryMarkdownBody(
+                    data: draftBodyController.text,
                   ),
           ),
         ],

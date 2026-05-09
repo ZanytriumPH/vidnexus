@@ -9,10 +9,10 @@ class FakeVideoSummaryRepository extends StreamBackedVideoSummaryRepository {
   @override
   VideoAssetInfo getVideoAsset() {
     return const VideoAssetInfo(
-      title: 'product-review.mp4',
-      durationLabel: '18m 24s',
-      sourceLabel: '产品源视频',
-      fileName: 'product-review.mp4',
+      title: 'CS50x-2025-Artificial-Intelligence.mp4',
+      durationLabel: '56m 00s',
+      sourceLabel: 'CS50x-2025',
+      fileName: 'CS50x-2025-Artificial-Intelligence.mp4',
     );
   }
 
@@ -26,9 +26,29 @@ class FakeVideoSummaryRepository extends StreamBackedVideoSummaryRepository {
     await Future<void>.delayed(const Duration(milliseconds: 400));
     return const VideoSummaryDraftData(
       paragraphs: [
-        '《视频总结》这次结构化内容初稿，系统共检出并修订了 Agent 结构的核心概念和底层细节。讲解者结合 LangChain 框架，详细分析了 Agent 的工作流程，包括用户输入、查询循环和工具调用等模块。',
-        '综合总结：该视频分片通过音频与页面结合，深入探讨了技术路线化的重要意义及其在面对初行之复杂中的应用价值。',
-        '《视频总结》这次结构化内容初稿，系统共检出并修订了 Agent 结构的核心概念和底层细节。讲解者结合 LangChain 框架，详细分析了 Agent 的工作流程，包括用户输入、查询循环和工具调用等模块。'
+        '''这段视频（CS50x 关于人工智能的讲座）在 **[28:15]** 左右引入了 **Minimax 算法**。以下是视频中关于该算法的核心知识点总结：
+
+* **算法核心思想与命名**：
+* Minimax 算法常用于计算机博弈（如井字棋 Tic-Tac-Toe）。其核心在于两名玩家的目标截然相反：一方致力于**最大化 (Maximize)** 得分，另一方致力于**最小化 (Minimize)** 得分。
+
+
+* **状态量化与评分系统**：
+* 为了让计算机进行数学推理，算法为每种游戏结果设定了具体的数值。视频中给出的设定是：如果是 X 赢，棋盘分数为 **1**；如果是 O 赢，分数为 **-1**；如果是平局，分数为 **0**。
+* 因此，玩家 X 的目标是选择能让最终分数趋近于 1 的步骤（最大化），而玩家 O 的目标是选择能让最终分数趋近于 -1 的步骤（最小化）。
+
+
+* **决策树与逻辑推演 (Decision Tree)**：
+* 在轮到某一方走棋时，计算机会在脑海中向下推演所有可能的“未来棋盘状态”。
+* 计算机通过假设对手也会采取最优策略，一路推演到游戏结束，从而反推出当前每一步的“真实价值”。例如，玩家 O 会在多个选项中，比较不同走法最终导向的棋盘分数，并无情地选择那个分数最小（如导向 0 或 -1）的分支。
+
+
+* **算法的优势**：
+* 使用 Minimax 算法虽然不能保证你永远获胜（取决于先后手和对手策略），但它能在逻辑上**保证你永远不会输**（最差也能逼平对手）。
+
+
+* **指数级增长的算力瓶颈**：
+* **状态空间爆炸**：随着剩余步数的增加，决策树的规模会呈指数级增长。
+* **适用场景限制**：对于井字棋，总共只有 255,000 种可能的游戏路径，现代计算机可以轻松遍历。但对于更复杂的棋类，例如国际象棋（仅前4回合就有 850 亿种可能）或围棋（266 亿亿种可能），纯粹的 Minimax 算法由于没有足够的内存和时间来计算所有的决策树，就会变得不可行，这也引出了后续对机器学习 (Machine Learning) 的需求。'''
       ],
     );
   }

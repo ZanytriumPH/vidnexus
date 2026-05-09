@@ -7,6 +7,7 @@ import '../../../app/widgets/composer_attachment_button.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
 import 'timestamp_interval_picker_sheet.dart';
+import 'video_summary_markdown_body.dart';
 
 class ChatThread extends StatelessWidget {
   const ChatThread({required this.summary, required this.messages, super.key});
@@ -86,9 +87,8 @@ class _FinalSummaryBubble extends StatelessWidget {
             ],
           ),
           SizedBox(height: messageStyles.messageSpacing),
-          Text(
-            summary.summaryBody,
-            style: context.appTextStyles.summaryContentBody,
+          VideoSummaryMarkdownBody(
+            data: summary.summaryBody,
           ),
         ],
       ),
