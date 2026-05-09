@@ -74,6 +74,38 @@ void main() {
       expect(find.text('引用内容'), findsOneWidget);
       expect(find.text('## 小结'), findsNothing);
     });
+
+    testWidgets('system chat message renders markdown content', (
+      WidgetTester tester,
+    ) async {
+      const summary = FinalSummaryData(
+        summaryTitle: '最终稿',
+        summaryBody: '正文',
+        timestampChips: [],
+        messages: [],
+      );
+
+      const messages = [
+        ChatMessage(
+          sender: SummaryChatSender.system,
+          text: '### 补充说明\n\n- 第一条\n- 第二条\n\n**重点提醒**',
+          timestampLabel: '12:30 - 14:00',
+        ),
+      ];
+
+      await tester.pumpWidget(
+        const _TestApp(
+          child: ChatThread(summary: summary, messages: messages),
+        ),
+      );
+
+      expect(find.text('补充说明'), findsOneWidget);
+      expect(find.text('第一条'), findsOneWidget);
+      expect(find.text('第二条'), findsOneWidget);
+      expect(find.text('重点提醒'), findsOneWidget);
+      expect(find.text('### 补充说明'), findsNothing);
+      expect(find.text('12:30 - 14:00'), findsOneWidget);
+    });
   });
 }
 

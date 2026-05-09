@@ -140,10 +140,15 @@ class _SummaryChatBubbleBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isSystemMessage = message.sender == SummaryChatSender.system;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(message.text, style: context.appTextStyles.summaryContentBody),
+        if (isSystemMessage)
+          VideoSummaryMarkdownBody(data: message.text)
+        else
+          Text(message.text, style: context.appTextStyles.summaryContentBody),
         if (message.timestampLabel != null) ...[
           const SizedBox(height: 10),
           Text(
