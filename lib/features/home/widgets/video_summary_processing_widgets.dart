@@ -37,6 +37,7 @@ class HeroCard extends StatelessWidget {
     final bool isProcessing = stage == VideoSummaryStage.processing;
     final bool isDraft = stage == VideoSummaryStage.draft;
     final bool isFinal = stage == VideoSummaryStage.finalChat;
+    final bool disableTapOverlay = isDraft || isFinal;
     final String pillLabel = switch (stage) {
       VideoSummaryStage.ready => '本地上传',
       VideoSummaryStage.processing => processingSnapshot?.statusLabel ?? '处理中',
@@ -66,75 +67,84 @@ class HeroCard extends StatelessWidget {
         colors: [Color(0xFFBDE2FF), Color(0xFFE9F5FF)],
       ),
       borderColor: const Color(0xFFD3E7F8),
-      child: InkWell(
-        onTap: onTap,
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                StatusPill(label: pillLabel),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 10,
-                  color: const Color(0xFF384A59),
-                  fontWeight: FontWeight.w600,
-                  height: 1.45,
-                ),
-              ),
-            ],
-            const SizedBox(height: 8),
-            if (isProcessing && processingSnapshot != null) ...[
-              Text(
-                '${videoAsset.fileName} · ${videoAsset.durationLabel}',
-                softWrap: true,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 10,
-                  color: const Color(0xFF51606D),
-                ),
-              ),
-              const SizedBox(height: 12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          splashFactory: disableTapOverlay ? NoSplash.splashFactory : null,
+          overlayColor: disableTapOverlay
+              ? WidgetStateProperty.all(Colors.transparent)
+              : null,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
                 children: [
-                  Expanded(
-                    child: AnimatedProgressBar(
-                      value: processingSnapshot!.progress,
-                      minHeight: 4,
-                      backgroundColor: const Color(0xFFD9EAF8),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  AnimatedPercentLabel(
-                    value: processingSnapshot!.progress * 100,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  StatusPill(label: pillLabel),
                 ],
               ),
-            ],
-            if (isDraft || isFinal)
-              const WhiteButtonBar(
-                label: '视频回放',
-                leadingIcon: Icons.play_arrow_rounded,
+              const SizedBox(height: 10),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
               ),
-          ],
+              if (subtitle != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 10,
+                    color: const Color(0xFF384A59),
+                    fontWeight: FontWeight.w600,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              if (isProcessing && processingSnapshot != null) ...[
+                Text(
+                  '${videoAsset.fileName} · ${videoAsset.durationLabel}',
+                  softWrap: true,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 10,
+                    color: const Color(0xFF51606D),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AnimatedProgressBar(
+                        value: processingSnapshot!.progress,
+                        minHeight: 4,
+                        backgroundColor: const Color(0xFFD9EAF8),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    AnimatedPercentLabel(
+                      value: processingSnapshot!.progress * 100,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (isDraft || isFinal)
+                const WhiteButtonBar(
+                  label: '视频回放',
+                  leadingIcon: Icons.play_arrow_rounded,
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -163,29 +173,36 @@ class _ReadyUploadHeroCard extends StatelessWidget {
         colors: [Color(0xFFAEDCFF), Color(0xFFF3FAFF)],
       ),
       borderColor: const Color(0xFFD4E7F7),
-      child: InkWell(
-        onTap: onTap,
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(14),
-        child: SizedBox(
-          height: 140,
-          child: Column(
-            children: [
-              const SizedBox(height: 28),
-              Text(
-                '本地上传',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          splashFactory: NoSplash.splashFactory,
+          overlayColor: WidgetStateProperty.all(Colors.transparent),
+          child: SizedBox(
+            height: 140,
+            child: Column(
+              children: [
+                const SizedBox(height: 28),
+                Text(
+                  '本地上传',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 18),
-              _ReadyUploadCallout(
-                highlighted: highlighted,
-                videoAsset: videoAsset,
-              ),
-            ],
+                const SizedBox(height: 18),
+                _ReadyUploadCallout(
+                  highlighted: highlighted,
+                  videoAsset: videoAsset,
+                ),
+              ],
+            ),
           ),
         ),
       ),
