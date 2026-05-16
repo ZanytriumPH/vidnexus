@@ -11,7 +11,7 @@ import 'video_summary_repository.dart';
 /// 基于 HTTP 的真实 VideoSummaryRepository 实现。
 ///
 /// 使用方式：
-/// - 通过 Provider 注入，替换 [FakeVideoSummaryRepository]
+/// - 通过 Provider 注入，实现 [VideoSummaryRepository]
 /// - [kbid] 和 [videoId] 在构造时指定（后续可由 Controller 动态设置）
 class HttpVideoSummaryRepository extends VideoSummaryRepository {
   HttpVideoSummaryRepository({
