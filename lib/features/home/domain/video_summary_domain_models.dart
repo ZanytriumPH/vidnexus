@@ -113,3 +113,68 @@ class VideoSummaryChatReplyData {
   final String text;
   final VideoSummaryReferenceRange? reference;
 }
+
+// ──── Phase 3: 后端任务状态映射 ────
+
+/// 对齐后端 API 的 workflow_state 字段。
+enum WorkflowState {
+  draftGenerating,
+  draftReady,
+  finalGenerating,
+  completed,
+  failed;
+
+  /// 从 API 返回的 snake_case 字符串解析。
+  factory WorkflowState.fromApi(String value) {
+    return switch (value) {
+      'DRAFT_GENERATING' => WorkflowState.draftGenerating,
+      'DRAFT_READY' => WorkflowState.draftReady,
+      'FINAL_GENERATING' => WorkflowState.finalGenerating,
+      'COMPLETED' => WorkflowState.completed,
+      'FAILED' => WorkflowState.failed,
+      _ => WorkflowState.failed,
+    };
+  }
+
+  /// 是否为终态（轮询应停止）。
+  bool get isTerminal =>
+      this == WorkflowState.draftReady ||
+      this == WorkflowState.completed ||
+      this == WorkflowState.failed;
+
+  /// 中文状态标签。
+  String get label {
+    return switch (this) {
+      WorkflowState.draftGenerating => '生成初稿中',
+      WorkflowState.draftReady => '初稿就绪',
+      WorkflowState.finalGenerating => '生成终稿中',
+      WorkflowState.completed => '已完成',
+      WorkflowState.failed => '处理失败',
+    };
+  }
+}
+
+/// 聚合 Task 的身份与状态信息，供 Repository → Mapper 传递。
+class VideoSummaryTaskInfo {
+  const VideoSummaryTaskInfo({
+    required this.taskId,
+    required this.videoId,
+    required this.kbid,
+    required this.workflowState,
+    this.draftSummary,
+    this.finalSummary,
+    this.title,
+    this.fileName,
+    this.userInitialPreference,
+  });
+
+  final String taskId;
+  final String videoId;
+  final String kbid;
+  final WorkflowState workflowState;
+  final String? draftSummary;
+  final String? finalSummary;
+  final String? title;
+  final String? fileName;
+  final String? userInitialPreference;
+}
