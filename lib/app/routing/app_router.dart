@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'app_route_arguments.dart';
 import 'app_route_error_screen.dart';
+import '../../features/auth/login_screen.dart';
+import '../../features/auth/register_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/home/video_summary_search_screen.dart';
 import '../../features/knowledge_base/knowledge_base_chat_screen.dart';
@@ -61,6 +63,16 @@ class AppRouter {
           return _buildRoute(
             settings: settings,
             builder: (_) => KnowledgeBaseSourcesScreen(library: args.library),
+          );
+        case AppRoutes.authLogin:
+          return _buildRoute(
+            settings: settings,
+            builder: (_) => const LoginScreen(),
+          );
+        case AppRoutes.authRegister:
+          return _buildRoute(
+            settings: settings,
+            builder: (_) => const RegisterScreen(),
           );
         default:
           return onUnknownRoute(settings);
@@ -179,4 +191,11 @@ class AppNavigator {
     );
   }
 
+  static Future<void> openLogin(BuildContext context) {
+    return Navigator.of(context).pushNamed<void>(AppRoutes.authLogin);
+  }
+
+  static Future<void> openRegister(BuildContext context) {
+    return Navigator.of(context).pushNamed<void>(AppRoutes.authRegister);
+  }
 }

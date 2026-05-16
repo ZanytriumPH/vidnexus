@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/widgets/app_user_avatar.dart';
 import '../../../app/theme/app_colors.dart';
 import 'video_summary_drawer_shared.dart';
 
@@ -112,6 +113,10 @@ class VideoSummaryHistoryDrawer extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
+              // 用户区（已登录显示头像+用户名，未登录显示"去登录"）
+              const AppDrawerUserTile(),
+              const SizedBox(height: 10),
+              // 设置区
               InkWell(
                 onTap: onSettingsPressed,
                 borderRadius: BorderRadius.circular(18),

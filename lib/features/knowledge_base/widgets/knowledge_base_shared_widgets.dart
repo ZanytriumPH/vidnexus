@@ -16,6 +16,7 @@ class KnowledgeBaseTopBar extends StatelessWidget {
     this.leadingIcon = Icons.arrow_back_rounded,
     this.showTitle = true,
     this.trailing,
+    this.onSettingsPressed,
     super.key,
   });
 
@@ -26,6 +27,7 @@ class KnowledgeBaseTopBar extends StatelessWidget {
   final IconData leadingIcon;
   final Widget? trailing;
   final bool showTitle;
+  final VoidCallback? onSettingsPressed;
 
   @override
   Widget build(BuildContext context) {

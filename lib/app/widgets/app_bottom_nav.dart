@@ -22,30 +22,19 @@ class AppSectionHeaderBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 44,
-      child: Row(
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          SizedBox(
-            width: 40,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Transform.translate(
-                offset: const Offset(-10, 0),
-                child: leading ?? const SizedBox.shrink(),
-              ),
+          AppBottomNav(current: current, onSelected: onSelected),
+          Positioned(
+            left: 0,
+            child: leading ?? const SizedBox.shrink(),
+          ),
+          if (trailing != null)
+            Positioned(
+              right: 0,
+              child: trailing!,
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: AppBottomNav(current: current, onSelected: onSelected),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 40,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: trailing ?? const SizedBox.shrink(),
-            ),
-          ),
         ],
       ),
     );
