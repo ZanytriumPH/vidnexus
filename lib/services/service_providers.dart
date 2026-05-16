@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'video_service.dart';
 import 'task_service.dart';
 import 'knowledge_base_service.dart';
+import 'global_chat_service.dart';
+import 'global_qa_service.dart';
+import 'video_qa_service.dart';
 
 /// VideoService provider。
 final videoServiceProvider = Provider<VideoService>((ref) => const VideoService());
@@ -13,4 +16,19 @@ final taskServiceProvider = Provider<TaskService>((ref) => const TaskService());
 /// KnowledgeBaseService provider。
 final knowledgeBaseServiceProvider = Provider<KnowledgeBaseService>(
   (ref) => const KnowledgeBaseService(),
+);
+
+/// GlobalChatService provider。
+final globalChatServiceProvider = Provider<GlobalChatService>(
+  (ref) => const GlobalChatService(),
+);
+
+/// GlobalQAService provider。
+final globalQAServiceProvider = Provider<GlobalQAService>(
+  (ref) => const GlobalQAService(),
+);
+
+/// VideoQAService provider。
+final videoQAServiceProvider = Provider<VideoQAService>(
+  (ref) => const VideoQAService(),
 );

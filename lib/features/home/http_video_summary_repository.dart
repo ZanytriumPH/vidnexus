@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../services/polling/qa_poller.dart';
 import '../../services/polling/task_poller.dart';
 import '../../services/task_service.dart';
+import '../../services/video_qa_service.dart';
 import 'domain/video_summary_domain_models.dart';
 import 'video_summary_models.dart';
 import 'video_summary_repository.dart';
@@ -16,15 +18,22 @@ import 'video_summary_repository.dart';
 class HttpVideoSummaryRepository extends VideoSummaryRepository {
   HttpVideoSummaryRepository({
     required TaskService taskService,
+    VideoQAService? videoQAService,
     TaskPoller? taskPoller,
     required this.kbid,
     required this.videoId,
   })  : _taskService = taskService,
+        _videoQAService = videoQAService,
         _taskPoller = taskPoller ??
-            TaskPoller(taskService: taskService);
+            TaskPoller(taskService: taskService),
+        _qaPoller = videoQAService != null
+            ? QAPoller(videoQAService: videoQAService)
+            : null;
 
   final TaskService _taskService;
+  final VideoQAService? _videoQAService;
   final TaskPoller _taskPoller;
+  final QAPoller? _qaPoller;
 
   /// 当前知识库 ID。
   final String kbid;
@@ -145,9 +154,25 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
   @override
   Future<VideoSummaryChatReplyData> sendSummaryChatMessage(String message) async {
-    // Phase 5 实现，当前抛出 UnimplementedError。
-    throw UnimplementedError(
-      'sendSummaryChatMessage will be implemented in Phase 5 (VideoQAService)',
+    final taskId = _taskId;
+    if (taskId == null) {
+      throw StateError('No active task — call startDraftGeneration() first');
+    }
+    final qaSvc = _videoQAService;
+    final poller = _qaPoller;
+    if (qaSvc == null || poller == null) {
+      throw UnimplementedError('VideoQAService not injected — add videoQAService to provider');
+    }
+    // 1. 创建 QA 记录
+    final createResp = await qaSvc.createQA(
+      taskId: taskId,
+      questionContent: message,
     );
+    final qaId = createResp.data?.qaId;
+    if (qaId == null) {
+      throw StateError('QA creation returned null qaId');
+    }
+    // 2. 轮询等待回答
+    return poller.waitForAnswer(taskId: taskId, qaId: qaId);
   }
 }

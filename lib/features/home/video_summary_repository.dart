@@ -14,6 +14,7 @@ const String _defaultVideoId = 'vid_default';
 final videoSummaryRepositoryProvider = Provider<VideoSummaryRepository>((ref) {
   return HttpVideoSummaryRepository(
     taskService: ref.watch(taskServiceProvider),
+    videoQAService: ref.watch(videoQAServiceProvider),
     kbid: _defaultKbid,
     videoId: _defaultVideoId,
   );
