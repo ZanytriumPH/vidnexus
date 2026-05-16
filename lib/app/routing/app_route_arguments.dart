@@ -8,23 +8,23 @@ class VideoSummarySearchRouteArguments {
 }
 
 class KnowledgeBaseSessionRouteArguments {
-  const KnowledgeBaseSessionRouteArguments({required this.library});
+  const KnowledgeBaseSessionRouteArguments({required this.kbid});
 
-  final KnowledgeBaseLibrary library;
+  final String kbid;
 }
 
 class KnowledgeBaseChatRouteArguments {
   const KnowledgeBaseChatRouteArguments({
-    required this.library,
+    required this.kbid,
     required this.initialConversation,
   });
 
-  final KnowledgeBaseLibrary library;
+  final String kbid;
   final KnowledgeConversationPreview initialConversation;
 }
 
 class KnowledgeBaseSourcesRouteArguments {
-  const KnowledgeBaseSourcesRouteArguments({required this.library});
+  const KnowledgeBaseSourcesRouteArguments({required this.kbid});
 
-  final KnowledgeBaseLibrary library;
+  final String kbid;
 }

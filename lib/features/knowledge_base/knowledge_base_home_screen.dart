@@ -1,50 +1,84 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/routing/app_route_arguments.dart';
 import '../../app/routing/app_router.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_card.dart';
 import '../../app/widgets/app_header_add_button.dart';
+import 'application/knowledge_base_controller.dart';
 import 'knowledge_base_models.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
 
-class KnowledgeBaseHomeScreen extends StatelessWidget {
+class KnowledgeBaseHomeScreen extends ConsumerWidget {
   const KnowledgeBaseHomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(knowledgeBaseControllerProvider);
+    final controller = ref.read(knowledgeBaseControllerProvider.notifier);
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _KnowledgeBaseHeader(
-                      currentSection: AppNavSection.knowledgeBase,
-                      onSectionSelected: (section) =>
-                          _handleSectionSelection(context, section),
-                      onCreatePressed: () => _showCreateHint(context),
-                    ),
-                    const SizedBox(height: 14),
-                    const _KnowledgeSearchBar(),
-                    const SizedBox(height: 18),
-                    Text(
-                      '我的知识库',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
+              child: RefreshIndicator(
+                onRefresh: () => controller.refresh(),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _KnowledgeBaseHeader(
+                        currentSection: AppNavSection.knowledgeBase,
+                        onSectionSelected: (section) =>
+                            _handleSectionSelection(context, section),
+                        onCreatePressed: () => _showCreateDialog(context, controller),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    const _KnowledgeLibraryGrid(),
-                  ],
+                      const SizedBox(height: 14),
+                      const _KnowledgeSearchBar(),
+                      const SizedBox(height: 18),
+                      Text(
+                        '我的知识库',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (state.isLoading && state.libraries.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 40),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (state.libraries.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 40),
+                          child: Center(
+                            child: Text(
+                              '暂无知识库，点击右上角 + 创建',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppColors.textHint,
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        _KnowledgeLibraryGrid(libraries: state.libraries),
+                      if (state.errorMessage != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text(
+                            state.errorMessage!,
+                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -63,10 +97,35 @@ class KnowledgeBaseHomeScreen extends StatelessWidget {
     }
   }
 
-  void _showCreateHint(BuildContext context) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('新建知识库流程将在下一阶段接入。')));
+  void _showCreateDialog(BuildContext context, KnowledgeBaseController controller) {
+    final nameController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('新建知识库'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(hintText: '知识库名称'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isNotEmpty) {
+                controller.createLibrary(name: name);
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -134,12 +193,12 @@ class _KnowledgeSearchBar extends StatelessWidget {
 }
 
 class _KnowledgeLibraryGrid extends StatelessWidget {
-  const _KnowledgeLibraryGrid();
+  const _KnowledgeLibraryGrid({required this.libraries});
+
+  final List<KnowledgeBaseLibrary> libraries;
 
   @override
   Widget build(BuildContext context) {
-    const items = demoKnowledgeBaseLibraries;
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final cardWidth = (constraints.maxWidth - 12) / 2;
@@ -147,7 +206,7 @@ class _KnowledgeLibraryGrid extends StatelessWidget {
         return Wrap(
           spacing: 12,
           runSpacing: 12,
-          children: items
+          children: libraries
               .map(
                 (item) => SizedBox(
                   width: cardWidth,
@@ -172,7 +231,7 @@ class _KnowledgeLibraryCard extends StatelessWidget {
       onTap: () {
         AppNavigator.openKnowledgeBaseSession(
           context,
-          arguments: KnowledgeBaseSessionRouteArguments(library: item),
+          kbid: item.id,
         );
       },
       borderRadius: BorderRadius.circular(20),

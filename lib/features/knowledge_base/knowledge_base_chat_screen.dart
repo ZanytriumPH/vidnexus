@@ -1,30 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/routing/app_route_arguments.dart';
 import '../../app/routing/app_router.dart';
 import '../../app/theme/app_theme.dart';
 import '../../app/widgets/app_markdown_body.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_header_add_button.dart';
+import 'application/knowledge_base_controller.dart';
 import 'knowledge_base_models.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
 
-class KnowledgeBaseChatScreen extends StatefulWidget {
+class KnowledgeBaseChatScreen extends ConsumerStatefulWidget {
   const KnowledgeBaseChatScreen({
-    required this.library,
+    required this.kbid,
     required this.initialConversation,
     super.key,
   });
 
-  final KnowledgeBaseLibrary library;
+  final String kbid;
   final KnowledgeConversationPreview initialConversation;
 
   @override
-  State<KnowledgeBaseChatScreen> createState() =>
+  ConsumerState<KnowledgeBaseChatScreen> createState() =>
       _KnowledgeBaseChatScreenState();
 }
 
-class _KnowledgeBaseChatScreenState extends State<KnowledgeBaseChatScreen> {
+class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScreen> {
   late final TextEditingController _composerController;
   final ScrollController _scrollController = ScrollController();
   late List<KnowledgeChatMessage> _messages;
@@ -64,7 +65,7 @@ class _KnowledgeBaseChatScreenState extends State<KnowledgeBaseChatScreen> {
                       AppNavigator.popToKnowledgeBaseHome(context);
                   }
                 },
-                title: widget.library.title,
+                title: ref.watch(knowledgeBaseControllerProvider).selectedLibrary?.title ?? '对话',
                 onLeadingPressed: () => AppNavigator.popCurrent(context),
                 trailing: AppHeaderAddButton(onPressed: _startEmptyConversation),
               ),
@@ -104,13 +105,14 @@ class _KnowledgeBaseChatScreenState extends State<KnowledgeBaseChatScreen> {
     }
 
     FocusScope.of(context).unfocus();
+    final libraryTitle = ref.read(knowledgeBaseControllerProvider).selectedLibrary?.title ?? '';
     setState(() {
       _messages = [
         ..._messages,
         KnowledgeChatMessage(sender: KnowledgeChatSender.user, text: text),
         KnowledgeChatMessage(
           sender: KnowledgeChatSender.system,
-          text: '我会基于"${widget.library.title}"里的资料继续回答：$text',
+          text: '我会基于"$libraryTitle"里的资料继续回答：$text',
         ),
       ];
       _composerController.clear();
@@ -129,11 +131,9 @@ class _KnowledgeBaseChatScreenState extends State<KnowledgeBaseChatScreen> {
   void _startEmptyConversation() {
     AppNavigator.openKnowledgeBaseChat(
       context,
-      arguments: KnowledgeBaseChatRouteArguments(
-        library: widget.library,
-        initialConversation: buildEmptyKnowledgeConversation(
-          libraryTitle: widget.library.title,
-        ),
+      kbid: widget.kbid,
+      initialConversation: buildEmptyKnowledgeConversation(
+        libraryTitle: ref.read(knowledgeBaseControllerProvider).selectedLibrary?.title ?? '',
       ),
     );
   }

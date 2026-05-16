@@ -1,21 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/routing/app_route_arguments.dart';
 import '../../app/routing/app_router.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_header_add_button.dart';
 import '../../app/widgets/app_card.dart';
+import 'application/knowledge_base_controller.dart';
 import 'knowledge_base_models.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
 
-class KnowledgeBaseSourcesScreen extends StatelessWidget {
-  const KnowledgeBaseSourcesScreen({required this.library, super.key});
+class KnowledgeBaseSourcesScreen extends ConsumerWidget {
+  const KnowledgeBaseSourcesScreen({required this.kbid, super.key});
 
-  final KnowledgeBaseLibrary library;
+  final String kbid;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final library = ref.watch(knowledgeBaseControllerProvider).selectedLibrary;
+    final sources = library?.sources ?? [];
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -36,7 +40,7 @@ class KnowledgeBaseSourcesScreen extends StatelessWidget {
                 title: '来源',
                 onLeadingPressed: () => AppNavigator.popCurrent(context),
                 trailing: AppHeaderAddButton(
-                  onPressed: () => _openNewConversation(context),
+                  onPressed: () => _openNewConversation(context, ref),
                 ),
               ),
             ),
@@ -57,12 +61,20 @@ class KnowledgeBaseSourcesScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    ...library.sources.map(
-                      (source) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _KnowledgeSourceCard(source: source),
+                    if (sources.isEmpty)
+                      Text(
+                        '暂无来源资料',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textHint,
+                        ),
+                      )
+                    else
+                      ...sources.map(
+                        (source) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _KnowledgeSourceCard(source: source),
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -73,14 +85,13 @@ class KnowledgeBaseSourcesScreen extends StatelessWidget {
     );
   }
 
-  void _openNewConversation(BuildContext context) {
+  void _openNewConversation(BuildContext context, WidgetRef ref) {
+    final libraryTitle = ref.read(knowledgeBaseControllerProvider).selectedLibrary?.title ?? '';
     AppNavigator.openKnowledgeBaseChat(
       context,
-      arguments: KnowledgeBaseChatRouteArguments(
-        library: library,
-        initialConversation: buildEmptyKnowledgeConversation(
-          libraryTitle: library.title,
-        ),
+      kbid: kbid,
+      initialConversation: buildEmptyKnowledgeConversation(
+        libraryTitle: libraryTitle,
       ),
     );
   }

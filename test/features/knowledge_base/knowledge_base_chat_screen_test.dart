@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vidnexus/app/theme/app_theme.dart';
+import 'package:vidnexus/features/knowledge_base/application/knowledge_base_controller.dart';
 import 'package:vidnexus/features/knowledge_base/knowledge_base_chat_screen.dart';
 import 'package:vidnexus/features/knowledge_base/knowledge_base_models.dart';
 
@@ -8,7 +10,7 @@ void main() {
   testWidgets('knowledge base system message renders markdown', (
     WidgetTester tester,
   ) async {
-    const library = KnowledgeBaseLibrary(
+    const testLibrary = KnowledgeBaseLibrary(
       id: 'kb-test',
       title: '测试知识库',
       meta: '测试元信息',
@@ -32,11 +34,18 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light(),
-        home: const KnowledgeBaseChatScreen(
-          library: library,
-          initialConversation: conversation,
+      ProviderScope(
+        overrides: [
+          knowledgeBaseControllerProvider.overrideWith(
+            () => _TestKnowledgeBaseController(testLibrary),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const KnowledgeBaseChatScreen(
+            kbid: 'kb-test',
+            initialConversation: conversation,
+          ),
         ),
       ),
     );
@@ -47,4 +56,17 @@ void main() {
     expect(find.text('重点说明'), findsOneWidget);
     expect(find.text('### 系统结论'), findsNothing);
   });
+}
+
+class _TestKnowledgeBaseController extends KnowledgeBaseController {
+  _TestKnowledgeBaseController(this.library);
+  final KnowledgeBaseLibrary library;
+
+  @override
+  KnowledgeBaseState build() {
+    return KnowledgeBaseState(
+      libraries: [library],
+      selectedLibrary: library,
+    );
+  }
 }

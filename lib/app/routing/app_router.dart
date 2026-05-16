@@ -8,6 +8,7 @@ import '../../features/home/home_screen.dart';
 import '../../features/home/video_summary_search_screen.dart';
 import '../../features/knowledge_base/knowledge_base_chat_screen.dart';
 import '../../features/knowledge_base/knowledge_base_home_screen.dart';
+import '../../features/knowledge_base/knowledge_base_models.dart';
 import '../../features/knowledge_base/knowledge_base_session_screen.dart';
 import '../../features/knowledge_base/knowledge_base_sources_screen.dart';
 import 'app_routes.dart';
@@ -43,7 +44,7 @@ class AppRouter {
           );
           return _buildRoute(
             settings: settings,
-            builder: (_) => KnowledgeBaseSessionScreen(library: args.library),
+            builder: (_) => KnowledgeBaseSessionScreen(kbid: args.kbid),
           );
         case AppRoutes.knowledgeBaseChat:
           final args = _requireArguments<KnowledgeBaseChatRouteArguments>(
@@ -52,7 +53,7 @@ class AppRouter {
           return _buildRoute(
             settings: settings,
             builder: (_) => KnowledgeBaseChatScreen(
-              library: args.library,
+              kbid: args.kbid,
               initialConversation: args.initialConversation,
             ),
           );
@@ -62,7 +63,7 @@ class AppRouter {
           );
           return _buildRoute(
             settings: settings,
-            builder: (_) => KnowledgeBaseSourcesScreen(library: args.library),
+            builder: (_) => KnowledgeBaseSourcesScreen(kbid: args.kbid),
           );
         case AppRoutes.authLogin:
           return _buildRoute(
@@ -153,31 +154,35 @@ class AppNavigator {
 
   static Future<void> openKnowledgeBaseSession(
     BuildContext context, {
-    required KnowledgeBaseSessionRouteArguments arguments,
+    required String kbid,
   }) {
     return Navigator.of(context).pushNamed<void>(
       AppRoutes.knowledgeBaseSession,
-      arguments: arguments,
+      arguments: KnowledgeBaseSessionRouteArguments(kbid: kbid),
     );
   }
 
   static Future<void> openKnowledgeBaseChat(
     BuildContext context, {
-    required KnowledgeBaseChatRouteArguments arguments,
+    required String kbid,
+    required KnowledgeConversationPreview initialConversation,
   }) {
     return Navigator.of(context).pushNamed<void>(
       AppRoutes.knowledgeBaseChat,
-      arguments: arguments,
+      arguments: KnowledgeBaseChatRouteArguments(
+        kbid: kbid,
+        initialConversation: initialConversation,
+      ),
     );
   }
 
   static Future<void> openKnowledgeBaseSources(
     BuildContext context, {
-    required KnowledgeBaseSourcesRouteArguments arguments,
+    required String kbid,
   }) {
     return Navigator.of(context).pushNamed<void>(
       AppRoutes.knowledgeBaseSources,
-      arguments: arguments,
+      arguments: KnowledgeBaseSourcesRouteArguments(kbid: kbid),
     );
   }
 
