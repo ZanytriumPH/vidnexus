@@ -36,10 +36,12 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
   @override
   VideoAssetInfo getVideoAsset() {
-    // 同步方法，返回占位信息；真实数据通过 fetchDraftResult 异步获取。
+    // 同步方法，返回合法默认值；真实数据通过 fetchDraftResult 异步获取。
+    // durationLabel 必须是 parseVideoSummaryDurationLabel 可解析的格式：
+    // "MM:SS"（如 "00:00"）或 "Xm Ys"（如 "0m 00s"）。
     return VideoAssetInfo(
       title: videoId,
-      durationLabel: '--:--',
+      durationLabel: '0m 00s',
       sourceLabel: kbid,
       fileName: videoId,
     );
