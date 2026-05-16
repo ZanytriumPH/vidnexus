@@ -6,7 +6,7 @@
 
 ## 1. 概述
 
-Phase 3 是 API 对接计划的核心里程碑——用真实的 HTTP 轮询替代 Fake 脚本化事件流，同时保持现有 UI 层零改动。通过 `TaskPoller` 将后端 `workflow_state` 的粗粒度状态轮询转化为 `VideoSummaryProcessingData` 流，`HttpVideoSummaryRepository` 完整实现 `VideoSummaryRepository` 接口，编译期 flag 一键切换 Fake/Http。
+Phase 3 是 API 对接计划的核心里程碑——用真实的 HTTP 轮询替代 Fake 脚本化事件流，同时保持现有 UI 层零改动。通过 `TaskPoller` 将后端 `workflow_state` 的粗粒度状态轮询转化为 `VideoSummaryProcessingData` 流，`HttpVideoSummaryRepository` 完整实现 `VideoSummaryRepository` 接口。最终彻底移除了所有本地 Mock 脚本代码，App 默认走 HTTP 真实通道，配合 ApiFox Mock 完成端到端验证。
 
 **架构原则**: Repository 只返回 domain 数据 → Mapper 转换 → UI 完全不变。
 
@@ -21,7 +21,14 @@ Phase 3 是 API 对接计划的核心里程碑——用真实的 HTTP 轮询替�
 | **新建** | `lib/services/polling/task_poller.dart` | 轮询引擎：状态检测、进度估算、超时保护 |
 | **新建** | `lib/features/home/http_video_summary_repository.dart` | VideoSummaryRepository 的 HTTP 实现 |
 | **修改** | `lib/features/home/domain/video_summary_domain_models.dart` | 新增 `WorkflowState` 枚举 + `VideoSummaryTaskInfo` 聚合类 |
-| **修改** | `lib/features/home/video_summary_repository.dart` | Provider 支持编译期 Fake/Http 切换 |
+| **修改** | `lib/features/home/video_summary_repository.dart` | Provider 简化为永远返回 `HttpVideoSummaryRepository` |
+| **修改** | `lib/services/task_service.dart` | `getTask()` 支持 `extraHeaders`；暴露 `dio` getter 供调试 |
+| **删除** | `lib/features/home/fake_video_summary_repository.dart` | Fake 仓库（已完成历史使命） |
+| **删除** | `lib/features/home/fake_video_summary_processing_event_source.dart` | Fake 事件脚本（15+ 帧静态序列） |
+| **删除** | `lib/features/home/stream_backed_video_summary_repository.dart` | 流式仓储基类（仅 Fake 使用） |
+| **删除** | `lib/features/home/video_summary_processing_event_source.dart` | 事件源抽象 + `DelayedVideoSummaryProcessingEventSource` |
+| **删除** | `lib/features/home/video_summary_processing_event_adapter.dart` | 事件适配器（`BackendEvent` → `ProcessingData`） |
+| **删除** | `test/features/home/video_summary_processing_event_adapter_test.dart` | 适配器单元测试（随被测代码移除） |
 
 ### 2.2 各组件详述
 
@@ -144,25 +151,36 @@ UI → startDraftGeneration()
                    └─ GET /api/v1/tasks/{taskId} → 提取 draft_summary
 ```
 
-#### 2.2.5 Provider 切换机制
+#### 2.2.5 Provider 简化 + 隐式 Bug 修复
 
 **位置**: `lib/features/home/video_summary_repository.dart`
 
+清理后的 Provider 直接返回 `HttpVideoSummaryRepository`，无需任何编译期 flag：
+
 ```dart
-const bool _useHttpRepository = bool.fromEnvironment(
-  'USE_HTTP_REPOSITORY',
-  defaultValue: false,
-);
+final videoSummaryRepositoryProvider = Provider<VideoSummaryRepository>((ref) {
+  return HttpVideoSummaryRepository(
+    taskService: ref.watch(taskServiceProvider),
+    kbid: _defaultKbid,
+    videoId: _defaultVideoId,
+  );
+});
 ```
 
-**切换方式**:
+**期间修复的隐式问题**:
+
+| 问题 | 现象 | 修复 |
+|------|------|------|
+| `durationLabel: '--:--'` 导致解析崩溃 | `FormatException: Invalid radix-10 number` | 改为 `'0m 00s'`（`parseVideoSummaryDurationLabel` 合法格式） |
+
+**启动命令简化**:
 
 ```bash
-# 默认：FakeVideoSummaryRepository（Mock 数据 + 脚本化进度动画）
-flutter run
+# 之前：需要两个 dart-define
+flutter run --dart-define=USE_HTTP_REPOSITORY=true --dart-define=API_BASE_URL=...
 
-# 切换到真实 HTTP 后端
-flutter run --dart-define=USE_HTTP_REPOSITORY=true
+# 现在：只需一个
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:4523/m1/8282015-8045148-default
 ```
 
 **临时占位常量**（后续 Phase 由用户交互动态设置）:
@@ -195,12 +213,35 @@ Phase 3 严格遵守"保持现有 UI 层零改动"约束：
 | Phase 2 | `TaskService.updateTask()` | `HttpVideoSummaryRepository.generateFinalSummary()` |
 | Phase 2 | `taskServiceProvider` | `videoSummaryRepositoryProvider` 注入 |
 
-### 3.3 Fake Repository 保留
+### 3.3 Fake 代码已完全移除
 
-`FakeVideoSummaryRepository` 完整保留，用于：
-- 单元测试（无网络依赖）
-- Widget 测试（确定性脚本化进度）
-- Demo 展示
+以下 5 个文件及其测试已被删除，项目代码净减少约 600 行：
+
+```
+删除文件:
+├── fake_video_summary_repository.dart           (~120 行)
+├── fake_video_summary_processing_event_source.dart (~160 行)
+├── stream_backed_video_summary_repository.dart   (~30 行)
+├── video_summary_processing_event_source.dart    (~65 行)
+├── video_summary_processing_event_adapter.dart   (~100 行)
+└── test/.../video_summary_processing_event_adapter_test.dart
+```
+
+原本由这些文件承担的"开发阶段 Demo 展示"职责，现已由 **ApiFox Mock + HttpVideoSummaryRepository** 完全接管。
+
+### 3.4 ApiFox Mock 端到端验证通过
+
+在清理 Fake 代码的过程中，完成了 ApiFox Mock 的实际联调：
+
+| 接口 | Mock 策略 | 验证结果 |
+|------|---------|---------|
+| `POST /api/v1/tasks` | 固定返回 `DRAFT_GENERATING` + `task_id` | ✅ 200 响应，HttpRepo 正确提取 taskId |
+| `GET /api/v1/tasks/{task_id}` | `DRAFT_READY` + `draft_summary` 有内容 | ✅ TaskPoller 检测终态 → 流关闭 → 进入初稿页 |
+| 轮询计数 | ApiFox `X-Poll-Count` header 条件匹配 | ✅ 前 3 次返回 `DRAFT_GENERATING`，第 4 次返回 `DRAFT_READY` |
+
+**联调中发现并修复的问题**:
+- ApiFox 自动 Mock 返回随机中文字符串（`"甘肃省"` / `"湖北省"`）导致 `WorkflowState.fromApi()` fallback 到 `failed` → 已通过配置精确 Mock 期望解决
+- `X-Mock-Step` header 条件在 ApiFox 中不可靠 → 改用 Flutter 侧主动发送 `X-Poll-Count` header 的方案
 
 ---
 
@@ -263,18 +304,28 @@ _kbid / _videoId 占位常量           → Phase 4 由 KnowledgeBaseController 
 lib/services/polling/
 └── task_poller.dart                    ← Phase 3 新建
 
+lib/services/
+└── task_service.dart                   ← Phase 3 修改（getTask 支持 extraHeaders + dio getter）
+
 lib/features/home/
 ├── domain/
 │   └── video_summary_domain_models.dart ← Phase 3 修改（WorkflowState + VideoSummaryTaskInfo）
-├── video_summary_repository.dart        ← Phase 3 修改（Provider 切换）
+├── video_summary_repository.dart        ← Phase 3 修改（Provider 简化为永远 Http）
 ├── http_video_summary_repository.dart   ← Phase 3 新建
-├── fake_video_summary_repository.dart   （已有，未变更）
-├── stream_backed_video_summary_repository.dart （已有，未变更）
-├── video_summary_processing_event_source.dart （已有，未变更）
-├── video_summary_processing_event_adapter.dart （已有，未变更）
 ├── video_summary_models.dart            （已有，未变更）
+├── video_summary_presentation_models.dart （已有，未变更）
+├── home_screen.dart                     （已有，未变更）
+├── video_summary_search_screen.dart     （已有，未变更）
+├── widgets/                             （已有，未变更）
 └── application/
     └── video_summary_result_mapper.dart  （已有，未变更——自动兼容）
+
+已删除（~600 行代码）:
+├── fake_video_summary_repository.dart
+├── fake_video_summary_processing_event_source.dart
+├── stream_backed_video_summary_repository.dart
+├── video_summary_processing_event_source.dart
+└── video_summary_processing_event_adapter.dart
 ```
 
 ---
