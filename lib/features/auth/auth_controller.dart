@@ -200,10 +200,7 @@ class AuthController extends Notifier<AuthState> {
   }
 
   void _injectAuthInterceptor() {
-    final dio = ApiClient.instance;
-    // 清除旧的 interceptor
-    dio.interceptors.removeWhere((i) => i is AuthInterceptor);
-    dio.interceptors.add(
+    ApiClient.injectAuthInterceptor(
       AuthInterceptor(
         getAccessToken: () async =>
             state.accessToken ?? await secureStorage.read(key: _kAccessToken),
@@ -214,7 +211,7 @@ class AuthController extends Notifier<AuthState> {
   }
 
   void _clearAuthInterceptor() {
-    ApiClient.instance.interceptors.removeWhere((i) => i is AuthInterceptor);
+    ApiClient.removeAuthInterceptor();
   }
 
   void _handleError(DioException e) {

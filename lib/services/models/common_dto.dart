@@ -60,6 +60,61 @@ class PaginationInfo {
       };
 }
 
+/// 分页请求参数，用于拼接 GET 列表接口的 query string。
+///
+/// 约束（对齐后端 PaginationInfo）：
+/// - page >= 1
+/// - 1 <= pageSize <= 100
+class PageParams {
+  const PageParams({
+    this.page = 1,
+    this.pageSize = 20,
+    this.fields,
+    this.sort,
+    this.cursor,
+  })  : assert(page >= 1, 'page must be >= 1'),
+        assert(pageSize >= 1 && pageSize <= 100,
+            'pageSize must be between 1 and 100');
+
+  final int page;
+  final int pageSize;
+
+  /// 逗号分隔的字段白名单（仅校验用，不裁剪响应）。
+  final String? fields;
+
+  /// 排序字段，格式如 "created_at" 或 "-created_at"。
+  final String? sort;
+
+  /// 游标分页 token（当前后端以传统分页为主）。
+  final String? cursor;
+
+  /// 转为 query parameters，跳过 null 值。
+  Map<String, dynamic> toQueryParameters() {
+    return {
+      'page': page.toString(),
+      'page_size': pageSize.toString(),
+      if (fields != null && fields!.isNotEmpty) 'fields': fields,
+      if (sort != null && sort!.isNotEmpty) 'sort': sort,
+      if (cursor != null && cursor!.isNotEmpty) 'cursor': cursor,
+    };
+  }
+
+  /// 创建下一页参数。
+  PageParams nextPage() {
+    return PageParams(
+      page: page + 1,
+      pageSize: pageSize,
+      fields: fields,
+      sort: sort,
+      cursor: cursor,
+    );
+  }
+
+  @override
+  String toString() =>
+      'PageParams(page: $page, pageSize: $pageSize, fields: $fields, sort: $sort)';
+}
+
 /// 业务接口成功响应（单对象），对应 {status, data, meta} 信封。
 class ApiResponse<T> {
   const ApiResponse({
