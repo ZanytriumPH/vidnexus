@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import '../../services/polling/task_poller.dart';
 import '../../services/task_service.dart';
 import 'domain/video_summary_domain_models.dart';
@@ -49,6 +51,13 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
   @override
   Stream<VideoSummaryProcessingData> startDraftGeneration() async* {
+    if (kDebugMode) {
+      debugPrint(
+        '[HttpRepo] 开始创建任务 — kbid=$kbid videoId=$videoId '
+        'baseUrl=${_taskService.dio.options.baseUrl}',
+      );
+    }
+
     // 1. 创建任务
     final createResp = await _taskService.createTask(
       kbid: kbid,
@@ -59,6 +68,10 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       throw StateError('Task creation returned null data');
     }
     _taskId = data.taskId;
+
+    if (kDebugMode) {
+      debugPrint('[HttpRepo] 任务已创建 — taskId=$_taskId state=${data.workflowState}');
+    }
 
     // 2. 轮询进度
     yield* _taskPoller.pollTask(_taskId!);

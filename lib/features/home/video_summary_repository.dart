@@ -7,9 +7,12 @@ import 'http_video_summary_repository.dart';
 import 'video_summary_models.dart';
 
 /// 是否使用 HTTP 真实后端（可通过环境变量或调试面板切换）。
+///
+/// 默认值改为 true，配合 ApiFox Mock 使用；
+/// 仅当显式设置 USE_HTTP_REPOSITORY=false 时回退到 Fake。
 const bool _useHttpRepository = bool.fromEnvironment(
   'USE_HTTP_REPOSITORY',
-  defaultValue: false,
+  defaultValue: true,
 );
 
 /// 默认知识库 ID（临时占位，后续由用户选择/创建知识库时动态设置）。

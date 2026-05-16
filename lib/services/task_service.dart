@@ -10,6 +10,9 @@ import 'models/video_summary_task_dto.dart';
 class TaskService {
   const TaskService();
 
+  /// 暴露 Dio 实例供调试（如打印 baseUrl）。
+  Dio get dio => ApiClient.instance;
+
   Dio get _dio => ApiClient.instance;
 
   /// 创建总结任务。
