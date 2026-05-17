@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../features/auth/auth_gate.dart';
 import 'routing/app_router.dart';
-import 'routing/app_routes.dart';
 import 'theme/app_theme.dart';
 
 class VidNexusApp extends StatelessWidget {
@@ -13,7 +13,9 @@ class VidNexusApp extends StatelessWidget {
       title: 'VidNexus',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
-      initialRoute: AppRoutes.home,
+      // AuthGate 作为首页守卫：启动时检查登录状态，
+      // 已登录进入主页，未登录进入登录页。
+      home: const AuthGate(),
       onGenerateRoute: AppRouter.onGenerateRoute,
       onUnknownRoute: AppRouter.onUnknownRoute,
     );

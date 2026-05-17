@@ -31,10 +31,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
 
-    // 登录成功后返回上一页
+    // 登录成功后跳转主页
     ref.listen<AuthState>(authControllerProvider, (prev, next) {
       if (next.isLoggedIn && !next.isLoading) {
-        AppNavigator.popCurrent(context);
+        AppNavigator.goToHomeRoot(context);
       }
     });
 

@@ -16,19 +16,35 @@ class ErrorInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     final statusCode = err.response?.statusCode;
+    final requestId = _extractRequestId(err);
 
     // 401 留给 AuthInterceptor 处理；仅当 AuthInterceptor 未注入或已失效时
     // 才在这里做 fallback 日志与回调。
     if (statusCode == 401) {
-      _log('401 Unauthorized — ${_extractDetail(err)}');
+      _log('[$requestId] 401 Unauthorized — ${_extractDetail(err)}');
       onAuthFailure?.call();
       return handler.next(err);
     }
 
-    // 统一日志
-    _log('${statusCode ?? 'N/A'} — ${_statusLabel(statusCode)} — ${_extractDetail(err)}');
+    // 统一日志（含 request-id 便于前后端联调追踪）
+    _log('[$requestId] ${statusCode ?? 'N/A'} — ${_statusLabel(statusCode)} — ${_extractDetail(err)}');
 
     return handler.next(err);
+  }
+
+  /// 从请求/响应中提取 x-request-id。
+  String _extractRequestId(DioException err) {
+    // 优先从请求 options headers 中获取（由 AuthInterceptor 注入）
+    final reqId = err.requestOptions.headers['x-request-id'];
+    if (reqId != null && reqId.toString().isNotEmpty) {
+      return reqId.toString();
+    }
+    // fallback：从响应 headers 中获取（服务端可能回传）
+    final respId = err.response?.headers.value('x-request-id');
+    if (respId != null && respId.isNotEmpty) {
+      return respId;
+    }
+    return 'no-request-id';
   }
 
   /// 从响应体提取 detail 字段。

@@ -1,9 +1,12 @@
 import 'package:dio/dio.dart';
 
+import 'api_client.dart';
+
 /// 自动注入 Authorization header，并在 401 时尝试 refresh token。
 ///
-/// 使用方式：在 auth controller 拿到 token 后调用 [setTokens]；
-/// 登出时调用 [clear] 移除 token。
+/// 使用方式：在 auth controller 拿到 token 后通过
+/// [ApiClient.injectAuthInterceptor] 注入；登出时通过
+/// [ApiClient.removeAuthInterceptor] 移除。
 class AuthInterceptor extends Interceptor {
   AuthInterceptor({
     required Future<String?> Function() getAccessToken,
@@ -28,9 +31,9 @@ class AuthInterceptor extends Interceptor {
     if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
     }
-    // 注入 request id（可从外部传入，这里先用简单的实现）
+    // 使用 UUID 格式的 request-id
     options.headers['x-request-id'] =
-        options.headers['x-request-id'] ?? 'req-${DateTime.now().millisecondsSinceEpoch}';
+        options.headers['x-request-id'] ?? ApiClient.generateRequestId();
     handler.next(options);
   }
 

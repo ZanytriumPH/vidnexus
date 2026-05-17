@@ -34,10 +34,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
 
-    // 注册+自动登录成功后返回
+    // 注册+自动登录成功后跳转主页
     ref.listen<AuthState>(authControllerProvider, (prev, next) {
       if (next.isLoggedIn && !next.isLoading) {
-        AppNavigator.popCurrent(context);
+        AppNavigator.goToHomeRoot(context);
       }
     });
 

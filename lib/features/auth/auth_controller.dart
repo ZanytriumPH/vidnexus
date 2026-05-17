@@ -30,7 +30,7 @@ class AuthController extends Notifier<AuthState> {
     _authService = ref.read(authServiceProvider);
     // 启动时尝试恢复登录态
     _restoreSession();
-    return const AuthState();
+    return const AuthState(isLoading: true);
   }
 
   // ---- public API ----
@@ -88,12 +88,15 @@ class AuthController extends Notifier<AuthState> {
   }
 
   /// 登出。
-  Future<void> logout() async {
+  ///
+  /// [isSessionExpired] 为 true 时表示因 token 过期被动登出，
+  /// 此时会设置 sessionExpired 标志，供 UI 层弹出提示。
+  Future<void> logout({bool isSessionExpired = false}) async {
     await secureStorage.delete(key: _kAccessToken);
     await secureStorage.delete(key: _kRefreshToken);
     // 不清除 deviceId，保留用于下次登录
     _clearAuthInterceptor();
-    state = const AuthState();
+    state = AuthState(sessionExpired: isSessionExpired);
   }
 
   /// 静默刷新 token（供 AuthInterceptor 回调）。
@@ -101,7 +104,10 @@ class AuthController extends Notifier<AuthState> {
     try {
       final refreshToken =
           await secureStorage.read(key: _kRefreshToken);
-      if (refreshToken == null || refreshToken.isEmpty) return false;
+      if (refreshToken == null || refreshToken.isEmpty) {
+        await _onRefreshFailed();
+        return false;
+      }
 
       final deviceId = await _getOrCreateDeviceId();
       final resp = await _authService.refresh(
@@ -121,7 +127,27 @@ class AuthController extends Notifier<AuthState> {
     } on DioException {
       // refresh 失败，清除登录态
     }
+    await _onRefreshFailed();
     return false;
+  }
+
+  /// 标记会话已过期并登出（供外部在 401 不可恢复时调用）。
+  Future<void> expireSession() async {
+    await logout(isSessionExpired: true);
+  }
+
+  /// 清除 sessionExpired 标志（在 AuthGate 弹出提示后调用）。
+  void clearSessionExpired() {
+    if (state.sessionExpired) {
+      state = state.copyWith(sessionExpired: false);
+    }
+  }
+
+  Future<void> _onRefreshFailed() async {
+    await secureStorage.delete(key: _kAccessToken);
+    await secureStorage.delete(key: _kRefreshToken);
+    _clearAuthInterceptor();
+    state = state.copyWith(isLoggedIn: false, sessionExpired: true);
   }
 
   /// 清除错误信息。
@@ -132,7 +158,7 @@ class AuthController extends Notifier<AuthState> {
   // ---- private ----
 
   Future<void> _restoreSession() async {
-    state = state.copyWith(isLoading: true);
+    // 注意：不在 build() 同步阶段读取 state；isLoading: true 已由 build() 返回值设置。
     try {
       final accessToken = await secureStorage.read(key: _kAccessToken);
       final refreshToken = await secureStorage.read(key: _kRefreshToken);
@@ -159,10 +185,9 @@ class AuthController extends Notifier<AuthState> {
         );
       } else {
         // token 无效，尝试 refresh
-        final refreshed = await tryRefresh();
-        if (!refreshed) {
-          await logout();
-        }
+        // tryRefresh 内部已通过 _onRefreshFailed 处理失败情况，
+        // 此处不再额外调用 logout，避免覆盖 sessionExpired 状态。
+        await tryRefresh();
       }
     } on DioException {
       // 网络不可达时，如果本地有 token 就保持乐观登录
@@ -204,7 +229,7 @@ class AuthController extends Notifier<AuthState> {
       AuthInterceptor(
         getAccessToken: () async =>
             state.accessToken ?? await secureStorage.read(key: _kAccessToken),
-        onRefreshFailed: logout,
+        onRefreshFailed: () => _onRefreshFailed(),
         tryRefresh: tryRefresh,
       ),
     );

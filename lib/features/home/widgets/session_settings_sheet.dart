@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../auth/auth_controller.dart';
 
 Future<void> showSessionSettingsSheet({
   required BuildContext context,
@@ -61,6 +64,15 @@ Future<void> showSessionSettingsSheet({
                     processingExpandedValue = value;
                     onDefaultProcessingExpandedChanged(value);
                     setSheetState(() {});
+                  },
+                ),
+                const SizedBox(height: 24),
+                const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                const SizedBox(height: 16),
+                // 登出按钮
+                _LogoutButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
                   },
                 ),
               ],
@@ -130,5 +142,61 @@ class _SettingsTile extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// 登出按钮，点击后弹出确认对话框，确认后调用 AuthController.logout()。
+class _LogoutButton extends ConsumerWidget {
+  const _LogoutButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: OutlinedButton.icon(
+        onPressed: () => _confirmLogout(context, ref),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFFDC2626),
+          side: const BorderSide(color: Color(0xFFFECACA)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        icon: const Icon(Icons.logout_rounded, size: 18),
+        label: const Text(
+          '退出登录',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('退出登录'),
+        content: const Text('确定要退出当前账号吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFDC2626)),
+            child: const Text('退出'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await ref.read(authControllerProvider.notifier).logout();
+      onPressed();
+    }
   }
 }

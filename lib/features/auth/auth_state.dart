@@ -5,6 +5,7 @@ class AuthState {
   const AuthState({
     this.isLoading = false,
     this.isLoggedIn = false,
+    this.sessionExpired = false,
     this.accessToken,
     this.refreshToken,
     this.currentUser,
@@ -13,6 +14,11 @@ class AuthState {
 
   final bool isLoading;
   final bool isLoggedIn;
+
+  /// 当 refresh token 失败或 401 无法恢复时置为 true，
+  /// 供 AuthGate 层弹出"登录已过期"提示并跳转登录页。
+  final bool sessionExpired;
+
   final String? accessToken;
   final String? refreshToken;
   final CurrentUserData? currentUser;
@@ -21,6 +27,7 @@ class AuthState {
   AuthState copyWith({
     bool? isLoading,
     bool? isLoggedIn,
+    bool? sessionExpired,
     String? accessToken,
     String? refreshToken,
     CurrentUserData? currentUser,
@@ -31,6 +38,7 @@ class AuthState {
     return AuthState(
       isLoading: isLoading ?? this.isLoading,
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
+      sessionExpired: sessionExpired ?? this.sessionExpired,
       accessToken: accessToken ?? this.accessToken,
       refreshToken: refreshToken ?? this.refreshToken,
       currentUser: clearUser ? null : (currentUser ?? this.currentUser),
