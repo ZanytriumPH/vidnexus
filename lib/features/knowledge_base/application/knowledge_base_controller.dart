@@ -51,7 +51,9 @@ class KnowledgeBaseController extends Notifier<KnowledgeBaseState> {
 
   @override
   KnowledgeBaseState build() {
-    _loadLibraries();
+    // 首次创建时自动触发加载。
+    // 注意：后续页面切换由 KnowledgeBaseHomeScreen.initState 调用 refresh() 兜底。
+    Future.microtask(_loadLibraries);
     return const KnowledgeBaseState();
   }
 

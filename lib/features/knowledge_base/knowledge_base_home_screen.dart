@@ -10,11 +10,28 @@ import 'application/knowledge_base_controller.dart';
 import 'knowledge_base_models.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
 
-class KnowledgeBaseHomeScreen extends ConsumerWidget {
+class KnowledgeBaseHomeScreen extends ConsumerStatefulWidget {
   const KnowledgeBaseHomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<KnowledgeBaseHomeScreen> createState() =>
+      _KnowledgeBaseHomeScreenState();
+}
+
+class _KnowledgeBaseHomeScreenState
+    extends ConsumerState<KnowledgeBaseHomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // 每次进入知识库首页时，确保列表数据已加载。
+    // 覆盖两场景：① Provider 缓存中已有旧数据 ② 首次创建 Provider 时 build() 已触发
+    Future.microtask(() {
+      ref.read(knowledgeBaseControllerProvider.notifier).refresh();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(knowledgeBaseControllerProvider);
     final controller = ref.read(knowledgeBaseControllerProvider.notifier);
 
