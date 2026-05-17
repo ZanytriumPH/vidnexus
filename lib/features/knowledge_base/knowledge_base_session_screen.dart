@@ -31,7 +31,7 @@ class _KnowledgeBaseSessionScreenState
     _composerController = TextEditingController();
     // 进入页面时加载知识库详情
     Future.microtask(() {
-      ref.read(knowledgeBaseControllerProvider.notifier).selectLibrary(widget.kbid);
+      ref.read(selectedLibraryControllerProvider.notifier).selectLibrary(widget.kbid);
     });
   }
 
@@ -43,7 +43,7 @@ class _KnowledgeBaseSessionScreenState
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(knowledgeBaseControllerProvider);
+    final state = ref.watch(selectedLibraryControllerProvider);
     final library = state.selectedLibrary;
 
     return Scaffold(
@@ -221,7 +221,7 @@ class _KnowledgeBaseSessionScreenState
     final kbid = widget.kbid;
 
     final tempPreview = buildEmptyKnowledgeConversation(
-      libraryTitle: ref.read(knowledgeBaseControllerProvider).selectedLibrary?.title ?? '',
+      libraryTitle: ref.read(selectedLibraryControllerProvider).selectedLibrary?.title ?? '',
     );
     _openConversation(tempPreview);
 
@@ -236,7 +236,7 @@ class _KnowledgeBaseSessionScreenState
           messages: [
             KnowledgeChatMessage(
               sender: KnowledgeChatSender.system,
-              text: '已为"${ref.read(knowledgeBaseControllerProvider).selectedLibrary?.title ?? ''}"新建会话。你可以直接提问，我会只基于当前知识库的资料继续回答。',
+              text: '已为"${ref.read(selectedLibraryControllerProvider).selectedLibrary?.title ?? ''}"新建会话。你可以直接提问，我会只基于当前知识库的资料继续回答。',
             ),
           ],
         );

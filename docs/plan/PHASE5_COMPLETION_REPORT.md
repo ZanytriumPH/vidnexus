@@ -1,6 +1,6 @@
 # Phase 5 完成报告：聊天 & QA 对接
 
-> **完成日期**: 2026-05-16 | **对应计划**: `docs/plan/API_INTEGRATION_PLAN.md` Phase 5 | **前置依赖**: Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅
+> **完成日期**: 2026-05-16（初始交付）→ 2026-05-17（补充交付） | **对应计划**: `docs/plan/API_INTEGRATION_PLAN.md` Phase 5 | **前置依赖**: Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 ✅
 
 ---
 
@@ -270,13 +270,13 @@ No issues found! (ran in 1,234ms)
 
 ## 6. 待后续完成的 Phase 5 子任务
 
-以下项目属于 Phase 5 计划范围，但依赖 KnowledgeBase UI 进一步重构（Phase 4 已建立 Controller 模式，但 Chat/Session 页的具体交互逻辑待完善）：
+> **2026-05-17 更新**：以下 3 项已全部完成（详见 §9）。
 
-| 子任务 | 状态 | 阻塞原因 |
+| 子任务 | 状态 | 完成日期 |
 |--------|------|---------|
-| KB ChatScreen 接入 `GlobalChatService` + `GlobalQAService` | ⏳ 待 Phase 6 并行 | KB Chat 页的 UI 交互流程（创建会话 → 发送消息 → 展示回答）需额外 UI 层工作 |
-| KB Repository 集成 `GlobalChatService` | ⏳ 待 Phase 6 并行 | `HttpKnowledgeBaseRepository` 已预留 `conversations` 字段，需配合 ChatScreen 改造 |
-| QA 轮询 UI 进度提示 | ⏳ 待 UI 层接入 | `QAPoller` 返回 `Future`（非 `Stream`），UI 调用时自然显示 loading 即可 |
+| KB ChatScreen 接入 `GlobalChatService` + `GlobalQAService` | ✅ 已完成 | 2026-05-17 |
+| KB Repository 集成 `GlobalChatService` | ✅ 已完成 | 2026-05-17 |
+| QA 轮询 UI 进度提示 | ✅ 已完成 | 2026-05-17 |
 
 ---
 
@@ -299,6 +299,119 @@ No issues found! (ran in 1,234ms)
 | QA 异步生成超时 | ✅ 已缓解 | 60s 超时 + `QAPollingTimeoutException`，调用方可捕获后提示"正在生成，请稍后重试" |
 | API 返回结构与文档不一致 | ⚠️ 待实测 | Service 层按接口文档编写，实际对接时关注 `answer_content` 是否为 null、`cited_sources` 结构 |
 | KB Chat 页的 `cited_sources` 展示 | ⏳ 待 UI 层 | 数据结构已就绪（`GlobalQARecordResponseData.citedSources`），UI 展示待后续迭代 |
+
+---
+
+## 9. 补充交付（2026-05-17）：知识库会话端到端接入 & 分层重构
+
+> Phase 5 初始交付（05-16）完成了 Service 层 15 个端点，但 Knowledge Base 模块的 Chat/Session 页面仍使用本地 Mock 数据（假 `chatId`、假系统回复）。本次补充将 KB 会话链路完整接入 HTTP，并同步完成模块内部分层重构。
+
+### 9.1 会话端到端 HTTP 接入
+
+#### 9.1.1 新建会话 → HTTP
+
+**涉及文件**: `knowledge_base_session_screen.dart`
+
+| 方法 | 之前 | 之后 |
+|------|------|------|
+| `_startNewConversation()` | 本地 `KnowledgeConversationPreview`，假 `id: 'new-...'` | `GlobalChatService.createChat(kbid, title)` → 真实 `chatId` → 替换路由 |
+| `_startEmptyConversation()` | 同上 | 同上 |
+
+**流程**: 先以临时 ID 打开 ChatScreen → 异步创建真实会话 → 拿到 `chatId` 后通过 `pushReplacement` 替换为真实会话页面。
+
+#### 9.1.2 发送消息 → HTTP + 轮询
+
+**涉及文件**: `knowledge_base_chat_screen.dart`
+
+| 方法 | 之前 | 之后 |
+|------|------|------|
+| `_sendMessage()` | `setState` 追加假系统回复 `"我会基于...的资料继续回答"` | `GlobalQAService.createQA(kbid, chatId, text)` → 拿 `qaId` → 轮询 `getQA()` |
+| 回答生成 | 无 | 2s 间隔轮询，60s 超时，`answer_content` 非空即返回 |
+| 等待状态 | 无 | `_isWaitingForAnswer` 禁用输入框 + 显示"AI 正在思考…"动画 |
+
+#### 9.1.3 历史会话加载 → HTTP
+
+**涉及文件**: `knowledge_base_chat_screen.dart`
+
+| 场景 | 之前 | 之后 |
+|------|------|------|
+| 点击历史会话 | `messages: const []`，空屏 | `GlobalQAService.listQAs(kbid, chatId)` → 加载历史 QA → 组装 user/system 消息对 |
+
+`_maybeTriggerInitialQA()` 现在分三种情况处理：
+- **临时 chatId**（`creating-` / `new-` 前缀）：跳过，等待 Session Screen 替换
+- **空 messages**（历史会话）：调用 `listQAs()` 加载
+- **用户消息在末尾**（新建会话首问）：调用 `createQA()` + 轮询
+
+#### 9.1.4 Repository 会话列表接入
+
+**涉及文件**: `http_knowledge_base_repository.dart`
+
+| 方法 | 之前 | 之后 |
+|------|------|------|
+| `getLibrary(kbid)` | `conversations: const []` | `GlobalChatService.listChats(kbid)` → 映射为 `KnowledgeConversationPreview` 列表 |
+| 新增 `_chatService` 字段 | 无 | 构造注入 `GlobalChatService` |
+| 新增 `_buildDateLabel()` | 无 | ISO → `"5月17日"` 日期格式化 |
+
+### 9.2 分层重构
+
+与 Home 模块的对齐分析暴露了 Knowledge Base 模块的结构性问题，本次执行了两个轻量重构（详见 `docs/refactor/` 规划）：
+
+#### 9.2.1 P0: 拆分 Monolithic Controller
+
+**之前**: `KnowledgeBaseController` 一个 Notifier 管理全部状态（`libraries` + `selectedLibrary` + `errorMessage`）。
+
+**之后**: 拆为两个独立 Notifier：
+
+| Controller | State | 使用者 |
+|-----------|-------|--------|
+| `LibraryListController` | `LibraryListState { isLoading, libraries, errorMessage }` | `KnowledgeBaseHomeScreen` |
+| `SelectedLibraryController` | `SelectedLibraryState { isLoading, selectedLibrary, errorMessage }` | `SessionScreen`, `ChatScreen`, `SourcesScreen` |
+
+保留 `knowledgeBaseControllerProvider = libraryListControllerProvider` 向后兼容别名。
+
+#### 9.2.2 P1: 抽取 Chat Controller
+
+**新建文件**: `lib/features/knowledge_base/application/knowledge_base_chat_controller.dart`
+
+```
+KnowledgeBaseChatController extends ChangeNotifier
+  ├── KnowledgeBaseChatState { messages, isWaitingForAnswer }
+  ├── sendMessage(text)
+  ├── triggerInitialQA()
+  ├── _sendChatMessage(text)     — HTTP createQA + poll
+  ├── _pollForAnswer(qaId)       — 2s 轮询，60s 超时
+  └── _loadQaHistory()           — 加载历史 QA
+```
+
+**Chat Screen 瘦身**: ~200 行业务逻辑 → ~60 行纯 UI（仅保留 `_sendMessage`、`_startEmptyConversation`、`_scrollToBottom`）。
+
+#### 9.2.3 KnowledgeBaseComposer 增强
+
+`KnowledgeBaseComposer` 新增 `enabled` 参数：
+- `enabled = true`（默认）：正常输入 + 发送按钮可点击
+- `enabled = false`：输入框灰色禁用 + 发送按钮显示 loading 动画
+
+### 9.3 补充文件变更
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| **新建** | `lib/features/knowledge_base/application/knowledge_base_chat_controller.dart` | Chat 会话控制器（ChangeNotifier） |
+| **重写** | `lib/features/knowledge_base/application/knowledge_base_controller.dart` | 拆分为 LibraryList + SelectedLibrary 双 Notifier |
+| **修改** | `lib/features/knowledge_base/http_knowledge_base_repository.dart` | 注入 `GlobalChatService`，`getLibrary()` 加载会话列表，新增 `_buildDateLabel()` |
+| **修改** | `lib/features/knowledge_base/knowledge_base_home_screen.dart` | ConsumerWidget → ConsumerStatefulWidget，initState 触发 refresh，引用新 Provider |
+| **修改** | `lib/features/knowledge_base/knowledge_base_session_screen.dart` | 新建会话接入 `GlobalChatService.createChat()`，引用新 Provider |
+| **修改** | `lib/features/knowledge_base/knowledge_base_chat_screen.dart` | 接入 `KnowledgeBaseChatController`，HTTP QA + 轮询 + 历史加载，引用新 Provider |
+| **修改** | `lib/features/knowledge_base/knowledge_base_sources_screen.dart` | 引用新 Provider |
+| **修改** | `lib/features/knowledge_base/widgets/knowledge_base_shared_widgets.dart` | Composer 新增 `enabled` 参数 |
+| **修改** | `lib/features/knowledge_base/knowledge_base_models.dart` | 删除 `demoKnowledgeBaseLibraries` mock 数据（~345 行） |
+| **修改** | `test/features/knowledge_base/knowledge_base_chat_screen_test.dart` | 适配新 Controller 结构 |
+
+### 9.4 验证
+
+```
+flutter analyze  → No issues found!
+flutter test     → 1/1 passed (knowledge_base_chat_screen_test)
+```
 
 ---
 

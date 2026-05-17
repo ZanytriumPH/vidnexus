@@ -5,7 +5,10 @@ import '../http_knowledge_base_repository.dart';
 import '../knowledge_base_models.dart';
 import '../knowledge_base_repository.dart';
 
-/// Repository Provider。
+// ============================================================
+// Repository Provider
+// ============================================================
+
 final knowledgeBaseRepositoryProvider = Provider<KnowledgeBaseRepository>((ref) {
   return HttpKnowledgeBaseRepository(
     kbService: ref.watch(knowledgeBaseServiceProvider),
@@ -13,51 +16,44 @@ final knowledgeBaseRepositoryProvider = Provider<KnowledgeBaseRepository>((ref) 
   );
 });
 
-/// 知识库列表状态。
-class KnowledgeBaseState {
-  const KnowledgeBaseState({
+// ============================================================
+// 1. LibraryListController — 知识库列表（首页用）
+// ============================================================
+
+class LibraryListState {
+  const LibraryListState({
     this.isLoading = false,
     this.libraries = const [],
-    this.selectedLibrary,
     this.errorMessage,
   });
 
   final bool isLoading;
   final List<KnowledgeBaseLibrary> libraries;
-  final KnowledgeBaseLibrary? selectedLibrary;
   final String? errorMessage;
 
-  KnowledgeBaseState copyWith({
+  LibraryListState copyWith({
     bool? isLoading,
     List<KnowledgeBaseLibrary>? libraries,
-    KnowledgeBaseLibrary? selectedLibrary,
     String? errorMessage,
     bool clearError = false,
-    bool clearSelection = false,
   }) {
-    return KnowledgeBaseState(
+    return LibraryListState(
       isLoading: isLoading ?? this.isLoading,
       libraries: libraries ?? this.libraries,
-      selectedLibrary:
-          clearSelection ? null : (selectedLibrary ?? this.selectedLibrary),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
 }
 
-/// 知识库主控制器。
-class KnowledgeBaseController extends Notifier<KnowledgeBaseState> {
+class LibraryListController extends Notifier<LibraryListState> {
   KnowledgeBaseRepository get _repo => ref.read(knowledgeBaseRepositoryProvider);
 
   @override
-  KnowledgeBaseState build() {
-    // 首次创建时自动触发加载。
-    // 注意：后续页面切换由 KnowledgeBaseHomeScreen.initState 调用 refresh() 兜底。
+  LibraryListState build() {
     Future.microtask(_loadLibraries);
-    return const KnowledgeBaseState();
+    return const LibraryListState();
   }
 
-  /// 加载知识库列表。
   Future<void> _loadLibraries() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
@@ -74,27 +70,8 @@ class KnowledgeBaseController extends Notifier<KnowledgeBaseState> {
     }
   }
 
-  /// 刷新列表。
   Future<void> refresh() => _loadLibraries();
 
-  /// 选中并加载知识库详情（含来源列表）。
-  Future<void> selectLibrary(String kbid) async {
-    state = state.copyWith(isLoading: true, clearError: true);
-    try {
-      final library = await _repo.getLibrary(kbid);
-      state = state.copyWith(
-        isLoading: false,
-        selectedLibrary: library,
-      );
-    } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: e.toString(),
-      );
-    }
-  }
-
-  /// 创建知识库。
   Future<KnowledgeBaseLibrary?> createLibrary({
     required String name,
     String? category,
@@ -116,27 +93,99 @@ class KnowledgeBaseController extends Notifier<KnowledgeBaseState> {
     }
   }
 
-  /// 删除知识库。
   Future<void> deleteLibrary(String kbid) async {
     try {
       await _repo.deleteLibrary(kbid);
       state = state.copyWith(
         libraries: state.libraries.where((l) => l.id != kbid).toList(),
-        clearSelection: state.selectedLibrary?.id == kbid,
       );
     } catch (e) {
       state = state.copyWith(errorMessage: e.toString());
     }
   }
 
-  /// 清除错误。
   void clearError() {
     state = state.copyWith(clearError: true);
   }
 }
 
-/// Controller Provider。
-final knowledgeBaseControllerProvider =
-    NotifierProvider<KnowledgeBaseController, KnowledgeBaseState>(
-      KnowledgeBaseController.new,
+final libraryListControllerProvider =
+    NotifierProvider<LibraryListController, LibraryListState>(
+      LibraryListController.new,
     );
+
+// ============================================================
+// 2. SelectedLibraryController — 选中的知识库详情（Session/Chat/Sources 用）
+// ============================================================
+
+class SelectedLibraryState {
+  const SelectedLibraryState({
+    this.isLoading = false,
+    this.selectedLibrary,
+    this.errorMessage,
+  });
+
+  final bool isLoading;
+  final KnowledgeBaseLibrary? selectedLibrary;
+  final String? errorMessage;
+
+  SelectedLibraryState copyWith({
+    bool? isLoading,
+    KnowledgeBaseLibrary? selectedLibrary,
+    String? errorMessage,
+    bool clearError = false,
+    bool clearSelection = false,
+  }) {
+    return SelectedLibraryState(
+      isLoading: isLoading ?? this.isLoading,
+      selectedLibrary:
+          clearSelection ? null : (selectedLibrary ?? this.selectedLibrary),
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+    );
+  }
+}
+
+class SelectedLibraryController extends Notifier<SelectedLibraryState> {
+  KnowledgeBaseRepository get _repo => ref.read(knowledgeBaseRepositoryProvider);
+
+  @override
+  SelectedLibraryState build() {
+    return const SelectedLibraryState();
+  }
+
+  Future<void> selectLibrary(String kbid) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final library = await _repo.getLibrary(kbid);
+      state = state.copyWith(
+        isLoading: false,
+        selectedLibrary: library,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: e.toString(),
+      );
+    }
+  }
+
+  void clearSelection() {
+    state = state.copyWith(clearSelection: true);
+  }
+
+  void clearError() {
+    state = state.copyWith(clearError: true);
+  }
+}
+
+final selectedLibraryControllerProvider =
+    NotifierProvider<SelectedLibraryController, SelectedLibraryState>(
+      SelectedLibraryController.new,
+    );
+
+// ============================================================
+// 向后兼容别名（逐步迁移后删除）
+// ============================================================
+
+/// @deprecated 使用 [libraryListControllerProvider] 或 [selectedLibraryControllerProvider]
+final knowledgeBaseControllerProvider = libraryListControllerProvider;

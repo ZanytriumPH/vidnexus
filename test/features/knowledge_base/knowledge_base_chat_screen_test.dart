@@ -36,8 +36,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          knowledgeBaseControllerProvider.overrideWith(
-            () => _TestKnowledgeBaseController(testLibrary),
+          selectedLibraryControllerProvider.overrideWith(
+            () => _TestSelectedLibraryController(testLibrary),
           ),
         ],
         child: MaterialApp(
@@ -58,15 +58,12 @@ void main() {
   });
 }
 
-class _TestKnowledgeBaseController extends KnowledgeBaseController {
-  _TestKnowledgeBaseController(this.library);
+class _TestSelectedLibraryController extends SelectedLibraryController {
+  _TestSelectedLibraryController(this.library);
   final KnowledgeBaseLibrary library;
 
   @override
-  KnowledgeBaseState build() {
-    return KnowledgeBaseState(
-      libraries: [library],
-      selectedLibrary: library,
-    );
+  SelectedLibraryState build() {
+    return SelectedLibraryState(selectedLibrary: library);
   }
 }

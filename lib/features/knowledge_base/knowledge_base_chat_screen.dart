@@ -8,8 +8,8 @@ import '../../app/theme/app_theme.dart';
 import '../../app/widgets/app_markdown_body.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_header_add_button.dart';
-import '../../services/global_qa_service.dart';
 import '../../services/service_providers.dart';
+import 'application/knowledge_base_chat_controller.dart';
 import 'application/knowledge_base_controller.dart';
 import 'knowledge_base_models.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
@@ -30,89 +30,36 @@ class KnowledgeBaseChatScreen extends ConsumerStatefulWidget {
 }
 
 class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScreen> {
+  late final KnowledgeBaseChatController _chatController;
   late final TextEditingController _composerController;
   final ScrollController _scrollController = ScrollController();
-  late List<KnowledgeChatMessage> _messages;
-  bool _isWaitingForAnswer = false;
-
-  GlobalQAService get _qaService => ref.read(globalQAServiceProvider);
 
   @override
   void initState() {
     super.initState();
     _composerController = TextEditingController();
-    _messages = List<KnowledgeChatMessage>.from(
-      widget.initialConversation.messages,
-    );
 
-    // 如果初始消息中只有用户问题没有系统回答，自动触发 QA 创建
-    _maybeTriggerInitialQA();
+    final qaService = ref.read(globalQAServiceProvider);
+    _chatController = KnowledgeBaseChatController(
+      qaService: qaService,
+      kbid: widget.kbid,
+      chatId: widget.initialConversation.id,
+      initialMessages: widget.initialConversation.messages,
+    )..addListener(_onChatStateChanged)
+     ..triggerInitialQA();
   }
 
-  /// 检测是否需要为初始问题发起 QA 请求，或加载历史消息。
-  void _maybeTriggerInitialQA() {
-    final chatId = widget.initialConversation.id;
-    final kbid = widget.kbid;
-
-    // 临时 ID（creating- / new- 前缀），等待 Session Screen 替换为真实 chatId
-    if (chatId.startsWith('creating-') || chatId.startsWith('new-')) {
-      return;
-    }
-
-    if (_messages.isEmpty) {
-      // 历史会话：加载已有 QA 记录
-      _loadQaHistory(kbid: kbid, chatId: chatId);
-      return;
-    }
-
-    final lastMessage = _messages.last;
-    // 如果最后一条是用户消息（说明还没得到回答），自动发起 QA
-    if (lastMessage.sender == KnowledgeChatSender.user) {
-      _messages = _messages
-          .where((m) => m.sender == KnowledgeChatSender.user)
-          .toList();
-      _sendChatMessage(lastMessage.text);
-    }
-  }
-
-  /// 从服务端加载会话的 QA 历史。
-  Future<void> _loadQaHistory({
-    required String kbid,
-    required String chatId,
-  }) async {
-    setState(() => _isWaitingForAnswer = true);
-
-    try {
-      final resp = await _qaService.listQAs(kbid, chatId);
-      final messages = <KnowledgeChatMessage>[];
-      for (final dto in resp.data) {
-        if (dto.questionContent.isNotEmpty) {
-          messages.add(KnowledgeChatMessage(
-            sender: KnowledgeChatSender.user,
-            text: dto.questionContent,
-          ));
-        }
-        if (dto.answerContent != null && dto.answerContent!.isNotEmpty) {
-          messages.add(KnowledgeChatMessage(
-            sender: KnowledgeChatSender.system,
-            text: dto.answerContent!,
-          ));
-        }
-      }
-
-      if (!mounted) return;
-      setState(() {
-        _messages = messages;
-        _isWaitingForAnswer = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _isWaitingForAnswer = false);
-    }
+  void _onChatStateChanged() {
+    if (!mounted) return;
+    setState(() {}); // ChangeNotifier 驱动重建
+    _scrollToBottom();
   }
 
   @override
   void dispose() {
+    _chatController
+      ..removeListener(_onChatStateChanged)
+      ..dispose();
     _composerController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -120,6 +67,9 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
 
   @override
   Widget build(BuildContext context) {
+    final messages = _chatController.messages;
+    final isWaiting = _chatController.isWaitingForAnswer;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -137,7 +87,7 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
                       AppNavigator.popToKnowledgeBaseHome(context);
                   }
                 },
-                title: ref.watch(knowledgeBaseControllerProvider).selectedLibrary?.title ?? '对话',
+                title: ref.watch(selectedLibraryControllerProvider).selectedLibrary?.title ?? '对话',
                 onLeadingPressed: () => AppNavigator.popCurrent(context),
                 trailing: AppHeaderAddButton(onPressed: _startEmptyConversation),
               ),
@@ -146,16 +96,15 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
               child: ListView.separated(
                 controller: _scrollController,
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-                itemCount: _messages.length + (_isWaitingForAnswer ? 1 : 0),
+                itemCount: messages.length + (isWaiting ? 1 : 0),
                 separatorBuilder: (context, index) => SizedBox(
                   height: context.appMessageStyles.messageSpacing,
                 ),
                 itemBuilder: (context, index) {
-                  if (_isWaitingForAnswer && index == _messages.length) {
+                  if (isWaiting && index == messages.length) {
                     return const _KnowledgeTypingIndicator();
                   }
-                  final message = _messages[index];
-                  return _KnowledgeChatBubble(message: message);
+                  return _KnowledgeChatBubble(message: messages[index]);
                 },
               ),
             ),
@@ -165,7 +114,7 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
               child: KnowledgeBaseComposer(
                 controller: _composerController,
                 onSubmit: _sendMessage,
-                enabled: !_isWaitingForAnswer,
+                enabled: !isWaiting,
               ),
             ),
           ],
@@ -176,101 +125,11 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
 
   void _sendMessage() {
     final text = _composerController.text.trim();
-    if (text.isEmpty || _isWaitingForAnswer) {
-      return;
-    }
+    if (text.isEmpty) return;
 
     FocusScope.of(context).unfocus();
     _composerController.clear();
-
-    setState(() {
-      _messages = [
-        ..._messages,
-        KnowledgeChatMessage(sender: KnowledgeChatSender.user, text: text),
-      ];
-    });
-
-    _sendChatMessage(text);
-  }
-
-  /// 发起真实 QA 请求并轮询等待回答。
-  Future<void> _sendChatMessage(String text) async {
-    final chatId = widget.initialConversation.id;
-    final kbid = widget.kbid;
-
-    // 如果是临时 ID，不发起真实请求
-    if (chatId.startsWith('creating-') || chatId.startsWith('new-')) {
-      return;
-    }
-
-    setState(() => _isWaitingForAnswer = true);
-
-    try {
-      // 1. 创建 QA
-      final createResp = await _qaService.createQA(
-        kbid: kbid,
-        chatId: chatId,
-        questionContent: text,
-      );
-      final qaId = createResp.data?.qaId;
-      if (qaId == null || qaId.isEmpty) {
-        throw Exception('QA creation returned empty qaId');
-      }
-
-      // 2. 轮询等待回答
-      final answer = await _pollForAnswer(kbid: kbid, chatId: chatId, qaId: qaId);
-
-      if (!mounted) return;
-      setState(() {
-        _messages = [
-          ..._messages,
-          KnowledgeChatMessage(
-            sender: KnowledgeChatSender.system,
-            text: answer,
-          ),
-        ];
-        _isWaitingForAnswer = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _messages = [
-          ..._messages,
-          KnowledgeChatMessage(
-            sender: KnowledgeChatSender.system,
-            text: '抱歉，回答生成失败：$e',
-          ),
-        ];
-        _isWaitingForAnswer = false;
-      });
-    }
-
-    _scrollToBottom();
-  }
-
-  /// 轮询 GlobalQAService.getQA 直到 answer_content 非空。
-  Future<String> _pollForAnswer({
-    required String kbid,
-    required String chatId,
-    required String qaId,
-  }) async {
-    final stopwatch = Stopwatch()..start();
-    const timeout = Duration(seconds: 60);
-    const interval = Duration(seconds: 2);
-
-    while (true) {
-      if (stopwatch.elapsed > timeout) {
-        throw Exception('回答生成超时（${timeout.inSeconds}秒）');
-      }
-
-      final resp = await _qaService.getQA(kbid, chatId, qaId);
-      final dto = resp.data;
-      if (dto != null && dto.answerContent != null && dto.answerContent!.isNotEmpty) {
-        return dto.answerContent!;
-      }
-
-      await Future<void>.delayed(interval);
-    }
+    _chatController.sendMessage(text);
   }
 
   void _scrollToBottom() {
@@ -301,7 +160,7 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
           messages: [
             KnowledgeChatMessage(
               sender: KnowledgeChatSender.system,
-              text: '已为"${ref.read(knowledgeBaseControllerProvider).selectedLibrary?.title ?? ''}"新建会话。你可以直接提问，我会只基于当前知识库的资料继续回答。',
+              text: '已为"${ref.read(selectedLibraryControllerProvider).selectedLibrary?.title ?? ''}"新建会话。你可以直接提问，我会只基于当前知识库的资料继续回答。',
             ),
           ],
         );
@@ -313,13 +172,12 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
         );
       }
     } catch (_) {
-      // 创建失败时回退到本地模式
       if (!mounted) return;
       AppNavigator.openKnowledgeBaseChat(
         context,
         kbid: kbid,
         initialConversation: buildEmptyKnowledgeConversation(
-          libraryTitle: ref.read(knowledgeBaseControllerProvider).selectedLibrary?.title ?? '',
+          libraryTitle: ref.read(selectedLibraryControllerProvider).selectedLibrary?.title ?? '',
         ),
       );
     }

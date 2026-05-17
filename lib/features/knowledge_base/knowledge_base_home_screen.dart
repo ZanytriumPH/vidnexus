@@ -26,14 +26,14 @@ class _KnowledgeBaseHomeScreenState
     // 每次进入知识库首页时，确保列表数据已加载。
     // 覆盖两场景：① Provider 缓存中已有旧数据 ② 首次创建 Provider 时 build() 已触发
     Future.microtask(() {
-      ref.read(knowledgeBaseControllerProvider.notifier).refresh();
+      ref.read(libraryListControllerProvider.notifier).refresh();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(knowledgeBaseControllerProvider);
-    final controller = ref.read(knowledgeBaseControllerProvider.notifier);
+    final state = ref.watch(libraryListControllerProvider);
+    final controller = ref.read(libraryListControllerProvider.notifier);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -114,7 +114,7 @@ class _KnowledgeBaseHomeScreenState
     }
   }
 
-  void _showCreateDialog(BuildContext context, KnowledgeBaseController controller) {
+  void _showCreateDialog(BuildContext context, LibraryListController controller) {
     final nameController = TextEditingController();
     showDialog(
       context: context,

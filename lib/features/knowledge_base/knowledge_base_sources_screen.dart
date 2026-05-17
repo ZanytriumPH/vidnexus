@@ -17,7 +17,7 @@ class KnowledgeBaseSourcesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final library = ref.watch(knowledgeBaseControllerProvider).selectedLibrary;
+    final library = ref.watch(selectedLibraryControllerProvider).selectedLibrary;
     final sources = library?.sources ?? [];
 
     return Scaffold(
@@ -86,7 +86,7 @@ class KnowledgeBaseSourcesScreen extends ConsumerWidget {
   }
 
   void _openNewConversation(BuildContext context, WidgetRef ref) {
-    final libraryTitle = ref.read(knowledgeBaseControllerProvider).selectedLibrary?.title ?? '';
+    final libraryTitle = ref.read(selectedLibraryControllerProvider).selectedLibrary?.title ?? '';
     AppNavigator.openKnowledgeBaseChat(
       context,
       kbid: kbid,
