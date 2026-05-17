@@ -49,20 +49,65 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
     _maybeTriggerInitialQA();
   }
 
-  /// 检测是否需要为初始问题发起 QA 请求。
+  /// 检测是否需要为初始问题发起 QA 请求，或加载历史消息。
   void _maybeTriggerInitialQA() {
-    if (_messages.isEmpty) return;
+    final chatId = widget.initialConversation.id;
+    final kbid = widget.kbid;
+
+    // 临时 ID（creating- / new- 前缀），等待 Session Screen 替换为真实 chatId
+    if (chatId.startsWith('creating-') || chatId.startsWith('new-')) {
+      return;
+    }
+
+    if (_messages.isEmpty) {
+      // 历史会话：加载已有 QA 记录
+      _loadQaHistory(kbid: kbid, chatId: chatId);
+      return;
+    }
 
     final lastMessage = _messages.last;
-    // 如果最后一条是用户消息（说明还没得到回答），且 chatId 是真实的（非临时占位）
-    if (lastMessage.sender == KnowledgeChatSender.user &&
-        !widget.initialConversation.id.startsWith('creating-') &&
-        !widget.initialConversation.id.startsWith('new-')) {
-      // 移除占位的系统回复（如果有），然后发起真实 QA
+    // 如果最后一条是用户消息（说明还没得到回答），自动发起 QA
+    if (lastMessage.sender == KnowledgeChatSender.user) {
       _messages = _messages
           .where((m) => m.sender == KnowledgeChatSender.user)
           .toList();
       _sendChatMessage(lastMessage.text);
+    }
+  }
+
+  /// 从服务端加载会话的 QA 历史。
+  Future<void> _loadQaHistory({
+    required String kbid,
+    required String chatId,
+  }) async {
+    setState(() => _isWaitingForAnswer = true);
+
+    try {
+      final resp = await _qaService.listQAs(kbid, chatId);
+      final messages = <KnowledgeChatMessage>[];
+      for (final dto in resp.data) {
+        if (dto.questionContent.isNotEmpty) {
+          messages.add(KnowledgeChatMessage(
+            sender: KnowledgeChatSender.user,
+            text: dto.questionContent,
+          ));
+        }
+        if (dto.answerContent != null && dto.answerContent!.isNotEmpty) {
+          messages.add(KnowledgeChatMessage(
+            sender: KnowledgeChatSender.system,
+            text: dto.answerContent!,
+          ));
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _messages = messages;
+        _isWaitingForAnswer = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isWaitingForAnswer = false);
     }
   }
 
