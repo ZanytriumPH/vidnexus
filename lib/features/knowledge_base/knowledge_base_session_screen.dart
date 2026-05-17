@@ -6,6 +6,7 @@ import '../../app/theme/app_colors.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_header_add_button.dart';
 import '../../app/widgets/app_card.dart';
+import '../../services/service_providers.dart';
 import 'application/knowledge_base_controller.dart';
 import 'knowledge_base_models.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
@@ -168,29 +169,85 @@ class _KnowledgeBaseSessionScreenState
     }
 
     _composerController.clear();
-    final newConversation = KnowledgeConversationPreview(
-      id: 'new-${DateTime.now().millisecondsSinceEpoch}',
+    final chatService = ref.read(globalChatServiceProvider);
+    final kbid = widget.kbid;
+
+    // 先跳转到加载态，再异步创建真实会话
+    final tempPreview = KnowledgeConversationPreview(
+      id: 'creating-${DateTime.now().millisecondsSinceEpoch}',
       title: prompt,
-      preview: '新对话已创建，正在围绕这组资料继续追问。',
+      preview: '正在创建会话…',
       dateLabel: '刚刚',
       messages: [
         KnowledgeChatMessage(sender: KnowledgeChatSender.user, text: prompt),
         const KnowledgeChatMessage(
           sender: KnowledgeChatSender.system,
-          text: '好的，我会基于当前知识库里的资料来回答这个新问题。接下来可以继续追问、要结构化结论，或者指定要看的来源范围。',
+          text: '正在思考…',
         ),
       ],
     );
+    _openConversation(tempPreview);
 
-    _openConversation(newConversation);
+    // 异步创建真实会话并通知 chat screen 刷新
+    chatService.createChat(kbid: kbid, chatTitle: prompt).then((resp) {
+      final chatId = resp.data?.chatId;
+      if (chatId != null && chatId.isNotEmpty && mounted) {
+        // chat screen 已通过 initialConversation.id 获取到临时 ID，
+        // 此处通过 Controller 通知更新 chatId 并自动触发首次 QA。
+        // 为简单起见，我们用 pushReplacement 替换路由。
+        final realConversation = KnowledgeConversationPreview(
+          id: chatId,
+          title: prompt,
+          preview: '新对话已创建，正在围绕这组资料继续追问。',
+          dateLabel: '刚刚',
+          messages: [
+            KnowledgeChatMessage(sender: KnowledgeChatSender.user, text: prompt),
+          ],
+        );
+        AppNavigator.popCurrent(context);
+        AppNavigator.openKnowledgeBaseChat(
+          context,
+          kbid: kbid,
+          initialConversation: realConversation,
+        );
+      }
+    }).catchError((_) {
+      // 创建失败时 chat screen 仍显示临时状态，用户可重试
+    });
   }
 
   void _startEmptyConversation() {
-    _openConversation(
-      buildEmptyKnowledgeConversation(
-        libraryTitle: ref.read(knowledgeBaseControllerProvider).selectedLibrary?.title ?? '',
-      ),
+    final chatService = ref.read(globalChatServiceProvider);
+    final kbid = widget.kbid;
+
+    final tempPreview = buildEmptyKnowledgeConversation(
+      libraryTitle: ref.read(knowledgeBaseControllerProvider).selectedLibrary?.title ?? '',
     );
+    _openConversation(tempPreview);
+
+    chatService.createChat(kbid: kbid, chatTitle: '新的会话').then((resp) {
+      final chatId = resp.data?.chatId;
+      if (chatId != null && chatId.isNotEmpty && mounted) {
+        final realConversation = KnowledgeConversationPreview(
+          id: chatId,
+          title: '新的会话',
+          preview: '已进入新会话，可以直接围绕当前知识库继续提问。',
+          dateLabel: '刚刚',
+          messages: [
+            KnowledgeChatMessage(
+              sender: KnowledgeChatSender.system,
+              text: '已为"${ref.read(knowledgeBaseControllerProvider).selectedLibrary?.title ?? ''}"新建会话。你可以直接提问，我会只基于当前知识库的资料继续回答。',
+            ),
+          ],
+        );
+        AppNavigator.popCurrent(context);
+        AppNavigator.openKnowledgeBaseChat(
+          context,
+          kbid: kbid,
+          initialConversation: realConversation,
+        );
+      }
+    }).catchError((_) {});
   }
 }
 

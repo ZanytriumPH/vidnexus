@@ -99,12 +99,14 @@ class KnowledgeBaseComposer extends StatefulWidget {
     required this.controller,
     required this.onSubmit,
     this.hintText = '继续追问资料，或让它输出结构化结论',
+    this.enabled = true,
     super.key,
   });
 
   final TextEditingController controller;
   final VoidCallback onSubmit;
   final String hintText;
+  final bool enabled;
 
   @override
   State<KnowledgeBaseComposer> createState() => _KnowledgeBaseComposerState();
@@ -166,6 +168,7 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
                     child: TextField(
                       controller: widget.controller,
                       focusNode: _focusNode,
+                      enabled: widget.enabled,
                       decoration: InputDecoration(
                         hintText: widget.hintText,
                         filled: false,
@@ -203,8 +206,8 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
                     if (hasInput) ...[
                       const SizedBox(width: 8),
                       AppInlineSubmitButton(
-                        isLoading: false,
-                        onPressed: widget.onSubmit,
+                        isLoading: !widget.enabled,
+                        onPressed: widget.enabled ? widget.onSubmit : null,
                       ),
                     ],
                   ],
