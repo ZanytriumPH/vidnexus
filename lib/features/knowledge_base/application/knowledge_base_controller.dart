@@ -9,6 +9,7 @@ import '../knowledge_base_repository.dart';
 final knowledgeBaseRepositoryProvider = Provider<KnowledgeBaseRepository>((ref) {
   return HttpKnowledgeBaseRepository(
     kbService: ref.watch(knowledgeBaseServiceProvider),
+    chatService: ref.watch(globalChatServiceProvider),
   );
 });
 

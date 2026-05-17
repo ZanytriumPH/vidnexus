@@ -1,3 +1,4 @@
+import '../../services/global_chat_service.dart';
 import '../../services/knowledge_base_service.dart';
 import '../../services/models/common_dto.dart';
 import 'knowledge_base_models.dart';
@@ -5,10 +6,14 @@ import 'knowledge_base_repository.dart';
 
 /// 基于 HTTP 的真实 KnowledgeBaseRepository 实现。
 class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
-  HttpKnowledgeBaseRepository({required KnowledgeBaseService kbService})
-    : _kbService = kbService;
+  HttpKnowledgeBaseRepository({
+    required KnowledgeBaseService kbService,
+    required GlobalChatService chatService,
+  })  : _kbService = kbService,
+       _chatService = chatService;
 
   final KnowledgeBaseService _kbService;
+  final GlobalChatService _chatService;
 
   @override
   Future<ApiListResponse<KnowledgeBaseLibrary>> listLibraries({
@@ -43,6 +48,17 @@ class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
     if (dto == null) return null;
 
     final sources = await listSources(kbid);
+    final chatsResp = await _chatService.listChats(kbid);
+
+    final conversations = chatsResp.data.map((dto) {
+      return KnowledgeConversationPreview(
+        id: dto.chatId,
+        title: dto.chatTitle,
+        preview: dto.chatTitle,
+        dateLabel: _buildDateLabel(dto.createdAt),
+        messages: const [],
+      );
+    }).toList();
 
     return KnowledgeBaseLibrary(
       id: dto.kbid,
@@ -51,7 +67,7 @@ class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
       description: dto.description ?? '',
       sourceCount: sources.length,
       sources: sources,
-      conversations: const [], // Phase 5 接入
+      conversations: conversations,
     );
   }
 
@@ -128,5 +144,16 @@ class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
       parts.add('创建于 $createdAt');
     }
     return parts.isEmpty ? '暂无信息' : parts.join(' · ');
+  }
+
+  /// 将 ISO 时间戳格式化为简短日期标签（如 "5月17日"）。
+  String _buildDateLabel(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(isoString);
+      return '${dt.month}月${dt.day}日';
+    } catch (_) {
+      return isoString;
+    }
   }
 }
