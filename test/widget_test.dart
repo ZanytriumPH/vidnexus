@@ -11,6 +11,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:vidnexus/features/auth/auth_controller.dart';
+import 'package:vidnexus/features/auth/auth_state.dart';
 import 'package:vidnexus/features/home/domain/video_summary_domain_models.dart';
 import 'package:vidnexus/features/home/video_summary_models.dart';
 import 'package:vidnexus/features/home/video_summary_repository.dart';
@@ -25,6 +27,9 @@ void main() {
         overrides: [
           videoSummaryRepositoryProvider.overrideWithValue(
             _WidgetTestVideoSummaryRepository(),
+          ),
+          authControllerProvider.overrideWith(
+            () => _TestAuthController.loggedIn(),
           ),
         ],
         child: const MyApp(),
@@ -60,6 +65,9 @@ void main() {
         overrides: [
           videoSummaryRepositoryProvider.overrideWithValue(
             _WidgetTestVideoSummaryRepository(),
+          ),
+          authControllerProvider.overrideWith(
+            () => _TestAuthController.loggedIn(),
           ),
         ],
         child: const MyApp(),
@@ -144,5 +152,17 @@ class _WidgetTestVideoSummaryRepository extends VideoSummaryRepository {
   @override
   Future<VideoSummaryChatReplyData> sendSummaryChatMessage(String message) async {
     return const VideoSummaryChatReplyData(text: 'reply');
+  }
+}
+
+/// 测试用 AuthController：直接返回已登录状态，跳过启动时的 _restoreSession() 流程。
+class _TestAuthController extends AuthController {
+  _TestAuthController.loggedIn();
+
+  @override
+  AuthState build() {
+    // 初始化 _authService 避免 LateInitializationError
+    ref.read(authServiceProvider);
+    return const AuthState(isLoggedIn: true);
   }
 }
