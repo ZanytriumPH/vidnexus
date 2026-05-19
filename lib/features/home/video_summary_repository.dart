@@ -29,6 +29,12 @@ abstract class VideoSummaryRepository {
 
   VideoAssetInfo getVideoAsset();
 
+  /// 获取当前用户的历史任务列表，用于左侧边栏展示。
+  Future<List<VideoSummaryTaskInfo>> listTaskHistory({
+    int page = 1,
+    int pageSize = 50,
+  });
+
   Stream<VideoSummaryProcessingData> startDraftGeneration();
 
   Future<VideoSummaryDraftData> fetchDraftResult();

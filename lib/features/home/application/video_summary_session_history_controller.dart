@@ -2,9 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/video_summary_domain_models.dart';
 import '../video_summary_models.dart';
+import '../video_summary_presentation_models.dart';
 import '../video_summary_repository.dart';
 import 'video_summary_flow_controller.dart';
-import 'video_summary_result_mapper.dart';
 
 final videoSummarySessionHistoryProvider = NotifierProvider<
     VideoSummarySessionHistoryController, VideoSummarySessionHistoryState>(
@@ -89,49 +89,115 @@ class VideoSummarySessionHistoryController
   @override
   VideoSummarySessionHistoryState build() {
     final videoAsset = _repository.getVideoAsset();
-    // 第一项始终代表当前正在编辑的主会话，后面几项是用于演示恢复能力的 seeded session。
-    final sessions = [
-      VideoSummarySessionHistoryEntry(
-        id: 'session-1',
-        title: '当前视频会话',
-        durationLabel: videoAsset.durationLabel,
-        detail: '当前会话仍在主区域，可以继续生成或追问。',
-        snapshot: VideoSummarySessionSnapshot(
-          flowSnapshot:
-              ref.read(videoSummaryFlowControllerProvider.notifier).captureSnapshot(),
-          readyPreferenceText: '',
-          draftGuidanceText: '',
-          draftBodyText: '',
-        ),
-      ),
-      VideoSummarySessionHistoryEntry(
-        id: 'session-seed-final',
-        title: '产品方案讲解',
-        durationLabel: '14:32',
-        detail: '已完成总结，可继续时间旅行追问',
-        snapshot: _buildSeededFinalSnapshot(),
-      ),
-      VideoSummarySessionHistoryEntry(
-        id: 'session-seed-processing',
-        title: '架构评审录屏',
-        durationLabel: '09:48',
-        detail: '处理中断点已保存，下次可直接恢复',
-        snapshot: _buildSeededProcessingSnapshot(),
-      ),
-      VideoSummarySessionHistoryEntry(
-        id: 'session-seed-draft',
-        title: '竞品分析 Demo',
-        durationLabel: '22:05',
-        detail: '已生成摘要，等待人工审阅',
-        snapshot: _buildSeededDraftSnapshot(),
-      ),
-    ];
+    final currentSession = _buildCurrentSessionEntry(videoAsset);
+
+    // 异步加载后端历史会话列表
+    _loadFromBackend();
 
     return VideoSummarySessionHistoryState(
-      sessions: sessions,
-      activeSessionId: sessions.first.id,
+      sessions: [currentSession],
+      activeSessionId: currentSession.id,
       createdSessionCount: 1,
     );
+  }
+
+  VideoSummarySessionHistoryEntry _buildCurrentSessionEntry(
+    VideoAssetInfo videoAsset,
+  ) {
+    return VideoSummarySessionHistoryEntry(
+      id: 'session-current',
+      title: '当前视频会话',
+      durationLabel: videoAsset.durationLabel,
+      detail: '当前会话仍在主区域，可以继续生成或追问。',
+      snapshot: VideoSummarySessionSnapshot(
+        flowSnapshot:
+            ref.read(videoSummaryFlowControllerProvider.notifier).captureSnapshot(),
+        readyPreferenceText: '',
+        draftGuidanceText: '',
+        draftBodyText: '',
+      ),
+    );
+  }
+
+  /// 从后端 GET /api/v1/tasks 加载历史任务并合并到侧边栏列表。
+  Future<void> _loadFromBackend() async {
+    try {
+      final tasks = await _repository.listTaskHistory();
+      if (tasks.isEmpty) return;
+
+      final currentSession = state.sessions.first;
+      final historyEntries = tasks.map(_mapTaskToEntry).toList();
+
+      state = state.copyWith(
+        sessions: [currentSession, ...historyEntries],
+        createdSessionCount: 1 + historyEntries.length,
+      );
+    } catch (_) {
+      // 后端不可用时静默保持仅当前会话，不影响用户操作
+    }
+  }
+
+  /// 将后端 [VideoSummaryTaskInfo] 映射为侧边栏展示条目。
+  VideoSummarySessionHistoryEntry _mapTaskToEntry(VideoSummaryTaskInfo task) {
+    final stage = _stageFromWorkflowState(task.workflowState);
+    final paragraphs = _splitParagraphs(task.draftSummary);
+
+    return VideoSummarySessionHistoryEntry(
+      id: task.taskId,
+      title: task.title ?? '未命名会话',
+      durationLabel: '--:--',
+      detail: task.workflowState.label,
+      snapshot: VideoSummarySessionSnapshot(
+        flowSnapshot: VideoSummaryFlowSnapshot(
+          stage: stage,
+          uploadHighlighted: stage != VideoSummaryStage.ready,
+          processingExpanded: stage == VideoSummaryStage.processing,
+          isTimestampScoped: false,
+          selectedTimestampStartSeconds: 0,
+          selectedTimestampEndSeconds:
+              VideoSummaryFlowController.minimumTimestampRangeSeconds,
+          isDraftEditMode: false,
+          processingSnapshot: null,
+          draftResult: (stage == VideoSummaryStage.draft ||
+                  stage == VideoSummaryStage.finalChat)
+              ? DraftResult(paragraphs: paragraphs, suggestionHint: '')
+              : null,
+          finalSummaryData: stage == VideoSummaryStage.finalChat
+              ? FinalSummaryData(
+                  summaryTitle: task.title ?? '',
+                  summaryBody: task.finalSummary ?? '',
+                  timestampChips: const [],
+                  messages: const [],
+                )
+              : null,
+          chatMessages: const [],
+        ),
+        readyPreferenceText: task.userInitialPreference ?? '',
+        draftGuidanceText: '',
+        draftBodyText: task.draftSummary ?? '',
+      ),
+    );
+  }
+
+  /// WorkflowState → VideoSummaryStage 映射。
+  VideoSummaryStage _stageFromWorkflowState(WorkflowState state) {
+    return switch (state) {
+      WorkflowState.draftGenerating => VideoSummaryStage.processing,
+      WorkflowState.draftReady => VideoSummaryStage.draft,
+      WorkflowState.finalGenerating => VideoSummaryStage.processing,
+      WorkflowState.completed => VideoSummaryStage.finalChat,
+      WorkflowState.failed => VideoSummaryStage.ready,
+    };
+  }
+
+  /// 将摘要文本按空行拆分为段落列表。
+  List<String> _splitParagraphs(String? text) {
+    if (text == null || text.trim().isEmpty) return [];
+    return text
+        .split(RegExp(r'\n\s*\n'))
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
   }
 
   VideoSummarySessionHistoryEntry? getSessionById(String sessionId) {
@@ -193,134 +259,5 @@ class VideoSummarySessionHistoryController
       VideoSummaryStage.draft => '已生成摘要，等待人工审阅',
       VideoSummaryStage.finalChat => '已完成总结，可继续时间旅行追问',
     };
-  }
-
-  // 这些 seeded snapshot 走和正式数据同样的 mapper 链路，避免 demo 数据污染分层边界。
-  VideoSummarySessionSnapshot _buildSeededProcessingSnapshot() {
-    return VideoSummarySessionSnapshot(
-      flowSnapshot: VideoSummaryFlowSnapshot(
-        stage: VideoSummaryStage.processing,
-        uploadHighlighted: true,
-        processingExpanded: true,
-        isTimestampScoped: true,
-        selectedTimestampStartSeconds: 0,
-        selectedTimestampEndSeconds: 30,
-        isDraftEditMode: false,
-        processingSnapshot: mapProcessingDataToSnapshot(
-          const VideoSummaryProcessingData(
-            progress: 0.58,
-            currentStage: VideoSummaryProcessingStage.analyzingVisionChunks,
-            currentMessage: '视觉分片正在补齐关键帧证据，音频线索已进入回流阶段。',
-            chunkProgress: VideoSummaryChunkProgressData(
-              stage: VideoSummaryChunkProgressStage.running,
-              totalChunks: 8,
-              audioDone: 5,
-              visionDone: 3,
-              synthesisDone: 1,
-              overallDone: 9,
-              overallTotal: 24,
-              overallPercent: 38,
-            ),
-            steps: [
-              VideoSummaryProcessingStepData(
-                phase: VideoSummaryProcessingPhase.preprocessing,
-                progress: 100,
-                completedUnits: 4,
-                totalUnits: 4,
-              ),
-              VideoSummaryProcessingStepData(
-                phase: VideoSummaryProcessingPhase.analysis,
-                progress: 61,
-                completedUnits: 8,
-                totalUnits: 16,
-              ),
-              VideoSummaryProcessingStepData(
-                phase: VideoSummaryProcessingPhase.synthesis,
-                progress: 28,
-                completedUnits: 1,
-                totalUnits: 10,
-              ),
-            ],
-          ),
-        ),
-        draftResult: null,
-        finalSummaryData: null,
-        chatMessages: [],
-      ),
-      readyPreferenceText: '先整理关键结论，再补充可执行动作。',
-      draftGuidanceText: '',
-      draftBodyText: '',
-    );
-  }
-
-  VideoSummarySessionSnapshot _buildSeededDraftSnapshot() {
-    return VideoSummarySessionSnapshot(
-      flowSnapshot: VideoSummaryFlowSnapshot(
-        stage: VideoSummaryStage.draft,
-        uploadHighlighted: true,
-        processingExpanded: false,
-        isTimestampScoped: true,
-        selectedTimestampStartSeconds: 0,
-        selectedTimestampEndSeconds: 30,
-        isDraftEditMode: false,
-        processingSnapshot: null,
-        draftResult: mapDraftDataToResult(
-          const VideoSummaryDraftData(
-            paragraphs: [
-              '这段竞品分析主要围绕用户分层、内容抓手和转化动作展开，前半段聚焦目标用户的需求切片，后半段则落到产品策略和执行节奏。',
-              '当前结构稿已经整理完主线、亮点和风险项，适合继续补充面向团队同步的版本。',
-            ],
-          ),
-        ),
-        finalSummaryData: null,
-        chatMessages: [],
-      ),
-        readyPreferenceText: '',
-        draftGuidanceText: '保留原结论，但把执行建议写得更明确。',
-      draftBodyText:
-          '这段竞品分析主要围绕用户分层、内容抓手和转化动作展开，前半段聚焦目标用户的需求切片，后半段则落到产品策略和执行节奏。\n\n当前结构稿已经整理完主线、亮点和风险项，适合继续补充面向团队同步的版本。',
-    );
-  }
-
-  VideoSummarySessionSnapshot _buildSeededFinalSnapshot() {
-    return VideoSummarySessionSnapshot(
-      flowSnapshot: VideoSummaryFlowSnapshot(
-        stage: VideoSummaryStage.finalChat,
-        uploadHighlighted: true,
-        processingExpanded: false,
-        isTimestampScoped: false,
-        selectedTimestampStartSeconds: 310,
-        selectedTimestampEndSeconds: 420,
-        isDraftEditMode: false,
-        processingSnapshot: null,
-        draftResult: mapDraftDataToResult(
-          const VideoSummaryDraftData(
-            paragraphs: ['产品方案讲解已经覆盖目标问题、用户路径和价值验证。'],
-          ),
-        ),
-        finalSummaryData: mapFinalResultDataToSummary(
-          const VideoSummaryFinalResultData(
-            body:
-                '该视频聚焦产品方案讲解，先梳理问题场景与目标用户，再展开方案结构、交付节奏和验证路径。整体结论已经可用于评审同步，并适合继续按时间戳展开追问。',
-            references: [
-              VideoSummaryReferenceRange(
-                startSeconds: 5 * 60 + 10,
-                endSeconds: 7 * 60,
-                topic: '方案价值与验证',
-              ),
-              VideoSummaryReferenceRange(
-                startSeconds: 10 * 60 + 20,
-                endSeconds: 12 * 60 + 10,
-                topic: '交付节奏与风险',
-              ),
-            ],
-          ),
-        ),
-        chatMessages: [],
-      ),
-      readyPreferenceText: '',
-      draftGuidanceText: '重点保留行动建议与里程碑。',
-      draftBodyText: '产品方案讲解已经覆盖目标问题、用户路径和价值验证。',
-    );
   }
 }

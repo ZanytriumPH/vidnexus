@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../services/api/paginated_mixin.dart';
+import '../../services/models/common_dto.dart';
 import '../../services/polling/qa_poller.dart';
 import '../../services/polling/task_poller.dart';
 import '../../services/task_service.dart';
@@ -44,6 +46,30 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   String? _taskId;
 
   // ---- VideoSummaryRepository 实现 ----
+
+  @override
+  Future<List<VideoSummaryTaskInfo>> listTaskHistory({
+    int page = 1,
+    int pageSize = 50,
+  }) async {
+    final resp = await _taskService.listTasks(
+      params: PageParams(page: page, pageSize: pageSize, sort: '-created_at'),
+    );
+    return resp.data
+        .map(
+          (dto) => VideoSummaryTaskInfo(
+            taskId: dto.taskId,
+            videoId: dto.videoId,
+            kbid: dto.kbid,
+            workflowState: WorkflowState.fromApi(dto.workflowState),
+            draftSummary: dto.draftSummary,
+            finalSummary: dto.finalSummary,
+            title: dto.title,
+            userInitialPreference: dto.userInitialPreference,
+          ),
+        )
+        .toList();
+  }
 
   @override
   VideoAssetInfo getVideoAsset() {
