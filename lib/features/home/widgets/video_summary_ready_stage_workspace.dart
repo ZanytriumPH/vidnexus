@@ -13,6 +13,8 @@ class ReadyStageWorkspace extends StatelessWidget {
     required this.isGenerating,
     required this.onUploadCardPressed,
     required this.onStartPressed,
+    required this.isUploading,
+    required this.uploadProgress,
     super.key,
   });
 
@@ -22,6 +24,8 @@ class ReadyStageWorkspace extends StatelessWidget {
   final bool isGenerating;
   final VoidCallback onUploadCardPressed;
   final VoidCallback? onStartPressed;
+  final bool isUploading;
+  final double uploadProgress;
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +46,8 @@ class ReadyStageWorkspace extends StatelessWidget {
                   videoAsset: videoAsset,
                   processingSnapshot: null,
                   processingExpanded: false,
+                  isUploading: isUploading,
+                  uploadProgress: uploadProgress,
                   onTap: onUploadCardPressed,
                 ),
               ],
@@ -67,8 +73,10 @@ class ReadyStageWorkspace extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 ReadyPrimaryButton(
-                  label: isGenerating ? '正在生成中...' : '开始生成初稿',
-                  onPressed: onStartPressed,
+                  label: isUploading 
+                      ? '正在上传视频...' 
+                      : (isGenerating ? '正在生成中...' : '开始生成初稿'),
+                  onPressed: (isUploading || isGenerating) ? null : onStartPressed,
                 ),
               ],
             ),
@@ -87,6 +95,8 @@ class ReadyStageWorkspace extends StatelessWidget {
           videoAsset: videoAsset,
           processingSnapshot: null,
           processingExpanded: false,
+          isUploading: isUploading,
+          uploadProgress: uploadProgress,
           onTap: onUploadCardPressed,
         ),
         const SizedBox(height: 24),
@@ -103,8 +113,10 @@ class ReadyStageWorkspace extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         ReadyPrimaryButton(
-          label: isGenerating ? '正在生成中...' : '开始生成初稿',
-          onPressed: onStartPressed,
+          label: isUploading 
+              ? '正在上传视频...' 
+              : (isGenerating ? '正在生成中...' : '开始生成初稿'),
+          onPressed: (isUploading || isGenerating) ? null : onStartPressed,
         ),
         const Spacer(flex: 4),
       ],

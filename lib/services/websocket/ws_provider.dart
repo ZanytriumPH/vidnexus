@@ -19,7 +19,7 @@ final wsEventProvider = StreamProvider<WSEventEnvelope?>((ref) {
     return const Stream.empty();
   }
 
-  final wsClient = ref.watch(_wsClientProvider);
+  final wsClient = ref.watch(wsClientProvider);
   final controller = StreamController<WSEventEnvelope?>();
 
   // 订阅 WS 事件，转发到 Riverpod StreamProvider
@@ -40,8 +40,8 @@ final wsEventProvider = StreamProvider<WSEventEnvelope?>((ref) {
   return controller.stream;
 });
 
-/// 内部 WebSocket 客户端 Provider。
-final _wsClientProvider = Provider<WsClient>((ref) {
+/// WebSocket 客户端 Provider。
+final wsClientProvider = Provider<WsClient>((ref) {
   final baseUrl = ApiClient.config.baseUrlSync;
 
   Future<String?> tokenProvider() async {

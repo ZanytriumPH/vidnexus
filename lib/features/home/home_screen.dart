@@ -262,7 +262,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       selectedTimestampEndSeconds: flowState.selectedTimestampEndSeconds,
       onUploadCardPressed: ref
           .read(videoSummaryFlowControllerProvider.notifier)
-          .toggleUploadSelection,
+          .pickAndUploadVideo,
       onProcessingCardPressed: ref
           .read(videoSummaryFlowControllerProvider.notifier)
           .toggleProcessingExpanded,
@@ -284,6 +284,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       onTimestampRangeChanged: ref
           .read(videoSummaryFlowControllerProvider.notifier)
           .setTimestampRange,
+      isUploading: flowState.isUploading,
+      uploadProgress: flowState.uploadProgress,
     );
   }
 }

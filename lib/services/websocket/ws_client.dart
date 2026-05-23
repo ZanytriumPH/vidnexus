@@ -73,7 +73,14 @@ class WsClient {
         return;
       }
 
-      final uri = Uri.parse('$baseUrl/ws/progress').replace(
+      String wsUrl = '$baseUrl/ws/progress';
+      if (wsUrl.startsWith('https://')) {
+        wsUrl = wsUrl.replaceFirst('https://', 'wss://');
+      } else if (wsUrl.startsWith('http://')) {
+        wsUrl = wsUrl.replaceFirst('http://', 'ws://');
+      }
+
+      final uri = Uri.parse(wsUrl).replace(
         queryParameters: {
           'token': token,
           if (_lastSequence > 0) 'last_sequence': _lastSequence.toString(),

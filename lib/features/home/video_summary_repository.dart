@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/service_providers.dart';
+import '../../services/websocket/ws_provider.dart';
 import 'domain/video_summary_domain_models.dart';
 import 'http_video_summary_repository.dart';
 import 'video_summary_models.dart';
@@ -12,9 +13,13 @@ const String _defaultKbid = 'kb_default';
 const String _defaultVideoId = 'vid_default';
 
 final videoSummaryRepositoryProvider = Provider<VideoSummaryRepository>((ref) {
+  // 保持 wsEventProvider 处于活动状态（自动处理连接/断开生命周期）
+  ref.listen(wsEventProvider, (prev, next) {});
+
   return HttpVideoSummaryRepository(
     taskService: ref.watch(taskServiceProvider),
     videoQAService: ref.watch(videoQAServiceProvider),
+    wsEventStream: ref.watch(wsClientProvider).eventStream,
     kbid: _defaultKbid,
     videoId: _defaultVideoId,
   );
@@ -44,5 +49,12 @@ abstract class VideoSummaryRepository {
     required List<String> draftParagraphs,
   });
 
-  Future<VideoSummaryChatReplyData> sendSummaryChatMessage(String message);
+  Stream<VideoSummaryChatReplyData> sendSummaryChatMessage(
+    String message, {
+    required String timestamp,
+    int? windowSeconds,
+  });
+
+  void updateVideoId(String newId);
+  void updateKbid(String newId);
 }

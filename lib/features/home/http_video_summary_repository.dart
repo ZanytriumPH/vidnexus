@@ -3,10 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../services/models/common_dto.dart';
-import '../../services/polling/qa_poller.dart';
 import '../../services/polling/task_poller.dart';
 import '../../services/task_service.dart';
 import '../../services/video_qa_service.dart';
+import '../../services/websocket/ws_models.dart';
+import '../../services/sse/sse_models.dart';
 import 'domain/video_summary_domain_models.dart';
 import 'video_summary_models.dart';
 import 'video_summary_repository.dart';
@@ -21,28 +22,37 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     required TaskService taskService,
     VideoQAService? videoQAService,
     TaskPoller? taskPoller,
+    required Stream<WSEventEnvelope?> wsEventStream,
     required this.kbid,
     required this.videoId,
   })  : _taskService = taskService,
         _videoQAService = videoQAService,
+        _wsEventStream = wsEventStream,
         _taskPoller = taskPoller ??
-            TaskPoller(taskService: taskService),
-        _qaPoller = videoQAService != null
-            ? QAPoller(videoQAService: videoQAService)
-            : null;
+            TaskPoller(taskService: taskService);
 
   final TaskService _taskService;
   final VideoQAService? _videoQAService;
+  final Stream<WSEventEnvelope?> _wsEventStream;
   final TaskPoller _taskPoller;
-  final QAPoller? _qaPoller;
 
   /// 当前知识库 ID。
-  final String kbid;
+  String kbid;
 
   /// 当前视频 ID。
-  final String videoId;
+  String videoId;
 
   String? _taskId;
+
+  @override
+  void updateVideoId(String newId) {
+    videoId = newId;
+  }
+
+  @override
+  void updateKbid(String newId) {
+    kbid = newId;
+  }
 
   // ---- VideoSummaryRepository 实现 ----
 
@@ -83,6 +93,69 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     );
   }
 
+  VideoSummaryProcessingStage _mapWSStage(WSStage? stage) {
+    if (stage == null) return VideoSummaryProcessingStage.acquiringVideo;
+    return switch (stage) {
+      WSStage.extraction => VideoSummaryProcessingStage.acquiringVideo,
+      WSStage.transcribing => VideoSummaryProcessingStage.transcribingAudio,
+      WSStage.extractingKeyframes => VideoSummaryProcessingStage.extractingFrames,
+      WSStage.ragRetrieval => VideoSummaryProcessingStage.dispatchingChunks,
+      WSStage.llmReasoning => VideoSummaryProcessingStage.analyzingAudioChunks,
+      WSStage.synthesis => VideoSummaryProcessingStage.synthesizingChunks,
+      WSStage.cleanup => VideoSummaryProcessingStage.waitingHumanReview,
+    };
+  }
+
+  List<VideoSummaryProcessingStepData> _buildWSSteps(WSStage? stage, int progress) {
+    int preprocessProgress = 0;
+    int analysisProgress = 0;
+    int synthesisProgress = 0;
+
+    if (stage == null) {
+      preprocessProgress = progress;
+    } else {
+      switch (stage) {
+        case WSStage.extraction:
+        case WSStage.transcribing:
+        case WSStage.extractingKeyframes:
+          preprocessProgress = progress.clamp(0, 100);
+          break;
+        case WSStage.ragRetrieval:
+        case WSStage.llmReasoning:
+          preprocessProgress = 100;
+          analysisProgress = progress.clamp(0, 100);
+          break;
+        case WSStage.synthesis:
+        case WSStage.cleanup:
+          preprocessProgress = 100;
+          analysisProgress = 100;
+          synthesisProgress = progress.clamp(0, 100);
+          break;
+      }
+    }
+
+    return [
+      VideoSummaryProcessingStepData(
+        phase: VideoSummaryProcessingPhase.preprocessing,
+        progress: preprocessProgress,
+        completedUnits: preprocessProgress,
+        totalUnits: 100,
+      ),
+      VideoSummaryProcessingStepData(
+        phase: VideoSummaryProcessingPhase.analysis,
+        progress: analysisProgress,
+        completedUnits: analysisProgress,
+        totalUnits: 100,
+      ),
+      VideoSummaryProcessingStepData(
+        phase: VideoSummaryProcessingPhase.synthesis,
+        progress: synthesisProgress,
+        completedUnits: synthesisProgress,
+        totalUnits: 100,
+      ),
+    ];
+  }
+
   @override
   Stream<VideoSummaryProcessingData> startDraftGeneration() async* {
     if (kDebugMode) {
@@ -117,8 +190,78 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       debugPrint('[HttpRepo] startAnalysis 失败（可能后端已自动启动）: $e');
     }
 
-    // 3. 轮询进度
-    yield* _taskPoller.pollTask(_taskId!);
+    // 3. 监听进度 (WebSocket + 降级 Polling)
+    final wsStream = _wsEventStream.where((env) =>
+        env != null &&
+        env.scope == WSScope.videoSummaryTask &&
+        env.scopeId == _taskId);
+
+    bool receivedWsEvent = false;
+    final controller = StreamController<VideoSummaryProcessingData>();
+
+    // 订阅 WS
+    StreamSubscription? wsSubscription;
+    wsSubscription = wsStream.listen(
+      (env) {
+        if (env == null) return;
+        receivedWsEvent = true;
+
+        if (env.eventType == WSEventType.error) {
+          controller.addError(TaskFailedException(_taskId!));
+          controller.close();
+          return;
+        }
+
+        final progressVal = (env.progress ?? 0) / 100.0;
+        final currentStage = _mapWSStage(env.stage);
+        final currentMessage = env.message ?? '';
+        final steps = _buildWSSteps(env.stage, env.progress ?? 0);
+
+        controller.add(VideoSummaryProcessingData(
+          progress: progressVal,
+          currentStage: currentStage,
+          currentMessage: currentMessage,
+          steps: steps,
+        ));
+
+        if (env.eventType == WSEventType.completed) {
+          controller.close();
+        }
+      },
+      onError: (e) {
+        debugPrint('[HttpRepo] WebSocket stream error: $e');
+      },
+    );
+
+    // 3秒后检查是否有收到 WS 消息，若没有，启动 Polling 降级方案以防卡死
+    Timer(const Duration(seconds: 3), () async {
+      if (!receivedWsEvent && !controller.isClosed) {
+        debugPrint('[HttpRepo] WebSocket 3秒内未收到消息，启用 Polling 降级方案');
+        try {
+          await for (final data in _taskPoller.pollTask(_taskId!)) {
+            if (!receivedWsEvent && !controller.isClosed) {
+              controller.add(data);
+            } else {
+              break;
+            }
+          }
+          if (!receivedWsEvent && !controller.isClosed) {
+            controller.close();
+          }
+        } catch (e) {
+          if (!receivedWsEvent && !controller.isClosed) {
+            controller.addError(e);
+            controller.close();
+          }
+        }
+      }
+    });
+
+    controller.onCancel = () {
+      wsSubscription?.cancel();
+    };
+
+    yield* controller.stream;
   }
 
   @override
@@ -201,26 +344,67 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   }
 
   @override
-  Future<VideoSummaryChatReplyData> sendSummaryChatMessage(String message) async {
+  Stream<VideoSummaryChatReplyData> sendSummaryChatMessage(
+    String message, {
+    required String timestamp,
+    int? windowSeconds,
+  }) {
     final taskId = _taskId;
     if (taskId == null) {
       throw StateError('No active task — call startDraftGeneration() first');
     }
     final qaSvc = _videoQAService;
-    final poller = _qaPoller;
-    if (qaSvc == null || poller == null) {
+    if (qaSvc == null) {
       throw UnimplementedError('VideoQAService not injected — add videoQAService to provider');
     }
-    // 1. 创建 QA 记录
-    final createResp = await qaSvc.createQA(
-      taskId: taskId,
+
+    final request = TimeTravelQAStreamRequest(
+      timestamp: timestamp,
       questionContent: message,
+      windowSeconds: windowSeconds,
     );
-    final qaId = createResp.data?.qaId;
-    if (qaId == null) {
-      throw StateError('QA creation returned null qaId');
-    }
-    // 2. 轮询等待回答
-    return poller.waitForAnswer(taskId: taskId, qaId: qaId);
+
+    final stream = qaSvc.createTimeTravelQAStream(taskId, request);
+    final answerBuffer = StringBuffer();
+    final controller = StreamController<VideoSummaryChatReplyData>();
+
+    StreamSubscription? sub;
+    controller.onListen = () {
+      sub = stream.listen(
+        (event) {
+          if (event.type == SSEEventType.delta) {
+            final delta = event.parseData<SSEDeltaData>(SSEDeltaData.fromJson);
+            if (delta != null) {
+              answerBuffer.write(delta.chunk);
+              controller.add(VideoSummaryChatReplyData(text: answerBuffer.toString()));
+            }
+          } else if (event.type == SSEEventType.done) {
+            final done = event.parseData<TimeTravelQADoneData>(TimeTravelQADoneData.fromJson);
+            if (done?.answerContent != null && done!.answerContent!.isNotEmpty) {
+              controller.add(VideoSummaryChatReplyData(text: done.answerContent!));
+            }
+            controller.close();
+          } else if (event.type == SSEEventType.error) {
+            controller.addError(Exception(event.data?.toString() ?? 'SSE stream error'));
+            controller.close();
+          }
+        },
+        onError: (e) {
+          controller.addError(e);
+          controller.close();
+        },
+        onDone: () {
+          if (!controller.isClosed) {
+            controller.close();
+          }
+        },
+      );
+    };
+
+    controller.onCancel = () {
+      sub?.cancel();
+    };
+
+    return controller.stream;
   }
 }

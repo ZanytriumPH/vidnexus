@@ -1,5 +1,10 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 
+import '../../../services/service_providers.dart';
+import '../../../services/upload_service.dart';
 import 'video_summary_result_mapper.dart';
 import '../domain/video_summary_time_utils.dart';
 import '../video_summary_models.dart';
@@ -29,6 +34,8 @@ class VideoSummaryFlowState {
     required this.draftResult,
     required this.finalSummaryData,
     required this.chatMessages,
+    required this.isUploading,
+    required this.uploadProgress,
   });
 
   final VideoAssetInfo videoAsset;
@@ -45,6 +52,8 @@ class VideoSummaryFlowState {
   final DraftResult? draftResult;
   final FinalSummaryData? finalSummaryData;
   final List<ChatMessage> chatMessages;
+  final bool isUploading;
+  final double uploadProgress;
 
   factory VideoSummaryFlowState.initial({required VideoAssetInfo videoAsset}) {
     return VideoSummaryFlowState(
@@ -63,6 +72,8 @@ class VideoSummaryFlowState {
       draftResult: null,
       finalSummaryData: null,
       chatMessages: const [],
+      isUploading: false,
+      uploadProgress: 0.0,
     );
   }
 
@@ -84,6 +95,8 @@ class VideoSummaryFlowState {
     Object? draftResult = _unset,
     Object? finalSummaryData = _unset,
     List<ChatMessage>? chatMessages,
+    bool? isUploading,
+    double? uploadProgress,
   }) {
     return VideoSummaryFlowState(
       videoAsset: videoAsset ?? this.videoAsset,
@@ -108,6 +121,8 @@ class VideoSummaryFlowState {
           ? this.finalSummaryData
           : finalSummaryData as FinalSummaryData?,
       chatMessages: chatMessages ?? this.chatMessages,
+      isUploading: isUploading ?? this.isUploading,
+      uploadProgress: uploadProgress ?? this.uploadProgress,
     );
   }
 }
@@ -189,8 +204,94 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     );
   }
 
-  void toggleUploadSelection() {
-    state = state.copyWith(uploadHighlighted: !state.uploadHighlighted);
+  Future<void> pickAndUploadVideo() async {
+    if (state.isUploading || state.isGenerating) {
+      return;
+    }
+
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.video,
+      );
+
+      if (result == null || result.files.single.path == null) {
+        return;
+      }
+
+      final filePath = result.files.single.path!;
+      final fileName = result.files.single.name;
+      final fileSize = result.files.single.size;
+
+      state = state.copyWith(
+        isUploading: true,
+        uploadProgress: 0.0,
+      );
+
+      final uploadService = ref.read(uploadServiceProvider);
+
+      // 1. 初始化上传
+      final initResp = await uploadService.initUpload(
+        fileName: fileName,
+        totalSize: fileSize,
+      );
+      final uploadId = initResp.data?.uploadId;
+      if (uploadId == null) {
+        throw Exception('Failed to initialize upload');
+      }
+
+      // 2. 分片上传 (每片 10 MiB)
+      final file = File(filePath);
+      final raf = await file.open(mode: FileMode.read);
+      int offset = 0;
+
+      try {
+        while (offset < fileSize) {
+          final lengthToRead = (fileSize - offset) < UploadService.chunkSize
+              ? (fileSize - offset)
+              : UploadService.chunkSize;
+          final bytes = await raf.read(lengthToRead);
+          await uploadService.uploadChunk(
+            uploadId: uploadId,
+            offset: offset,
+            bytes: Uint8List.fromList(bytes),
+          );
+          offset += lengthToRead;
+          state = state.copyWith(
+            uploadProgress: offset / fileSize,
+          );
+        }
+      } finally {
+        await raf.close();
+      }
+
+      // 3. 注册视频资源
+      final createVideoResp = await ref.read(videoServiceProvider).createVideo(
+        fileName: fileName,
+      );
+      final newVideoId = createVideoResp.data?.videoId ?? fileName;
+
+      // 4. 更新 repository 中的 videoId
+      _repository.updateVideoId(newVideoId);
+
+      // 5. 更新本地状态中的视频资产信息
+      state = state.copyWith(
+        isUploading: false,
+        uploadProgress: 1.0,
+        uploadHighlighted: true,
+        videoAsset: VideoAssetInfo(
+          title: newVideoId,
+          durationLabel: '0m 00s',
+          sourceLabel: state.videoAsset.sourceLabel,
+          fileName: fileName,
+        ),
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isUploading: false,
+        uploadProgress: 0.0,
+      );
+      debugPrint('Upload failed: $e');
+    }
   }
 
   void toggleProcessingExpanded() {
@@ -297,6 +398,13 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     }
   }
 
+  String _formatHHMMSS(int totalSeconds) {
+    final hours = totalSeconds ~/ 3600;
+    final minutes = (totalSeconds % 3600) ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
   Future<void> sendChatMessage(String rawMessage) async {
     final message = rawMessage.trim();
     if (state.isSendingChat || message.isEmpty) {
@@ -305,7 +413,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
     // 时间旅行模式开启时，把当前时间范围一起附着到用户消息上，便于 UI 回显上下文。
     final timestampLabel = state.isTimestampScoped
-      ? formatVideoSummaryTimestampRange(
+        ? formatVideoSummaryTimestampRange(
             state.selectedTimestampStartSeconds,
             state.selectedTimestampEndSeconds,
           )
@@ -317,25 +425,54 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       timestampLabel: timestampLabel,
     );
 
-    state = state.copyWith(
-      isSendingChat: true,
-      chatMessages: [...state.chatMessages, userMessage],
+    // 追加一条空系统回复，用于 SSE 流式追加
+    final systemMessage = ChatMessage(
+      sender: SummaryChatSender.system,
+      text: '',
+      timestampLabel: timestampLabel,
     );
 
+    state = state.copyWith(
+      isSendingChat: true,
+      chatMessages: [...state.chatMessages, userMessage, systemMessage],
+    );
+
+    final timestamp = _formatHHMMSS(state.selectedTimestampStartSeconds);
+    final windowSeconds = state.isTimestampScoped
+        ? (state.selectedTimestampEndSeconds - state.selectedTimestampStartSeconds)
+        : null;
+
     try {
-      final reply = await _repository.sendSummaryChatMessage(message);
-      final replyMessage = mapChatReplyDataToMessage(reply);
-      state = state.copyWith(
-        chatMessages: [
-          ...state.chatMessages,
-          // 系统回复保留当前发送时的时间标签，这样聊天记录就能看出它基于哪个范围回答。
-          ChatMessage(
-            sender: replyMessage.sender,
-            text: replyMessage.text,
-            timestampLabel: timestampLabel,
-          ),
-        ],
+      final sseStream = _repository.sendSummaryChatMessage(
+        message,
+        timestamp: timestamp,
+        windowSeconds: windowSeconds,
       );
+
+      await for (final reply in sseStream) {
+        final currentMessages = List<ChatMessage>.from(state.chatMessages);
+        if (currentMessages.isNotEmpty) {
+          final lastMsg = currentMessages.last;
+          currentMessages[currentMessages.length - 1] = ChatMessage(
+            sender: lastMsg.sender,
+            text: reply.text,
+            timestampLabel: lastMsg.timestampLabel,
+          );
+          state = state.copyWith(chatMessages: currentMessages);
+        }
+      }
+    } catch (e) {
+      debugPrint('[FlowController] SSE QA failed: $e');
+      final currentMessages = List<ChatMessage>.from(state.chatMessages);
+      if (currentMessages.isNotEmpty) {
+        final lastMsg = currentMessages.last;
+        currentMessages[currentMessages.length - 1] = ChatMessage(
+          sender: lastMsg.sender,
+          text: '错误：$e',
+          timestampLabel: lastMsg.timestampLabel,
+        );
+        state = state.copyWith(chatMessages: currentMessages);
+      }
     } finally {
       state = state.copyWith(isSendingChat: false);
     }

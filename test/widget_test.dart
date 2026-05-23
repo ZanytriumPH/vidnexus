@@ -158,9 +158,19 @@ class _WidgetTestVideoSummaryRepository extends VideoSummaryRepository {
   }
 
   @override
-  Future<VideoSummaryChatReplyData> sendSummaryChatMessage(String message) async {
-    return const VideoSummaryChatReplyData(text: 'reply');
+  Stream<VideoSummaryChatReplyData> sendSummaryChatMessage(
+    String message, {
+    required String timestamp,
+    int? windowSeconds,
+  }) {
+    return Stream.value(const VideoSummaryChatReplyData(text: 'reply'));
   }
+
+  @override
+  void updateVideoId(String newId) {}
+
+  @override
+  void updateKbid(String newId) {}
 }
 
 /// 测试用 AuthController：直接返回已登录状态，跳过启动时的 _restoreSession() 流程。

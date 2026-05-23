@@ -12,6 +12,8 @@ class HeroCard extends StatelessWidget {
     required this.videoAsset,
     required this.processingSnapshot,
     required this.processingExpanded,
+    this.isUploading = false,
+    this.uploadProgress = 0.0,
     this.onTap,
     super.key,
   });
@@ -21,6 +23,8 @@ class HeroCard extends StatelessWidget {
   final VideoAssetInfo videoAsset;
   final ProcessingSnapshot? processingSnapshot;
   final bool processingExpanded;
+  final bool isUploading;
+  final double uploadProgress;
   final VoidCallback? onTap;
 
   @override
@@ -30,6 +34,8 @@ class HeroCard extends StatelessWidget {
       return _ReadyUploadHeroCard(
         highlighted: highlighted,
         videoAsset: videoAsset,
+        isUploading: isUploading,
+        uploadProgress: uploadProgress,
         onTap: onTap,
       );
     }
@@ -155,11 +161,15 @@ class _ReadyUploadHeroCard extends StatelessWidget {
   const _ReadyUploadHeroCard({
     required this.highlighted,
     required this.videoAsset,
+    this.isUploading = false,
+    this.uploadProgress = 0.0,
     this.onTap,
   });
 
   final bool highlighted;
   final VideoAssetInfo videoAsset;
+  final bool isUploading;
+  final double uploadProgress;
   final VoidCallback? onTap;
 
   @override
@@ -178,7 +188,7 @@ class _ReadyUploadHeroCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: onTap,
+          onTap: isUploading ? null : onTap, // 正在上传时禁止点击触发新的上传
           borderRadius: BorderRadius.circular(14),
           splashFactory: NoSplash.splashFactory,
           overlayColor: WidgetStateProperty.all(Colors.transparent),
@@ -200,6 +210,8 @@ class _ReadyUploadHeroCard extends StatelessWidget {
                 _ReadyUploadCallout(
                   highlighted: highlighted,
                   videoAsset: videoAsset,
+                  isUploading: isUploading,
+                  uploadProgress: uploadProgress,
                 ),
               ],
             ),
@@ -214,10 +226,14 @@ class _ReadyUploadCallout extends StatelessWidget {
   const _ReadyUploadCallout({
     required this.highlighted,
     required this.videoAsset,
+    this.isUploading = false,
+    this.uploadProgress = 0.0,
   });
 
   final bool highlighted;
   final VideoAssetInfo videoAsset;
+  final bool isUploading;
+  final double uploadProgress;
 
   @override
   Widget build(BuildContext context) {
@@ -233,29 +249,52 @@ class _ReadyUploadCallout extends StatelessWidget {
         mainAxisSize: MainAxisSize.max,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (highlighted) ...[
-            Text(
-              '✓',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textSecondary,
+          if (isUploading) ...[
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.primary,
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '正在上传: ${(uploadProgress * 100).toStringAsFixed(0)}%',
+                textAlign: TextAlign.left,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ] else ...[
+            if (highlighted) ...[
+              Text(
+                '✓',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
+            Expanded(
+              child: Text(
+                highlighted ? '已选择 ${videoAsset.fileName}' : '点击从设备选择文件',
+                textAlign: TextAlign.center,
+                softWrap: true,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
           ],
-          Expanded(
-            child: Text(
-              highlighted ? '已选择 ${videoAsset.fileName}' : '点击从设备选择文件',
-              textAlign: TextAlign.center,
-              softWrap: true,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
         ],
       ),
     );

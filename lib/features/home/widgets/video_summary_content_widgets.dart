@@ -38,6 +38,8 @@ class VideoSummaryWorkspace extends StatelessWidget {
     required this.onSendChatPressed,
     required this.onTimestampScopeChanged,
     required this.onTimestampRangeChanged,
+    required this.isUploading,
+    required this.uploadProgress,
     super.key,
   });
 
@@ -69,6 +71,8 @@ class VideoSummaryWorkspace extends StatelessWidget {
   final VoidCallback? onSendChatPressed;
   final ValueChanged<bool> onTimestampScopeChanged;
   final ValueChanged<TimestampRangeSelection> onTimestampRangeChanged;
+  final bool isUploading;
+  final double uploadProgress;
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +84,8 @@ class VideoSummaryWorkspace extends StatelessWidget {
         isGenerating: isGenerating,
         onUploadCardPressed: onUploadCardPressed,
         onStartPressed: onStartPressed,
+        isUploading: isUploading,
+        uploadProgress: uploadProgress,
       ),
       VideoSummaryStage.processing when processingSnapshot != null =>
         ProcessingStageWorkspace(

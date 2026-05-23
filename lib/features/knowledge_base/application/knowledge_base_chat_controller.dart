@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../services/global_qa_service.dart';
+import '../../../services/sse/sse_models.dart';
 import '../knowledge_base_models.dart';
 
 /// 知识库会话控制器的状态快照。
@@ -97,63 +98,78 @@ class KnowledgeBaseChatController extends ChangeNotifier {
 
   /// 发起真实 QA 请求并轮询等待回答。
   Future<void> _sendChatMessage(String text) async {
-    _emit(_state.copyWith(isWaitingForAnswer: true));
+    _emit(_state.copyWith(
+      isWaitingForAnswer: true,
+      messages: [
+        ..._state.messages,
+        KnowledgeChatMessage(
+          sender: KnowledgeChatSender.system,
+          text: '',
+        ),
+      ],
+    ));
+
+    final sseStream = _qaService.createQAStream(
+      kbid: _kbid,
+      chatId: _chatId,
+      questionContent: text,
+    );
+
+    final answerBuffer = StringBuffer();
 
     try {
-      final createResp = await _qaService.createQA(
-        kbid: _kbid,
-        chatId: _chatId,
-        questionContent: text,
-      );
-      final qaId = createResp.data?.qaId;
-      if (qaId == null || qaId.isEmpty) {
-        throw Exception('QA creation returned empty qaId');
+      await for (final event in sseStream) {
+        if (event.type == SSEEventType.delta) {
+          final delta = event.parseData<SSEDeltaData>(SSEDeltaData.fromJson);
+          if (delta != null) {
+            answerBuffer.write(delta.chunk);
+            final currentMessages = List<KnowledgeChatMessage>.from(_state.messages);
+            if (currentMessages.isNotEmpty) {
+              final lastMsg = currentMessages.last;
+              currentMessages[currentMessages.length - 1] = KnowledgeChatMessage(
+                sender: lastMsg.sender,
+                text: answerBuffer.toString(),
+              );
+              _emit(_state.copyWith(messages: currentMessages));
+            }
+          }
+        } else if (event.type == SSEEventType.done) {
+          final done = event.parseData<GlobalQADoneData>(GlobalQADoneData.fromJson);
+          if (done?.answerContent != null && done!.answerContent!.isNotEmpty) {
+            final currentMessages = List<KnowledgeChatMessage>.from(_state.messages);
+            if (currentMessages.isNotEmpty) {
+              final lastMsg = currentMessages.last;
+              currentMessages[currentMessages.length - 1] = KnowledgeChatMessage(
+                sender: lastMsg.sender,
+                text: done.answerContent!,
+              );
+              _emit(_state.copyWith(
+                messages: currentMessages,
+                isWaitingForAnswer: false,
+              ));
+            }
+            return;
+          }
+        } else if (event.type == SSEEventType.error) {
+          throw Exception(event.data?.toString() ?? 'SSE stream error');
+        }
       }
-
-      final answer = await _pollForAnswer(qaId);
-
-      _emit(_state.copyWith(
-        messages: [
-          ..._state.messages,
-          KnowledgeChatMessage(
-            sender: KnowledgeChatSender.system,
-            text: answer,
-          ),
-        ],
-        isWaitingForAnswer: false,
-      ));
+      _emit(_state.copyWith(isWaitingForAnswer: false));
     } catch (e) {
-      _emit(_state.copyWith(
-        messages: [
-          ..._state.messages,
-          KnowledgeChatMessage(
-            sender: KnowledgeChatSender.system,
-            text: '抱歉，回答生成失败：$e',
-          ),
-        ],
-        isWaitingForAnswer: false,
-      ));
-    }
-  }
-
-  /// 轮询直到 answer_content 非空。
-  Future<String> _pollForAnswer(String qaId) async {
-    final stopwatch = Stopwatch()..start();
-    const timeout = Duration(seconds: 60);
-    const interval = Duration(seconds: 2);
-
-    while (true) {
-      if (stopwatch.elapsed > timeout) {
-        throw Exception('回答生成超时（${timeout.inSeconds}秒）');
+      final currentMessages = List<KnowledgeChatMessage>.from(_state.messages);
+      if (currentMessages.isNotEmpty) {
+        final lastMsg = currentMessages.last;
+        currentMessages[currentMessages.length - 1] = KnowledgeChatMessage(
+          sender: lastMsg.sender,
+          text: '抱歉，回答生成失败：$e',
+        );
+        _emit(_state.copyWith(
+          messages: currentMessages,
+          isWaitingForAnswer: false,
+        ));
+      } else {
+        _emit(_state.copyWith(isWaitingForAnswer: false));
       }
-
-      final resp = await _qaService.getQA(_kbid, _chatId, qaId);
-      final dto = resp.data;
-      if (dto != null && dto.answerContent != null && dto.answerContent!.isNotEmpty) {
-        return dto.answerContent!;
-      }
-
-      await Future<void>.delayed(interval);
     }
   }
 

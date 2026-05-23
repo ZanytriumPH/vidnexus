@@ -10,6 +10,7 @@ import 'package:vidnexus/services/polling/qa_poller.dart';
 import 'package:vidnexus/services/polling/task_poller.dart';
 import 'package:vidnexus/services/task_service.dart';
 import 'package:vidnexus/services/video_qa_service.dart';
+import 'package:vidnexus/services/sse/sse_models.dart';
 
 // ---- Mocks ----
 
@@ -17,7 +18,11 @@ class MockTaskService extends Mock implements TaskService {}
 
 class MockVideoQAService extends Mock implements VideoQAService {}
 
+class FakeTimeTravelQAStreamRequest extends Fake implements TimeTravelQAStreamRequest {}
+
 void main() {
+  registerFallbackValue(FakeTimeTravelQAStreamRequest());
+
   late MockTaskService mockTaskService;
   late MockVideoQAService mockVideoQAService;
   late TaskPoller taskPoller;
@@ -277,6 +282,7 @@ void main() {
         taskService: mockTaskService,
         videoQAService: mockVideoQAService,
         taskPoller: taskPoller,
+        wsEventStream: const Stream.empty(),
         kbid: testKbid,
         videoId: testVideoId,
       );
@@ -360,6 +366,7 @@ void main() {
     test('fetchDraftResult throws StateError when no active task', () async {
       final freshRepo = HttpVideoSummaryRepository(
         taskService: mockTaskService,
+        wsEventStream: const Stream.empty(),
         kbid: testKbid,
         videoId: testVideoId,
       );
@@ -416,41 +423,43 @@ void main() {
       expect(result.references, isEmpty);
     });
 
-    test('sendSummaryChatMessage creates QA and polls for answer', () async {
+    test('sendSummaryChatMessage creates QA and streams answer', () async {
       stubTaskCreationAndPollCompletion();
 
       final genStream = repository.startDraftGeneration();
       await genStream.first;
 
-      // Stub createQA
-      when(() => mockVideoQAService.createQA(
-            taskId: testTaskId,
-            questionContent: '能再详细解释一下吗？',
+      // Stub createTimeTravelQAStream
+      when(() => mockVideoQAService.createTimeTravelQAStream(
+            testTaskId,
+            any(),
           )).thenAnswer(
-        (_) async => _apiResponse(
-          const VideoQARecordResponseData(
-            qaId: testQaId,
-            taskId: testTaskId,
-            questionContent: '能再详细解释一下吗？',
-            answerContent: null,
+        (_) => Stream.fromIterable([
+          const SSEEvent(
+            type: SSEEventType.delta,
+            event: 'delta',
+            data: {
+              'task_id': testTaskId,
+              'qa_id': testQaId,
+              'chunk': '当然，这里是更详细的解释……',
+              'sequence': 1,
+            },
           ),
-        ),
+          const SSEEvent(
+            type: SSEEventType.done,
+            event: 'done',
+            data: {
+              'task_id': testTaskId,
+              'qa_id': testQaId,
+              'answer_content': '当然，这里是更详细的解释……',
+            },
+          ),
+        ]),
       );
 
-      // Stub getQA for poller
-      when(() => mockVideoQAService.getQA(testTaskId, testQaId)).thenAnswer(
-        (_) async => _apiResponse(
-          const VideoQARecordResponseData(
-            qaId: testQaId,
-            taskId: testTaskId,
-            questionContent: '能再详细解释一下吗？',
-            answerContent: '当然，这里是更详细的解释……',
-          ),
-        ),
-      );
-
-      final reply =
-          await repository.sendSummaryChatMessage('能再详细解释一下吗？');
+      final replyStream =
+          repository.sendSummaryChatMessage('能再详细解释一下吗？', timestamp: '00:00:00');
+      final reply = await replyStream.last;
 
       expect(reply.text, '当然，这里是更详细的解释……');
     });
@@ -460,6 +469,7 @@ void main() {
         () async {
       final repoWithoutQA = HttpVideoSummaryRepository(
         taskService: mockTaskService,
+        wsEventStream: const Stream.empty(),
         kbid: testKbid,
         videoId: testVideoId,
       );
@@ -470,7 +480,7 @@ void main() {
       await genStream.first;
 
       expect(
-        () => repoWithoutQA.sendSummaryChatMessage('测试'),
+        () => repoWithoutQA.sendSummaryChatMessage('测试', timestamp: '00:00:00'),
         throwsA(isA<UnimplementedError>()),
       );
     });
