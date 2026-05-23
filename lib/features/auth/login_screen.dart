@@ -49,12 +49,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // 返回按钮
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    onPressed: () => AppNavigator.popCurrent(context),
-                    icon: const Icon(Icons.arrow_back_rounded, size: 24),
-                    color: AppColors.textPrimary,
+                Visibility(
+                  visible: Navigator.canPop(context),
+                  maintainSize: true,
+                  maintainAnimation: true,
+                  maintainState: true,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      onPressed: () => AppNavigator.popCurrent(context),
+                      icon: const Icon(Icons.arrow_back_rounded, size: 24),
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -69,7 +75,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '登录你的 VidNexus 账号',
+                  '登录你的智汇视记账号',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         fontSize: 15,
                         color: AppColors.textSecondary,

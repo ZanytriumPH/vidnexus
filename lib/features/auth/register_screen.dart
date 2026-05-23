@@ -51,12 +51,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    onPressed: () => AppNavigator.popCurrent(context),
-                    icon: const Icon(Icons.arrow_back_rounded, size: 24),
-                    color: AppColors.textPrimary,
+                Visibility(
+                  visible: Navigator.canPop(context),
+                  maintainSize: true,
+                  maintainAnimation: true,
+                  maintainState: true,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      onPressed: () => AppNavigator.popCurrent(context),
+                      icon: const Icon(Icons.arrow_back_rounded, size: 24),
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -70,7 +76,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '注册 VidNexus，开始智能视频分析',
+                  '注册智汇视记，开始智能视频分析',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         fontSize: 15,
                         color: AppColors.textSecondary,
