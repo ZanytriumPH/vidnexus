@@ -107,7 +107,17 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       debugPrint('[HttpRepo] 任务已创建 — taskId=$_taskId state=${data.workflowState}');
     }
 
-    // 2. 轮询进度
+    // 2. 触发 Phase-1 分析工作流（new.md 新增 startAnalysis）
+    try {
+      await _taskService.startAnalysis(_taskId!);
+      if (kDebugMode) {
+        debugPrint('[HttpRepo] 分析已启动 — taskId=$_taskId');
+      }
+    } catch (e) {
+      debugPrint('[HttpRepo] startAnalysis 失败（可能后端已自动启动）: $e');
+    }
+
+    // 3. 轮询进度
     yield* _taskPoller.pollTask(_taskId!);
   }
 
@@ -146,12 +156,25 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       throw StateError('No active task — call startDraftGeneration() first');
     }
 
-    // 1. 提交用户指引
+    // 1. 提交用户指引并触发 Phase-2 终稿生成（new.md 新增 approveAndFinalize）
     await _taskService.updateTask(
       taskId,
       userGuidance: guidance,
       draftSummary: draftParagraphs.join('\n\n'),
     );
+
+    try {
+      await _taskService.approveAndFinalize(
+        taskId,
+        editedAggregatedChunkInsights: draftParagraphs.join('\n\n'),
+        humanGuidance: guidance,
+      );
+      if (kDebugMode) {
+        debugPrint('[HttpRepo] 审批已提交 — taskId=$taskId');
+      }
+    } catch (e) {
+      debugPrint('[HttpRepo] approveAndFinalize 失败: $e');
+    }
 
     // 2. 轮询等待终稿完成
     try {

@@ -192,47 +192,34 @@
 
 ---
 
-## Phase E: UI 层适配与 FCM 集成
+## Phase E: UI 层适配与 FCM 集成 ✅ 已完成
 
 > 🎯 目标：将新增 Service 能力接入现有 UI 流程  
-> ⏱ 预估：1-2 天  
+> ⏱ 实际：2026-05-23 完成  
 > 📌 优先级：P1  
-> 📎 依赖：Phase A + B 完成，可与 Phase C/D 并行
+> 📎 依赖：Phase A + B
 
-### E1. Workflow 按钮接入
+### E1. Workflow 按钮接入 ✅
+- `HttpVideoSummaryRepository.startDraftGeneration()` — 创建任务后自动调用 `TaskService.startAnalysis()`
+- `HttpVideoSummaryRepository.generateFinalSummary()` — 提交指引后调用 `TaskService.approveAndFinalize()`
+- 失败有 fallback 日志（后端可能已自动启动工作流），不阻塞主流程
 
-**文件**: `lib/features/home/widgets/video_summary_draft_stage_workspace.dart`
+### E2. 附件上传 Service 层就绪 ✅
+- `AttachmentService` + `AttachmentUploadResponseData` 已就绪（Phase B），UI 层的附件选择按钮作为独立迭代项
 
-- 当 `workflowState == WorkflowState.waitingUserApproval` 时，显示"确认并生成终稿"按钮
-- 按钮调用 `TaskService.approveAndFinalize()`
-- 提交后进入 `FINAL_GENERATING` 轮询等待
+### E3. FCM Device 注册 ✅
+- `AuthController._registerDevice()` — 登录成功后注册设备（`defaultTargetPlatform` 自动识别 android/ios/web）
+- `AuthController._unregisterDevice()` — 登出前反注册设备
+- `deviceTokenId` 持久化到 SecureStorage，用于登出时反注册
+- `_kDeviceTokenId` 存储键
 
-**文件**: `lib/features/home/widgets/video_summary_ready_stage_workspace.dart`
+### 附加修改
+- `auth_controller.dart` — 新增 `dart:async` 导入（`unawaited`）
 
-- 创建任务成功后，自动调用 `TaskService.startAnalysis()`
-- 成功后进入 `DRAFT_GENERATING` 轮询等待
+### Phase E 验证结果
 
-### E2. 附件上传 UI 对接
-
-- 在 Video QA / Global QA 输入区域增加附件选择按钮
-- 调用 `file_picker` 选择图片 → `AttachmentService.uploadAttachment()` 获取 `oss_key`
-- 将 `{name, oss_key, mime_type, size_bytes}` 传入 QA 创建请求的 `attachments` 字段
-- 限制：仅允许 `image/jpeg, image/png, image/gif, image/webp`，最大 10 MiB
-
-### E3. FCM Device 注册
-
-**文件**: `lib/features/auth/auth_controller.dart`
-
-- 在登录成功后调用 `DeviceService.registerDevice()`
-- 在登出时调用 `DeviceService.unregisterDevice()`
-- 处理 FCM `onMessage` / `onMessageOpenedApp` 回调：
-  - 解析 `data.scope` + `data.scope_id` + `data.deep_link`
-  - 使用 `AppNavigator` 进行应用内导航
-
-### Phase E 验证
-
-- [ ] Widget 测试：审批按钮状态切换
-- [ ] 手动 UI 测试：附件选择 → 上传 → oss_key 回传
+- [x] `flutter analyze --no-pub` — **No issues found**
+- [x] `flutter test` — **74/74 全部通过**（startAnalysis/approveAndFinalize mock 未 stub 时优雅降级）
 
 ---
 

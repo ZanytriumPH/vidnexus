@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -6,6 +9,7 @@ import '../../services/api/api_client.dart';
 import '../../services/api/auth_interceptor.dart';
 import '../../services/models/auth_dto.dart';
 import '../../services/models/common_dto.dart';
+import '../../services/service_providers.dart';
 import 'auth_service.dart';
 import 'auth_state.dart';
 
@@ -13,6 +17,7 @@ import 'auth_state.dart';
 const _kAccessToken = 'auth.access_token';
 const _kRefreshToken = 'auth.refresh_token';
 const _kDeviceId = 'auth.device_id';
+const _kDeviceTokenId = 'auth.device_token_id';
 
 /// AuthService provider。
 final authServiceProvider = Provider<AuthService>((ref) => const AuthService());
@@ -76,6 +81,8 @@ class AuthController extends Notifier<AuthState> {
           refreshToken: resp.data!.refreshToken,
           currentUser: resp.data!.user,
         );
+        // 注册 FCM 设备（new.md 新增）
+        unawaited(_registerDevice(deviceId));
       }
     } on DioException catch (e) {
       _handleError(e);
@@ -92,6 +99,8 @@ class AuthController extends Notifier<AuthState> {
   /// [isSessionExpired] 为 true 时表示因 token 过期被动登出，
   /// 此时会设置 sessionExpired 标志，供 UI 层弹出提示。
   Future<void> logout({bool isSessionExpired = false}) async {
+    // 反注册 FCM 设备（new.md 新增）
+    await _unregisterDevice();
     await secureStorage.delete(key: _kAccessToken);
     await secureStorage.delete(key: _kRefreshToken);
     // 不清除 deviceId，保留用于下次登录
@@ -245,5 +254,45 @@ class AuthController extends Notifier<AuthState> {
       isLoading: false,
       errorMessage: apiError.userMessage,
     );
+  }
+
+  /// 注册设备到后端（new.md 新增 DeviceService）。
+  Future<void> _registerDevice(String deviceId) async {
+    try {
+      final deviceSvc = ref.read(deviceServiceProvider);
+      final platform = defaultTargetPlatform == TargetPlatform.android
+          ? 'android'
+          : defaultTargetPlatform == TargetPlatform.iOS
+              ? 'ios'
+              : 'web';
+      final resp = await deviceSvc.registerDevice(
+        deviceToken: deviceId, // FCM token 未集成时使用 deviceId 占位
+        platform: platform,
+        appVersion: '1.0.0',
+        deviceId: deviceId,
+      );
+      if (resp.data != null) {
+        await secureStorage.write(
+          key: _kDeviceTokenId,
+          value: resp.data!.deviceTokenId,
+        );
+      }
+    } catch (e) {
+      // 设备注册失败不阻塞登录流程
+      debugPrint('[Auth] Device registration failed: $e');
+    }
+  }
+
+  /// 反注册设备（登出时调用）。
+  Future<void> _unregisterDevice() async {
+    try {
+      final deviceTokenId = await secureStorage.read(key: _kDeviceTokenId);
+      if (deviceTokenId == null || deviceTokenId.isEmpty) return;
+      final deviceSvc = ref.read(deviceServiceProvider);
+      await deviceSvc.unregisterDevice(deviceTokenId);
+      await secureStorage.delete(key: _kDeviceTokenId);
+    } catch (e) {
+      debugPrint('[Auth] Device unregistration failed: $e');
+    }
   }
 }
