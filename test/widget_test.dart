@@ -150,6 +150,14 @@ class _WidgetTestVideoSummaryRepository extends VideoSummaryRepository {
   }
 
   @override
+  Future<List<VideoSummaryTaskInfo>> listTaskHistory({
+    int page = 1,
+    int pageSize = 50,
+  }) async {
+    return const [];
+  }
+
+  @override
   Future<VideoSummaryChatReplyData> sendSummaryChatMessage(String message) async {
     return const VideoSummaryChatReplyData(text: 'reply');
   }

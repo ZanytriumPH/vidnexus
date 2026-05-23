@@ -106,6 +106,13 @@ class ApiClient {
 
   /// 生成请求追踪 ID。
   static String generateRequestId() => _config.generateRequestId();
+
+  /// 仅用于测试：注入外部 Dio 实例替代内部单例。
+  ///
+  /// 调用后 [instance] 返回注入的 Dio。测试结束后应调用 [reset] 清理。
+  static void injectTestDio(Dio dio) {
+    _instance = dio;
+  }
 }
 
 /// 安全存储单例，供 auth 层持久化 token。

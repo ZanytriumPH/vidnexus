@@ -100,3 +100,82 @@ class TaskDeleteResponseData {
     return TaskDeleteResponseData(taskId: json['task_id'] as String? ?? '');
   }
 }
+
+// ──── new.md 新增 Workflow DTO ────
+
+/// POST /api/v1/tasks/{task_id}/start-analysis 响应 data。
+class StartAnalysisResponseData {
+  const StartAnalysisResponseData({
+    required this.taskId,
+    this.celeryTaskId,
+    this.threadId,
+    this.workflowState,
+    this.acceptedAt,
+    this.message,
+  });
+
+  final String taskId;
+  final String? celeryTaskId;
+  final String? threadId;
+  final String? workflowState;
+  final String? acceptedAt;
+  final String? message;
+
+  factory StartAnalysisResponseData.fromJson(Map<String, dynamic> json) {
+    return StartAnalysisResponseData(
+      taskId: json['task_id'] as String? ?? '',
+      celeryTaskId: json['celery_task_id'] as String?,
+      threadId: json['thread_id'] as String?,
+      workflowState: json['workflow_state'] as String?,
+      acceptedAt: json['accepted_at'] as String?,
+      message: json['message'] as String?,
+    );
+  }
+}
+
+/// POST /api/v1/tasks/{task_id}/approve-and-finalize 请求体。
+class ApproveAndFinalizeRequest {
+  const ApproveAndFinalizeRequest({
+    this.editedAggregatedChunkInsights,
+    this.humanGuidance,
+  });
+
+  final String? editedAggregatedChunkInsights;
+  final String? humanGuidance;
+
+  Map<String, dynamic> toJson() => {
+        if (editedAggregatedChunkInsights != null)
+          'edited_aggregated_chunk_insights': editedAggregatedChunkInsights,
+        if (humanGuidance != null) 'human_guidance': humanGuidance,
+      };
+}
+
+/// POST /api/v1/tasks/{task_id}/approve-and-finalize 响应 data。
+class ApproveAndFinalizeResponseData {
+  const ApproveAndFinalizeResponseData({
+    required this.taskId,
+    this.celeryTaskId,
+    this.threadId,
+    this.workflowState,
+    this.acceptedAt,
+    this.message,
+  });
+
+  final String taskId;
+  final String? celeryTaskId;
+  final String? threadId;
+  final String? workflowState;
+  final String? acceptedAt;
+  final String? message;
+
+  factory ApproveAndFinalizeResponseData.fromJson(Map<String, dynamic> json) {
+    return ApproveAndFinalizeResponseData(
+      taskId: json['task_id'] as String? ?? '',
+      celeryTaskId: json['celery_task_id'] as String?,
+      threadId: json['thread_id'] as String?,
+      workflowState: json['workflow_state'] as String?,
+      acceptedAt: json['accepted_at'] as String?,
+      message: json['message'] as String?,
+    );
+  }
+}

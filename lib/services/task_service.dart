@@ -88,4 +88,34 @@ class TaskService {
       TaskDeleteResponseData.fromJson,
     );
   }
+
+  /// 触发 Phase-1 分析工作流（new.md 新增）。
+  Future<ApiResponse<StartAnalysisResponseData>> startAnalysis(
+    String taskId,
+  ) async {
+    final resp = await _dio.post(ApiEndpoints.taskStartAnalysis(taskId));
+    return ApiResponse.fromJson(
+      resp.data as Map<String, dynamic>,
+      StartAnalysisResponseData.fromJson,
+    );
+  }
+
+  /// 提交审批并触发 Phase-2 终稿生成（new.md 新增）。
+  Future<ApiResponse<ApproveAndFinalizeResponseData>> approveAndFinalize(
+    String taskId, {
+    String? editedAggregatedChunkInsights,
+    String? humanGuidance,
+  }) async {
+    final resp = await _dio.post(
+      ApiEndpoints.taskApproveAndFinalize(taskId),
+      data: ApproveAndFinalizeRequest(
+        editedAggregatedChunkInsights: editedAggregatedChunkInsights,
+        humanGuidance: humanGuidance,
+      ).toJson(),
+    );
+    return ApiResponse.fromJson(
+      resp.data as Map<String, dynamic>,
+      ApproveAndFinalizeResponseData.fromJson,
+    );
+  }
 }
