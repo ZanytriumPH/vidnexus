@@ -179,13 +179,16 @@ class ApiListResponse<T> {
   }
 }
 
-/// 通用错误响应（兼容 FastAPI detail 与全局 500 格式）。
+/// 通用错误响应（兼容 FastAPI detail 与全局 500 格式，以及 new.md ErrorResponse）。
 class ApiError {
   const ApiError({
     this.detail,
     this.status,
     this.message,
     this.statusCode,
+    this.code,
+    this.isRetryable,
+    this.retryAfter,
   });
 
   final String? detail;
@@ -193,14 +196,23 @@ class ApiError {
   final String? message;
   final int? statusCode;
 
+  /// 来自 new.md ErrorResponse 的字段。
+  final String? code;
+  final bool? isRetryable;
+  final int? retryAfter;
+
   factory ApiError.fromDioException(DioException e) {
     final data = e.response?.data;
     if (data is Map<String, dynamic>) {
+      final error = data['error'] as Map<String, dynamic>?;
       return ApiError(
         detail: data['detail'] as String?,
         status: data['status'] as String?,
-        message: data['message'] as String?,
+        message: data['message'] as String? ?? error?['message'] as String?,
         statusCode: e.response?.statusCode,
+        code: error?['code'] as String?,
+        isRetryable: error?['is_retryable'] as bool?,
+        retryAfter: error?['retry_after'] as int?,
       );
     }
     return ApiError(

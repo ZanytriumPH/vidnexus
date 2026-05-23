@@ -183,7 +183,7 @@ class VideoSummarySessionHistoryController
   VideoSummaryStage _stageFromWorkflowState(WorkflowState state) {
     return switch (state) {
       WorkflowState.draftGenerating => VideoSummaryStage.processing,
-      WorkflowState.draftReady => VideoSummaryStage.draft,
+      WorkflowState.waitingUserApproval => VideoSummaryStage.draft,
       WorkflowState.finalGenerating => VideoSummaryStage.processing,
       WorkflowState.completed => VideoSummaryStage.finalChat,
       WorkflowState.failed => VideoSummaryStage.ready,

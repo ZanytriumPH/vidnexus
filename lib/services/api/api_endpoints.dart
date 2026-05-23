@@ -45,4 +45,30 @@ class ApiEndpoints {
       '$basePath/kbs/$kbid/chats/$chatId/qa';
   static String kbChatQa(String kbid, String chatId, String qaId) =>
       '$basePath/kbs/$kbid/chats/$chatId/qa/$qaId';
+
+  // -- task workflow (new.md 新增) --
+  static String taskStartAnalysis(String taskId) =>
+      '$basePath/tasks/$taskId/start-analysis';
+  static String taskApproveAndFinalize(String taskId) =>
+      '$basePath/tasks/$taskId/approve-and-finalize';
+
+  // -- time-travel QA stream (new.md 新增) --
+  static String taskTimeTravelQAStream(String taskId) =>
+      '$basePath/tasks/$taskId/time-travel-qa/stream';
+
+  // -- global QA stream (new.md 新增) --
+  static String kbChatQAStream(String kbid, String chatId) =>
+      '$basePath/kbs/$kbid/chats/$chatId/qa/stream';
+
+  // -- attachments (new.md 新增) --
+  static const String attachmentsUpload = '$basePath/attachments/upload';
+
+  // -- uploads TUS (new.md 新增) --
+  static const String uploads = '$basePath/uploads';
+  static String upload(String uploadId) => '$basePath/uploads/$uploadId';
+
+  // -- devices (new.md 新增) --
+  static const String devices = '$basePath/devices';
+  static String device(String deviceTokenId) =>
+      '$basePath/devices/$deviceTokenId';
 }

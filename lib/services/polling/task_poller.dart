@@ -49,7 +49,7 @@ class TaskPoller {
   /// 轮询 task 直到终态，每次状态变化产出 [VideoSummaryProcessingData]。
   ///
   /// 终态规则：
-  /// - DRAFT_READY / COMPLETED → 流正常关闭
+  /// - WAITING_USER_APPROVAL / COMPLETED → 流正常关闭
   /// - FAILED → 抛出 [TaskFailedException]
   /// - 超时 → 抛出 [PollingTimeoutException]
   Stream<VideoSummaryProcessingData> pollTask(String taskId) async* {
@@ -117,7 +117,7 @@ class TaskPoller {
   VideoSummaryProcessingStage _mapStage(WorkflowState state) {
     return switch (state) {
       WorkflowState.draftGenerating => VideoSummaryProcessingStage.dispatchingChunks,
-      WorkflowState.draftReady => VideoSummaryProcessingStage.waitingHumanReview,
+      WorkflowState.waitingUserApproval => VideoSummaryProcessingStage.waitingHumanReview,
       WorkflowState.finalGenerating => VideoSummaryProcessingStage.aggregatingChunks,
       WorkflowState.completed => VideoSummaryProcessingStage.waitingHumanReview,
       WorkflowState.failed => VideoSummaryProcessingStage.acquiringVideo,
@@ -129,7 +129,7 @@ class TaskPoller {
     final title = dto.title ?? '';
     return switch (state) {
       WorkflowState.draftGenerating => '正在生成结构化初稿…$title',
-      WorkflowState.draftReady => '初稿已生成，请查看并编辑',
+      WorkflowState.waitingUserApproval => '初稿已生成，请查看并编辑',
       WorkflowState.finalGenerating => '正在根据您的指引生成终稿…',
       WorkflowState.completed => '终稿已完成',
       WorkflowState.failed => '处理失败，请重试',
@@ -146,7 +146,7 @@ class TaskPoller {
       case WorkflowState.draftGenerating:
         // 10 ticks 内从 0.1 → 0.85
         return (0.1 + (tick * 0.075)).clamp(0.0, 0.85);
-      case WorkflowState.draftReady:
+      case WorkflowState.waitingUserApproval:
         return 0.9;
       case WorkflowState.finalGenerating:
         // 5 ticks 内从 0.9 → 0.99
@@ -165,13 +165,13 @@ class TaskPoller {
   ) {
     final preprocessProgress = state == WorkflowState.draftGenerating ||
             state == WorkflowState.finalGenerating ||
-            state == WorkflowState.draftReady ||
+            state == WorkflowState.waitingUserApproval ||
             state == WorkflowState.completed
         ? 100
         : 0;
 
     final analysisProgress = switch (state) {
-      WorkflowState.draftReady || WorkflowState.completed => 100,
+      WorkflowState.waitingUserApproval || WorkflowState.completed => 100,
       WorkflowState.draftGenerating ||
       WorkflowState.finalGenerating =>
         ((progress - 0.1) / 0.75 * 100).round().clamp(0, 100),
@@ -180,7 +180,7 @@ class TaskPoller {
 
     final synthesisProgress = switch (state) {
       WorkflowState.completed => 100,
-      WorkflowState.draftReady => 85,
+      WorkflowState.waitingUserApproval => 85,
       WorkflowState.finalGenerating =>
         ((progress - 0.85) / 0.14 * 100).round().clamp(0, 100),
       _ => 0,

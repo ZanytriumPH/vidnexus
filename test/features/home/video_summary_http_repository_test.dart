@@ -93,9 +93,9 @@ void main() {
           WorkflowState.draftGenerating);
     });
 
-    test('parses DRAFT_READY from API string', () {
+    test('parses WAITING_USER_APPROVAL from API string', () {
       expect(
-          WorkflowState.fromApi('DRAFT_READY'), WorkflowState.draftReady);
+          WorkflowState.fromApi('WAITING_USER_APPROVAL'), WorkflowState.waitingUserApproval);
     });
 
     test('parses FINAL_GENERATING from API string', () {
@@ -116,8 +116,8 @@ void main() {
           WorkflowState.fromApi('UNKNOWN_STATE'), WorkflowState.failed);
     });
 
-    test('isTerminal returns true for DRAFT_READY', () {
-      expect(WorkflowState.draftReady.isTerminal, isTrue);
+    test('isTerminal returns true for WAITING_USER_APPROVAL', () {
+      expect(WorkflowState.waitingUserApproval.isTerminal, isTrue);
     });
 
     test('isTerminal returns true for COMPLETED', () {
@@ -134,7 +134,7 @@ void main() {
 
     test('label returns Chinese labels for all states', () {
       expect(WorkflowState.draftGenerating.label, '生成初稿中');
-      expect(WorkflowState.draftReady.label, '初稿就绪');
+      expect(WorkflowState.waitingUserApproval.label, '等待用户审批');
       expect(WorkflowState.finalGenerating.label, '生成终稿中');
       expect(WorkflowState.completed.label, '已完成');
       expect(WorkflowState.failed.label, '处理失败');
@@ -144,7 +144,7 @@ void main() {
   // ──── TaskPoller 轮询逻辑 ────
 
   group('TaskPoller polling', () {
-    test('yields processing data and completes on DRAFT_READY', () async {
+    test('yields processing data and completes on WAITING_USER_APPROVAL', () async {
       // First call: DRAFT_GENERATING
       when(() => mockTaskService.getTask(testTaskId)).thenAnswer(
         (_) async => _apiResponse(
@@ -253,7 +253,7 @@ void main() {
     late HttpVideoSummaryRepository repository;
 
     /// Helper: stub createTask + getTask so that startDraftGeneration
-    /// creates a task and the poller terminates immediately (DRAFT_READY).
+    /// creates a task and the poller terminates immediately (WAITING_USER_APPROVAL).
     void stubTaskCreationAndPollCompletion() {
       when(() => mockTaskService.createTask(
             kbid: testKbid,
@@ -264,10 +264,10 @@ void main() {
         ),
       );
 
-      // getTask returns DRAFT_READY so poller terminates after first tick.
+      // getTask returns WAITING_USER_APPROVAL so poller terminates after first tick.
       when(() => mockTaskService.getTask(testTaskId)).thenAnswer(
         (_) async => _apiResponse(
-          _taskResponse(workflowState: 'DRAFT_READY'),
+          _taskResponse(workflowState: 'WAITING_USER_APPROVAL'),
         ),
       );
     }
@@ -295,13 +295,13 @@ void main() {
       stubTaskCreationAndPollCompletion();
 
       final genStream = repository.startDraftGeneration();
-      await genStream.first; // Poller terminates on DRAFT_READY
+      await genStream.first; // Poller terminates on WAITING_USER_APPROVAL
 
       // Re-stub getTask for fetchDraftResult
       when(() => mockTaskService.getTask(testTaskId)).thenAnswer(
         (_) async => _apiResponse(
           _taskResponse(
-            workflowState: 'DRAFT_READY',
+            workflowState: 'WAITING_USER_APPROVAL',
             draftSummary: '第一段内容。\n\n第二段内容。\n\n第三段，测试。',
           ),
         ),
@@ -324,7 +324,7 @@ void main() {
       when(() => mockTaskService.getTask(testTaskId)).thenAnswer(
         (_) async => _apiResponse(
           _taskResponse(
-            workflowState: 'DRAFT_READY',
+            workflowState: 'WAITING_USER_APPROVAL',
             draftSummary: '只有一段内容不含双换行。',
           ),
         ),
@@ -345,7 +345,7 @@ void main() {
       when(() => mockTaskService.getTask(testTaskId)).thenAnswer(
         (_) async => _apiResponse(
           _taskResponse(
-            workflowState: 'DRAFT_READY',
+            workflowState: 'WAITING_USER_APPROVAL',
             draftSummary: '',
           ),
         ),
@@ -584,14 +584,14 @@ void main() {
         taskId: 'task-1',
         videoId: 'vid-1',
         kbid: 'kb-1',
-        workflowState: WorkflowState.draftReady,
+        workflowState: WorkflowState.waitingUserApproval,
         draftSummary: 'draft',
         finalSummary: null,
         fileName: 'test.mp4',
       );
 
       expect(info.taskId, 'task-1');
-      expect(info.workflowState, WorkflowState.draftReady);
+      expect(info.workflowState, WorkflowState.waitingUserApproval);
       expect(info.workflowState.isTerminal, isTrue);
     });
   });

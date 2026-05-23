@@ -26,6 +26,7 @@ class VideoResourceResponseData {
     required this.ownerId,
     required this.fileName,
     this.ossKey,
+    this.presignedUrl,
     this.duration,
     this.fullTranscript,
     this.transcribeStatus,
@@ -41,6 +42,7 @@ class VideoResourceResponseData {
   final String ownerId;
   final String fileName;
   final String? ossKey;
+  final String? presignedUrl;
   final int? duration;
   final String? fullTranscript;
   final String? transcribeStatus;
@@ -57,6 +59,7 @@ class VideoResourceResponseData {
       ownerId: json['owner_id'] as String? ?? '',
       fileName: json['file_name'] as String? ?? '',
       ossKey: json['oss_key'] as String?,
+      presignedUrl: json['presigned_url'] as String?,
       duration: json['duration'] as int?,
       fullTranscript: json['full_transcript'] as String?,
       transcribeStatus: json['transcribe_status'] as String?,

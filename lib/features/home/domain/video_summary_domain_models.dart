@@ -119,7 +119,7 @@ class VideoSummaryChatReplyData {
 /// 对齐后端 API 的 workflow_state 字段。
 enum WorkflowState {
   draftGenerating,
-  draftReady,
+  waitingUserApproval,
   finalGenerating,
   completed,
   failed;
@@ -128,7 +128,7 @@ enum WorkflowState {
   factory WorkflowState.fromApi(String value) {
     return switch (value) {
       'DRAFT_GENERATING' => WorkflowState.draftGenerating,
-      'DRAFT_READY' => WorkflowState.draftReady,
+      'WAITING_USER_APPROVAL' => WorkflowState.waitingUserApproval,
       'FINAL_GENERATING' => WorkflowState.finalGenerating,
       'COMPLETED' => WorkflowState.completed,
       'FAILED' => WorkflowState.failed,
@@ -138,7 +138,7 @@ enum WorkflowState {
 
   /// 是否为终态（轮询应停止）。
   bool get isTerminal =>
-      this == WorkflowState.draftReady ||
+      this == WorkflowState.waitingUserApproval ||
       this == WorkflowState.completed ||
       this == WorkflowState.failed;
 
@@ -146,7 +146,7 @@ enum WorkflowState {
   String get label {
     return switch (this) {
       WorkflowState.draftGenerating => '生成初稿中',
-      WorkflowState.draftReady => '初稿就绪',
+      WorkflowState.waitingUserApproval => '等待用户审批',
       WorkflowState.finalGenerating => '生成终稿中',
       WorkflowState.completed => '已完成',
       WorkflowState.failed => '处理失败',

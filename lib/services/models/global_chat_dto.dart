@@ -42,15 +42,15 @@ class CitedSource {
 class GlobalChatCreateRequest {
   const GlobalChatCreateRequest({
     required this.kbid,
-    required this.chatTitle,
+    this.chatTitle,
   });
 
   final String kbid;
-  final String chatTitle;
+  final String? chatTitle;
 
   Map<String, dynamic> toJson() => {
         'kbid': kbid,
-        'chat_title': chatTitle,
+        if (chatTitle != null) 'chat_title': chatTitle,
       };
 }
 

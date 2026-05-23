@@ -8,12 +8,14 @@ class AttachmentInfo {
     required this.ossKey,
     required this.mimeType,
     required this.sizeBytes,
+    this.presignedUrl,
   });
 
   final String name;
   final String ossKey;
   final String mimeType;
   final int sizeBytes;
+  final String? presignedUrl;
 
   factory AttachmentInfo.fromJson(Map<String, dynamic> json) {
     return AttachmentInfo(
@@ -21,6 +23,7 @@ class AttachmentInfo {
       ossKey: json['oss_key'] as String? ?? '',
       mimeType: json['mime_type'] as String? ?? '',
       sizeBytes: json['size_bytes'] as int? ?? 0,
+      presignedUrl: json['presigned_url'] as String?,
     );
   }
 
