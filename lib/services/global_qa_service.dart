@@ -6,6 +6,8 @@ import 'api/paginated_mixin.dart';
 import 'models/common_dto.dart';
 import 'models/global_chat_dto.dart';
 import 'models/video_qa_dto.dart';
+import 'sse/sse_client.dart';
+import 'sse/sse_models.dart';
 
 /// 知识库全局问答 CRUD Service，与后端 /api/v1/kbs/{kbid}/chats/{chat_id}/qa 路由对齐。
 class GlobalQAService {
@@ -86,6 +88,22 @@ class GlobalQAService {
     return ApiResponse.fromJson(
       resp.data as Map<String, dynamic>,
       QADeleteResponseData.fromJson,
+    );
+  }
+
+  /// 通过 SSE 流式获取全局 QA 回答（new.md 新增）。
+  Stream<SSEEvent> createQAStream({
+    required String kbid,
+    required String chatId,
+    required String questionContent,
+    List<AttachmentInfo> attachments = const [],
+  }) {
+    return SseClient.instance.connect(
+      ApiEndpoints.kbChatQAStream(kbid, chatId),
+      data: GlobalQACreateRequest(
+        questionContent: questionContent,
+        attachments: attachments,
+      ).toJson(),
     );
   }
 }

@@ -19,6 +19,7 @@ extension PaginatedDioExtension on Dio {
   }) async {
     final query = <String, dynamic>{
       ...params.toQueryParameters(),
+      // ignore: use_null_aware_elements
       if (extraQuery != null) ...extraQuery,
     };
 

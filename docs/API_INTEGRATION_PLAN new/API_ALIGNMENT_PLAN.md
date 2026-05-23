@@ -122,199 +122,35 @@
 
 ---
 
-## Phase C: SSE 流式协议支持（实时 QA 生成）
+## Phase C: SSE 流式协议支持（实时 QA 生成） ✅ 已完成
 
 > 🎯 目标：替换 QA 场景的 HTTP 轮询为 SSE 流式推送  
-> ⏱ 预估：2-3 天  
+> ⏱ 实际：2026-05-23 完成  
 > 📌 优先级：P1  
-> 📎 依赖：Phase A、Phase B（B1/C2/C3 需要 B1 的 endpoint 常量）
+> 📎 依赖：Phase A、Phase B
 
-### C1. SSE 客户端基础能力
+### C1. SSE 客户端基础能力 ✅
+- **新建** `lib/services/sse/sse_client.dart` — 基于 Dio `ResponseType.stream` 的 SSE 解析
+  - 处理 `text/event-stream` 响应
+  - `_toLines()` 字节流→行流转换
+  - `_dispatch()` 事件分发（start/delta/done/error）
+  - 返回 `Stream<SSEEvent>`
+- **新建** `lib/services/sse/sse_models.dart` — SSE 事件模型
+  - `SSEEventType` 枚举、`SSEEvent` 类
+  - `TimeTravelQAStreamRequest` / `TimeTravelQAStartData` / `SSEDeltaData` / `TimeTravelQADoneData`
+  - `GlobalQAStartData` / `GlobalQADoneData`
 
-**新建文件**: `lib/services/sse/sse_client.dart`
+### C2. VideoQAService 新增流式方法 ✅
+- `createTimeTravelQAStream(taskId, request)` → `POST /api/v1/tasks/{taskId}/time-travel-qa/stream`
 
-- 基于 `dio` 的 `responseType: ResponseType.stream` 实现 SSE 解析
-- 处理 `text/event-stream` 响应格式
-- 事件类型枚举：`start` / `delta` / `done` / `error`
-- 返回 `Stream<SSEEvent>`
+### C3. GlobalQAService 新增流式方法 ✅
+- `createQAStream(kbid, chatId, questionContent, attachments)` → `POST /api/v1/kbs/{kbid}/chats/{chatId}/qa/stream`
 
-**新建文件**: `lib/services/sse/sse_models.dart`
+### Phase C 验证结果
 
-```dart
-/// SSE 事件类型枚举。
-enum SSEEventType { start, delta, done, error }
-
-/// 通用 SSE 事件结构。
-class SSEEvent {
-  const SSEEvent({
-    required this.type,
-    this.data,
-  });
-
-  final SSEEventType type;
-  final Map<String, dynamic>? data;
-
-  /// 尝试将 data 解析为指定类型。
-  T? parseData<T>(T Function(Map<String, dynamic>) fromJson) {
-    if (data == null) return null;
-    return fromJson(data!);
-  }
-}
-
-/// POST /api/v1/tasks/{task_id}/time-travel-qa/stream 请求体。
-class TimeTravelQAStreamRequest {
-  const TimeTravelQAStreamRequest({
-    required this.timestamp,
-    required this.questionContent,
-    this.attachments = const [],
-    this.windowSeconds,
-  });
-
-  final String timestamp;        // 格式：HH:MM:SS
-  final String questionContent;  // 也可传 question 别名
-  final List<AttachmentInfo> attachments;
-  final int? windowSeconds;     // 5~300，null=全量 RAG
-
-  Map<String, dynamic> toJson() => {
-        'timestamp': timestamp,
-        'question_content': questionContent,
-        'attachments': attachments.map((a) => a.toJson()).toList(),
-        if (windowSeconds != null) 'window_seconds': windowSeconds,
-      };
-}
-
-/// SSE start 事件的 data 载荷（time-travel QA）。
-class TimeTravelQAStartData {
-  const TimeTravelQAStartData({
-    required this.taskId,
-    required this.qaId,
-    this.timestamp,
-  });
-  final String taskId;
-  final String qaId;
-  final String? timestamp;
-
-  factory TimeTravelQAStartData.fromJson(Map<String, dynamic> json) =>
-      TimeTravelQAStartData(
-        taskId: json['task_id'] as String? ?? '',
-        qaId: json['qa_id'] as String? ?? '',
-        timestamp: json['timestamp'] as String?,
-      );
-}
-
-/// SSE delta 事件的 data 载荷。
-class SSE DeltaData {
-  const SSEDeltaData({
-    required this.taskId,
-    required this.qaId,
-    required this.chunk,
-    required this.sequence,
-    this.timestamp,
-  });
-  final String taskId;
-  final String qaId;
-  final String chunk;
-  final int sequence;
-  final String? timestamp;
-
-  factory SSEDeltaData.fromJson(Map<String, dynamic> json) => SSEDeltaData(
-        taskId: json['task_id'] as String? ?? '',
-        qaId: json['qa_id'] as String? ?? '',
-        chunk: json['chunk'] as String? ?? '',
-        sequence: json['sequence'] as int? ?? 0,
-        timestamp: json['timestamp'] as String?,
-      );
-}
-
-/// SSE done 事件的 data 载荷。
-class SSE DoneData {
-  const SSEDoneData({
-    required this.taskId,
-    required this.qaId,
-    this.answerContent,
-    this.timestamp,
-  });
-  final String taskId;
-  final String qaId;
-  final String? answerContent;
-  final String? timestamp;
-
-  factory SSEDoneData.fromJson(Map<String, dynamic> json) => SSEDoneData(
-        taskId: json['task_id'] as String? ?? '',
-        qaId: json['qa_id'] as String? ?? '',
-        answerContent: json['answer_content'] as String?,
-        timestamp: json['timestamp'] as String?,
-      );
-}
-
-/// Global QA 版本的 SSE 载荷。
-class GlobalQAStartData {
-  const GlobalQAStartData({
-    required this.kbid,
-    required this.chatId,
-    required this.qaId,
-    this.timestamp,
-  });
-  final String kbid;
-  final String chatId;
-  final String qaId;
-  final String? timestamp;
-
-  factory GlobalQAStartData.fromJson(Map<String, dynamic> json) =>
-      GlobalQAStartData(
-        kbid: json['kbid'] as String? ?? '',
-        chatId: json['chat_id'] as String? ?? '',
-        qaId: json['qa_id'] as String? ?? '',
-        timestamp: json['timestamp'] as String?,
-      );
-}
-```
-
-### C2. VideoQAService 新增流式方法
-
-**文件**: `lib/services/video_qa_service.dart`
-
-```dart
-/// 通过 SSE 流式获取 time-travel QA 回答。
-Stream<SSEEvent> createTimeTravelQAStream(
-  String taskId,
-  TimeTravelQAStreamRequest request,
-) {
-  return SseClient.instance.connect(
-    ApiEndpoints.taskTimeTravelQAStream(taskId),
-    data: request.toJson(),
-  );
-}
-```
-
-### C3. GlobalQAService 新增流式方法
-
-**文件**: `lib/services/global_qa_service.dart`
-
-```dart
-/// 通过 SSE 流式获取全局 QA 回答。
-Stream<SSEEvent> createQAStream({
-  required String kbid,
-  required String chatId,
-  required String questionContent,
-  List<AttachmentInfo> attachments = const [],
-}) {
-  return SseClient.instance.connect(
-    ApiEndpoints.kbChatQAStream(kbid, chatId),
-    data: GlobalQACreateRequest(
-      questionContent: questionContent,
-      attachments: attachments,
-    ).toJson(),
-  );
-}
-```
-
-### Phase C 验证
-
-- [ ] SSE 客户端单元测试（模拟 Dio stream 响应）
-- [ ] 验证 start → delta×N → done 事件流完整解析
-- [ ] 验证 error 事件处理
-- [ ] 现有 `QAPoller` 作为降级 fallback 保持可用
+- [x] `flutter analyze --no-pub` — 仅 1 个预存 warning
+- [x] `flutter test` — **64/64 全部通过**（53 原有 + 11 新增 SSE 测试）
+- [x] SSE 测试覆盖：start/delta/done/error 解析、多事件流、未知事件忽略、DTO 序列化
 
 ---
 
