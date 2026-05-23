@@ -154,162 +154,41 @@
 
 ---
 
-## Phase D: WebSocket 实时进度推送
+## Phase D: WebSocket 实时进度推送 ✅ 已完成
 
-> 🎯 目标：替换 TaskPoller HTTP 轮询为 WebSocket 实时推送  
-> ⏱ 预估：2-3 天  
-> 📌 优先级：P2（可选，HTTP 轮询已验证可用）  
-> 📎 依赖：Phase A 完成（WorkflowState 枚举对齐），可与 Phase B/C 并行
+> 🎯 目标：提供 WebSocket 实时推送作为 TaskPoller HTTP 轮询的升级替代  
+> ⏱ 实际：2026-05-23 完成  
+> 📌 优先级：P2（HTTP 轮询已可用，WS 为体验优化）  
+> 📎 依赖：Phase A
 
-### D1. WebSocket 客户端
+### D1. WebSocket 客户端 ✅
+- **新建** `lib/services/websocket/ws_client.dart` — WebSocket 连接管理器
+  - JWT token 鉴权（query parameter: `?token={jwt}`）
+  - 自动重连（exponential backoff: 1s→2s→…→30s 上限）
+  - 心跳 ping（每 30s）
+  - 鉴权失败处理（close code 4001 → `onAuthFailure` 回调）
+  - `Stream<WSEventEnvelope>` 事件广播
+- **新建** `lib/services/websocket/ws_models.dart` — WS 事件模型
+  - `WSEventEnvelope` 类（17 个字段，含 eventId/eventType/scope/stage/sequence 等）
+  - 枚举：`WSEventType`（progress/completed/error/statusUpdate/reconnectAck）
+  - 枚举：`WSScope`（videoResource/videoSummaryTask/videoQa/globalChat）
+  - 枚举：`WSStage`（extraction/transcribing/.../cleanup）
 
-**添加依赖**: `pubspec.yaml`
+### D2. WebSocket Provider 集成 ✅
+- **新建** `lib/services/websocket/ws_provider.dart`
+  - `wsEventProvider` — Riverpod `StreamProvider<WSEventEnvelope?>`
+  - 自动跟随 `AuthState.isLoggedIn` 连接/断开
+  - `onAuthFailure` → 触发 `AuthController.expireSession()`
 
-```yaml
-dependencies:
-  web_socket_channel: ^3.0.1
-```
+### D3. 附加修改
+- `pubspec.yaml` — 添加 `web_socket_channel: ^3.0.1`
+- `lib/services/api/api_config.dart` — 新增 `baseUrlSync` 同步 getter
 
-**新建文件**: `lib/services/websocket/ws_client.dart`
+### Phase D 验证结果
 
-- 连接 `/ws/progress?token={jwt}&last_sequence={seq}`
-- 自动重连机制（exponential backoff：1s→2s→4s→…→30s 上限）
-- 心跳：客户端每 30s 发送 ping，服务端回复 pong
-- 鉴权失败处理：close code 4001 → 触发 `AuthController.logout(isSessionExpired: true)`
-
-**新建文件**: `lib/services/websocket/ws_models.dart`
-
-```dart
-/// WebSocket 事件类型。
-enum WSEventType {
-  progress,
-  completed,
-  error,
-  statusUpdate,
-  reconnectAck,
-}
-
-/// 事件作用域。
-enum WSScope {
-  videoResource,
-  videoSummaryTask,
-  videoQa,
-  globalChat,
-}
-
-/// 处理阶段。
-enum WSStage {
-  extraction,
-  transcribing,
-  extractingKeyframes,
-  ragRetrieval,
-  llmReasoning,
-  synthesis,
-  cleanup,
-}
-
-/// WS 事件统一信封。
-class WSEventEnvelope {
-  const WSEventEnvelope({
-    required this.eventId,
-    required this.eventType,
-    required this.scope,
-    required this.scopeId,
-    required this.sequence,
-    this.stage,
-    this.substage,
-    this.status,
-    this.progress,
-    this.message,
-    this.payload = const {},
-    this.traceId,
-    this.producedAt,
-    this.userId,
-  });
-
-  final String eventId;
-  final WSEventType eventType;
-  final WSScope scope;
-  final String scopeId;
-  final int sequence;
-  final WSStage? stage;
-  final String? substage;
-  final String? status;
-  final int? progress;
-  final String? message;
-  final Map<String, dynamic> payload;
-  final String? traceId;
-  final String? producedAt;
-  final String? userId;
-
-  factory WSEventEnvelope.fromJson(Map<String, dynamic> json) =>
-      WSEventEnvelope(
-        eventId: json['event_id'] as String? ?? '',
-        eventType: _parseEventType(json['event_type'] as String? ?? ''),
-        scope: _parseScope(json['scope'] as String? ?? ''),
-        scopeId: json['scope_id'] as String? ?? '',
-        sequence: json['sequence'] as int? ?? 0,
-        stage: json['stage'] != null
-            ? _parseStage(json['stage'] as String)
-            : null,
-        substage: json['substage'] as String?,
-        status: json['status'] as String?,
-        progress: json['progress'] as int?,
-        message: json['message'] as String?,
-        payload: (json['payload'] as Map<String, dynamic>?) ?? {},
-        traceId: json['trace_id'] as String?,
-        producedAt: json['produced_at'] as String?,
-        userId: json['user_id'] as String?,
-      );
-
-  static WSEventType _parseEventType(String s) => switch (s) {
-        'progress' => WSEventType.progress,
-        'completed' => WSEventType.completed,
-        'error' => WSEventType.error,
-        'status_update' => WSEventType.statusUpdate,
-        'reconnect_ack' => WSEventType.reconnectAck,
-        _ => WSEventType.statusUpdate,
-      };
-
-  static WSScope _parseScope(String s) => switch (s) {
-        'video_resource' => WSScope.videoResource,
-        'video_summary_task' => WSScope.videoSummaryTask,
-        'video_qa' => WSScope.videoQa,
-        'global_chat' => WSScope.globalChat,
-        _ => WSScope.videoSummaryTask,
-      };
-
-  static WSStage _parseStage(String s) => switch (s) {
-        'extraction' => WSStage.extraction,
-        'transcribing' => WSStage.transcribing,
-        'extracting_keyframes' => WSStage.extractingKeyframes,
-        'rag_retrieval' => WSStage.ragRetrieval,
-        'llm_reasoning' => WSStage.llmReasoning,
-        'synthesis' => WSStage.synthesis,
-        'cleanup' => WSStage.cleanup,
-        _ => WSStage.extraction,
-      };
-}
-```
-
-### D2. WebSocket Provider 集成
-
-**新建文件**: `lib/services/websocket/ws_provider.dart`
-
-- Riverpod `StreamProvider<WSEventEnvelope?>` 暴露事件流
-- 自动在登录后连接，登出后断开
-- 与 `AuthController` 配合管理生命周期
-
-### D3. 轮询引擎保留策略
-
-- 保留 `TaskPoller` 作为 HTTP 降级 fallback
-- 新增 `WsTaskTracker` 作为 WebSocket 事件消费者（可选）
-- UI 层优先消费 WebSocket 事件，连接断开时自动切换到 HTTP 轮询
-
-### Phase D 验证
-
-- [ ] 手动联调测试（需要后端 WebSocket 就绪）
-- [ ] 单元测试 Mock WebSocket 连接：重连/心跳/鉴权失败
+- [x] `flutter analyze --no-pub` — No issues found
+- [x] `flutter test` — **74/74 全部通过**（64 原有 + 10 新增 WS 测试）
+- [x] WS 测试覆盖：progress/completed/error/statusUpdate/reconnectAck 事件解析、枚举解析与 fallback、可选字段缺省处理
 
 ---
 

@@ -23,13 +23,24 @@ class ApiConfig {
 
   String? _overriddenBaseUrl;
 
-  /// 获取当前有效的 baseUrl。
+  /// 获取当前有效的 baseUrl（异步版本）。
   ///
   /// 优先级：运行时覆盖 > SecureStorage > 编译期环境变量 > 默认值。
   Future<String> get baseUrl async {
     if (_overriddenBaseUrl != null) return _overriddenBaseUrl!;
     final stored = await _storage.read(key: _keyBaseUrl);
     if (stored != null && stored.isNotEmpty) return stored;
+    return const String.fromEnvironment(
+      'API_BASE_URL',
+      defaultValue: defaultBaseUrl,
+    );
+  }
+
+  /// 获取当前有效的 baseUrl（同步版本）。
+  ///
+  /// 仅返回运行时覆盖或默认值，不访问 SecureStorage。
+  String get baseUrlSync {
+    if (_overriddenBaseUrl != null) return _overriddenBaseUrl!;
     return const String.fromEnvironment(
       'API_BASE_URL',
       defaultValue: defaultBaseUrl,
