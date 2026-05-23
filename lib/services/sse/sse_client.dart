@@ -42,7 +42,8 @@ class SseClient {
         headers: {
           'Accept': 'text/event-stream',
           'Cache-Control': 'no-cache',
-          if (headers != null) ...headers,
+          if (headers != null) // ignore: use_null_aware_elements
+            ...headers,
         },
       ),
     );
