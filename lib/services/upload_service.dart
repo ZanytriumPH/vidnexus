@@ -19,7 +19,7 @@ class UploadService {
   Dio get _dio => ApiClient.instance;
 
   /// 初始化上传会话。
-  Future<ApiResponse<InitUploadResponseData>> initUpload({
+  Future<InitUploadResponseData> initUpload({
     required String fileName,
     required int totalSize,
   }) async {
@@ -30,10 +30,9 @@ class UploadService {
         totalSize: totalSize,
       ).toJson(),
     );
-    return ApiResponse.fromJson(
-      resp.data as Map<String, dynamic>,
-      InitUploadResponseData.fromJson,
-    );
+    // 后端返回扁平 JSON：{"upload_id":"...","chunk_size":...,"expires_at":"..."}
+    // 不走 ApiResponse 信封，直接解析
+    return InitUploadResponseData.fromJson(resp.data as Map<String, dynamic>);
   }
 
   /// 查询已上传偏移量（HEAD 请求）。

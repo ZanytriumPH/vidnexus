@@ -119,7 +119,15 @@ class WsClient {
 
   void _onMessage(dynamic message) {
     try {
-      final json = jsonDecode(message as String) as Map<String, dynamic>;
+      final text = message as String;
+
+      // 服务端心跳 pong 是纯文本，非 JSON，直接忽略
+      if (text == 'pong') {
+        debugPrint('[WS] Received pong');
+        return;
+      }
+
+      final json = jsonDecode(text) as Map<String, dynamic>;
       final event = WSEventEnvelope.fromJson(json);
       _lastSequence = event.sequence;
 

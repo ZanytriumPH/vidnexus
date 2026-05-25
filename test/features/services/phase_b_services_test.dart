@@ -241,11 +241,11 @@ void main() {
       fakeDio.postResponse = Response<Map<String, dynamic>>(
         requestOptions: RequestOptions(path: '/api/v1/uploads'),
         statusCode: 201,
-        data: successEnvelope({
+        data: {
           'upload_id': 'upl_001',
           'chunk_size': 10485760,
           'expires_at': '2026-05-23T12:00:00Z',
-        }),
+        },
       );
 
       final service = const UploadService();
@@ -254,9 +254,9 @@ void main() {
         totalSize: 524288000,
       );
 
-      expect(resp.data!.uploadId, 'upl_001');
-      expect(resp.data!.chunkSize, 10485760);
-      expect(resp.data!.expiresAt, isNotNull);
+      expect(resp.uploadId, 'upl_001');
+      expect(resp.chunkSize, 10485760);
+      expect(resp.expiresAt, isNotNull);
     });
 
     test('queryOffset returns upload-offset and upload-length headers', () async {

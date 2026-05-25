@@ -234,9 +234,9 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         fileName: fileName,
         totalSize: fileSize,
       );
-      final uploadId = initResp.data?.uploadId;
-      if (uploadId == null) {
-        throw Exception('Failed to initialize upload');
+      final uploadId = initResp.uploadId;
+      if (uploadId.isEmpty) {
+        throw Exception('Failed to initialize upload: empty upload_id');
       }
 
       // 2. 分片上传 (每片 10 MiB)
