@@ -51,7 +51,11 @@ class ErrorInterceptor extends Interceptor {
   String _extractDetail(DioException err) {
     final data = err.response?.data;
     if (data is Map<String, dynamic>) {
-      return data['detail']?.toString() ?? data['message']?.toString() ?? '';
+      final error = data['error'] as Map<String, dynamic>?;
+      return data['detail']?.toString() ??
+          data['message']?.toString() ??
+          error?['message']?.toString() ??
+          '';
     }
     return err.message ?? '';
   }

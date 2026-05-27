@@ -93,7 +93,10 @@ class TaskService {
   Future<ApiResponse<StartAnalysisResponseData>> startAnalysis(
     String taskId,
   ) async {
-    final resp = await _dio.post(ApiEndpoints.taskStartAnalysis(taskId));
+    final resp = await _dio.post(
+      ApiEndpoints.taskStartAnalysis(taskId),
+      data: {},
+    );
     return ApiResponse.fromJson(
       resp.data as Map<String, dynamic>,
       StartAnalysisResponseData.fromJson,

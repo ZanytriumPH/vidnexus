@@ -16,6 +16,10 @@ import 'package:vidnexus/features/auth/auth_state.dart';
 import 'package:vidnexus/features/home/domain/video_summary_domain_models.dart';
 import 'package:vidnexus/features/home/video_summary_models.dart';
 import 'package:vidnexus/features/home/video_summary_repository.dart';
+import 'package:vidnexus/services/service_providers.dart';
+import 'package:vidnexus/services/video_service.dart';
+import 'package:vidnexus/services/models/common_dto.dart';
+import 'package:vidnexus/services/models/video_resource_dto.dart';
 import 'package:vidnexus/main.dart';
 
 void main() {
@@ -27,6 +31,9 @@ void main() {
         overrides: [
           videoSummaryRepositoryProvider.overrideWithValue(
             _WidgetTestVideoSummaryRepository(),
+          ),
+          videoServiceProvider.overrideWithValue(
+            _FakeVideoService(),
           ),
           authControllerProvider.overrideWith(
             () => _TestAuthController.loggedIn(),
@@ -65,6 +72,9 @@ void main() {
         overrides: [
           videoSummaryRepositoryProvider.overrideWithValue(
             _WidgetTestVideoSummaryRepository(),
+          ),
+          videoServiceProvider.overrideWithValue(
+            _FakeVideoService(),
           ),
           authControllerProvider.overrideWith(
             () => _TestAuthController.loggedIn(),
@@ -171,6 +181,30 @@ class _WidgetTestVideoSummaryRepository extends VideoSummaryRepository {
 
   @override
   void updateKbid(String newId) {}
+
+  @override
+  String get kbid => 'kb-widget-test';
+
+  @override
+  String get videoId => 'vid-widget-test';
+}
+
+class _FakeVideoService extends Fake implements VideoService {
+  @override
+  Future<ApiResponse<VideoResourceResponseData>> getVideo(String videoId) async {
+    return ApiResponse(
+      status: 'success',
+      data: VideoResourceResponseData(
+        videoId: videoId,
+        ownerId: 'user-test',
+        fileName: 'widget-test.mp4',
+        transcribeStatus: 'COMPLETED',
+        frameExtractionStatus: 'COMPLETED',
+        createdAt: '2026-05-17T10:00:00Z',
+      ),
+      meta: MetaInfo(requestId: 'req-test', timestamp: '2026-05-17T10:00:00Z'),
+    );
+  }
 }
 
 /// 测试用 AuthController：直接返回已登录状态，跳过启动时的 _restoreSession() 流程。

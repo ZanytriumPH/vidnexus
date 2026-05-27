@@ -294,6 +294,53 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     }
   }
 
+  Future<void> _ensureKbidResolved() async {
+    // 如果 kbid 已经是有效值（非空且非占位符），无需等待
+    if (_repository.kbid.isNotEmpty && _repository.kbid != 'kb_default') {
+      return;
+    }
+    try {
+      // 等待 defaultKbidProvider 解析完成
+      final kbid = await ref.read(defaultKbidProvider.future);
+      _repository.updateKbid(kbid);
+    } catch (e) {
+      // 如果之前网络超时导致 Riverpod 缓存了 Error 状态，在此处进行重置并重试
+      debugPrint('[FlowCtrl] defaultKbidProvider resolved with error: $e, invalidating and retrying...');
+      ref.invalidate(defaultKbidProvider);
+      final kbid = await ref.read(defaultKbidProvider.future);
+      _repository.updateKbid(kbid);
+    }
+  }
+
+  /// 轮询等待视频转写和关键帧抽取完成，超时 120 秒。
+  Future<void> _waitForVideoReady() async {
+    const maxAttempts = 60; // 最多轮询 60 次
+    const pollInterval = Duration(seconds: 2);
+
+    for (int i = 0; i < maxAttempts; i++) {
+      try {
+        final videoService = ref.read(videoServiceProvider);
+        final resp = await videoService.getVideo(_repository.videoId);
+        final data = resp.data;
+        if (data != null &&
+            data.transcribeStatus == 'COMPLETED' &&
+            data.frameExtractionStatus == 'COMPLETED') {
+          if (kDebugMode) {
+            debugPrint('[FlowCtrl] 视频已就绪 — videoId=${_repository.videoId}');
+          }
+          return;
+        }
+      } catch (_) {
+        // 忽略单次轮询失败，继续重试
+      }
+      await Future.delayed(pollInterval);
+    }
+    // 超时仍继续，让后端返回具体错误
+    if (kDebugMode) {
+      debugPrint('[FlowCtrl] 视频就绪等待超时 — videoId=${_repository.videoId}');
+    }
+  }
+
   void toggleProcessingExpanded() {
     if (state.stage != VideoSummaryStage.processing) {
       return;
@@ -324,7 +371,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
     final settings = ref.read(videoSummarySettingsProvider);
 
-    // 每次重新生成草稿，都要清掉后续阶段结果，确保流程重新从 processing 开始推进。
+    // 每次重新生成草稿，都要清掉后续阶段结果，并立即切换为 processing 阶段以提供用户反馈
     state = state.copyWith(
       isGenerating: true,
       stage: VideoSummaryStage.processing,
@@ -336,6 +383,12 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     );
 
     try {
+      // 确保 kbid 已解析（等待 defaultKbidProvider 完成）
+      await _ensureKbidResolved();
+
+      // 等待视频处理完成（转写 + 关键帧抽取），否则后端返回 422
+      await _waitForVideoReady();
+
       await for (final processingData in _repository.startDraftGeneration()) {
         state = state.copyWith(
           processingSnapshot: mapProcessingDataToSnapshot(processingData),
@@ -350,6 +403,13 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         processingExpanded: false,
         isDraftEditMode: false,
       );
+    } catch (e) {
+      debugPrint('[FlowCtrl] Start draft generation failed: $e');
+      // 发生错误时将阶段重置回 ready，使用户可以重新尝试
+      state = state.copyWith(
+        stage: VideoSummaryStage.ready,
+      );
+      rethrow;
     } finally {
       state = state.copyWith(isGenerating: false);
     }

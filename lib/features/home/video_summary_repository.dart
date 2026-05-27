@@ -2,25 +2,46 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/service_providers.dart';
 import '../../services/websocket/ws_provider.dart';
+import '../auth/auth_controller.dart';
 import 'domain/video_summary_domain_models.dart';
 import 'http_video_summary_repository.dart';
 import 'video_summary_models.dart';
 
-/// 默认知识库 ID（后续由用户选择/创建知识库时动态设置）。
-const String _defaultKbid = 'kb_default';
-
 /// 默认视频 ID（后续由上传/选择视频时动态设置）。
 const String _defaultVideoId = 'vid_default';
+
+/// 获取当前用户的默认知识库 ID（不存在则自动创建）。
+final defaultKbidProvider = FutureProvider<String>((ref) async {
+  // 监听 authControllerProvider 的变化。当 authState 变化时，这个 FutureProvider 会自动重新计算并重新获取数据
+  ref.watch(authControllerProvider);
+
+  final kbService = ref.watch(knowledgeBaseServiceProvider);
+  final resp = await kbService.listKBs();
+  final kbs = resp.data;
+  if (kbs.isNotEmpty) {
+    return kbs.first.kbid;
+  }
+  // 没有知识库则自动创建默认知识库
+  final createResp = await kbService.createKB(name: '默认知识库');
+  if (createResp.data == null) {
+    throw Exception('Failed to create default knowledge base');
+  }
+  return createResp.data!.kbid;
+});
 
 final videoSummaryRepositoryProvider = Provider<VideoSummaryRepository>((ref) {
   // 保持 wsEventProvider 处于活动状态（自动处理连接/断开生命周期）
   ref.listen(wsEventProvider, (prev, next) {});
 
+  // 监听异步 kbid，加载期间使用占位值，完成后 Provider 会自动重建
+  final kbidAsync = ref.watch(defaultKbidProvider);
+  final kbid = kbidAsync.valueOrNull ?? '';
+
   return HttpVideoSummaryRepository(
     taskService: ref.watch(taskServiceProvider),
     videoQAService: ref.watch(videoQAServiceProvider),
     wsEventStream: ref.watch(wsClientProvider).eventStream,
-    kbid: _defaultKbid,
+    kbid: kbid,
     videoId: _defaultVideoId,
   );
 });
@@ -57,4 +78,10 @@ abstract class VideoSummaryRepository {
 
   void updateVideoId(String newId);
   void updateKbid(String newId);
+
+  /// 当前知识库 ID。
+  String get kbid;
+
+  /// 当前视频 ID。
+  String get videoId;
 }
