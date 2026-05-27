@@ -78,10 +78,14 @@ abstract class VideoSummaryRepository {
 
   void updateVideoId(String newId);
   void updateKbid(String newId);
+  void updateTaskId(String? newId);
 
   /// 当前知识库 ID。
   String get kbid;
 
   /// 当前视频 ID。
   String get videoId;
+
+  /// 当前任务 ID。
+  String? get activeTaskId;
 }

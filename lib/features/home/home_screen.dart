@@ -52,6 +52,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             )
             .toList(),
+        isLoadingHistory: sessionHistory.isLoadingHistory,
+        errorMessage: sessionHistory.errorMessage,
+        onRetryHistory: () {
+          ref
+              .read(videoSummarySessionHistoryProvider.notifier)
+              .retryLoadHistory();
+        },
         onNewSessionPressed: _createNewSessionFromDrawer,
         onSessionSelected: _restoreSessionFromDrawer,
         onSettingsPressed: _openSettingsFromDrawer,

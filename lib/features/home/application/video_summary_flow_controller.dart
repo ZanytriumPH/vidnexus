@@ -20,6 +20,7 @@ final videoSummaryFlowControllerProvider =
 /// 主流程状态：页面只关心“当前展示什么”，具体状态切换由 controller 驱动。
 class VideoSummaryFlowState {
   const VideoSummaryFlowState({
+    this.taskId,
     required this.videoAsset,
     required this.uploadHighlighted,
     required this.processingExpanded,
@@ -38,6 +39,7 @@ class VideoSummaryFlowState {
     required this.uploadProgress,
   });
 
+  final String? taskId;
   final VideoAssetInfo videoAsset;
   final bool uploadHighlighted;
   final bool processingExpanded;
@@ -55,8 +57,9 @@ class VideoSummaryFlowState {
   final bool isUploading;
   final double uploadProgress;
 
-  factory VideoSummaryFlowState.initial({required VideoAssetInfo videoAsset}) {
+  factory VideoSummaryFlowState.initial({required VideoAssetInfo videoAsset, String? taskId}) {
     return VideoSummaryFlowState(
+      taskId: taskId,
       videoAsset: videoAsset,
       uploadHighlighted: false,
       processingExpanded: true,
@@ -81,6 +84,7 @@ class VideoSummaryFlowState {
   static const _unset = Object();
 
   VideoSummaryFlowState copyWith({
+    Object? taskId = _unset,
     VideoAssetInfo? videoAsset,
     bool? uploadHighlighted,
     bool? processingExpanded,
@@ -99,6 +103,7 @@ class VideoSummaryFlowState {
     double? uploadProgress,
   }) {
     return VideoSummaryFlowState(
+      taskId: taskId == _unset ? this.taskId : taskId as String?,
       videoAsset: videoAsset ?? this.videoAsset,
       uploadHighlighted: uploadHighlighted ?? this.uploadHighlighted,
       processingExpanded: processingExpanded ?? this.processingExpanded,
@@ -130,6 +135,8 @@ class VideoSummaryFlowState {
 /// 用于 session 恢复的轻量快照，和实时 state 分开，避免把运行时控制字段直接序列化思维化。
 class VideoSummaryFlowSnapshot {
   const VideoSummaryFlowSnapshot({
+    this.taskId,
+    this.videoAsset,
     required this.stage,
     required this.uploadHighlighted,
     required this.processingExpanded,
@@ -143,6 +150,8 @@ class VideoSummaryFlowSnapshot {
     required this.chatMessages,
   });
 
+  final String? taskId;
+  final VideoAssetInfo? videoAsset;
   final VideoSummaryStage stage;
   final bool uploadHighlighted;
   final bool processingExpanded;
@@ -165,7 +174,10 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   @override
   VideoSummaryFlowState build() {
     final videoAsset = _repository.getVideoAsset();
-    final initialState = VideoSummaryFlowState.initial(videoAsset: videoAsset);
+    final initialState = VideoSummaryFlowState.initial(
+      videoAsset: videoAsset,
+      taskId: _repository.activeTaskId,
+    );
     final defaultRange = _buildDefaultTimestampRange(videoAsset.durationLabel);
     return initialState.copyWith(
       selectedTimestampStartSeconds: defaultRange.startSeconds,
@@ -185,9 +197,11 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       );
 
   void reset() {
+    _repository.updateTaskId(null);
     final settings = ref.read(videoSummarySettingsProvider);
     final defaultRange = _buildDefaultTimestampRange(state.videoAsset.durationLabel);
     state = state.copyWith(
+      taskId: null,
       uploadHighlighted: false,
       processingExpanded: settings.defaultProcessingExpanded,
       isDraftEditMode: false,
@@ -269,18 +283,22 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         fileName: fileName,
       );
       final newVideoId = createVideoResp.data?.videoId ?? fileName;
+      final createdDuration = createVideoResp.data?.duration;
 
       // 4. 更新 repository 中的 videoId
       _repository.updateVideoId(newVideoId);
 
       // 5. 更新本地状态中的视频资产信息
+      final durationLabel = createdDuration != null && createdDuration > 0
+          ? _formatDurationLabel(createdDuration)
+          : '0m 00s';
       state = state.copyWith(
         isUploading: false,
         uploadProgress: 1.0,
         uploadHighlighted: true,
         videoAsset: VideoAssetInfo(
           title: newVideoId,
-          durationLabel: '0m 00s',
+          durationLabel: durationLabel,
           sourceLabel: state.videoAsset.sourceLabel,
           fileName: fileName,
         ),
@@ -313,6 +331,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   }
 
   /// 轮询等待视频转写和关键帧抽取完成，超时 120 秒。
+  /// 就绪后用后端返回的 duration 更新本地 videoAsset 和时间区间。
   Future<void> _waitForVideoReady() async {
     const maxAttempts = 60; // 最多轮询 60 次
     const pollInterval = Duration(seconds: 2);
@@ -328,6 +347,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           if (kDebugMode) {
             debugPrint('[FlowCtrl] 视频已就绪 — videoId=${_repository.videoId}');
           }
+          // 用后端返回的真实视频时长更新本地状态
+          _updateVideoDuration(data.duration);
           return;
         }
       } catch (_) {
@@ -339,6 +360,45 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     if (kDebugMode) {
       debugPrint('[FlowCtrl] 视频就绪等待超时 — videoId=${_repository.videoId}');
     }
+  }
+
+  /// 将后端返回的视频时长（秒）同步到本地 videoAsset 和默认时间区间。
+  void _updateVideoDuration(int? durationSeconds) {
+    if (durationSeconds == null || durationSeconds <= 0) return;
+
+    final newLabel = _formatDurationLabel(durationSeconds);
+    final currentAsset = state.videoAsset;
+
+    // 仅当当前标签仍是占位值时才更新（避免覆盖用户从历史会话恢复的有效值）
+    if (currentAsset.durationLabel == '0m 00s' ||
+        currentAsset.durationLabel == '--:--') {
+      final updatedAsset = VideoAssetInfo(
+        title: currentAsset.title,
+        durationLabel: newLabel,
+        sourceLabel: currentAsset.sourceLabel,
+        fileName: currentAsset.fileName,
+      );
+      final defaultRange = _buildDefaultTimestampRange(newLabel);
+      state = state.copyWith(
+        videoAsset: updatedAsset,
+        selectedTimestampStartSeconds: defaultRange.startSeconds,
+        selectedTimestampEndSeconds: defaultRange.endSeconds,
+      );
+      if (kDebugMode) {
+        debugPrint('[FlowCtrl] 视频时长已更新 — $durationSeconds 秒 ($newLabel)');
+      }
+    }
+  }
+
+  /// 把秒数格式化为 durationLabel（例："12m 30s"，"1h 05m 30s"）。
+  static String _formatDurationLabel(int totalSeconds) {
+    final hours = totalSeconds ~/ 3600;
+    final minutes = (totalSeconds % 3600) ~/ 60;
+    final seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return '${hours}h ${minutes.toString().padLeft(2, '0')}m ${seconds.toString().padLeft(2, '0')}s';
+    }
+    return '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
   }
 
   void toggleProcessingExpanded() {
@@ -540,6 +600,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
   VideoSummaryFlowSnapshot captureSnapshot() {
     return VideoSummaryFlowSnapshot(
+      taskId: state.taskId,
+      videoAsset: state.videoAsset,
       stage: state.stage,
       uploadHighlighted: state.uploadHighlighted,
       processingExpanded: state.processingExpanded,
@@ -555,7 +617,10 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   }
 
   void restoreSnapshot(VideoSummaryFlowSnapshot snapshot) {
+    final videoAsset = snapshot.videoAsset ?? state.videoAsset;
     state = state.copyWith(
+      taskId: snapshot.taskId,
+      videoAsset: videoAsset,
       stage: snapshot.stage,
       uploadHighlighted: snapshot.uploadHighlighted,
       processingExpanded: snapshot.processingExpanded,
@@ -570,6 +635,32 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       finalSummaryData: snapshot.finalSummaryData,
       chatMessages: List<ChatMessage>.from(snapshot.chatMessages),
     );
+
+    // 同步 repository 的 videoId（从快照的 videoAsset.title 中获取）
+    if (videoAsset.title.isNotEmpty &&
+        videoAsset.title != 'vid_default') {
+      _repository.updateVideoId(videoAsset.title);
+    }
+
+    // 旧快照的 durationLabel 可能是占位值，异步从后端刷新真实时长
+    if (state.videoAsset.durationLabel == '0m 00s' ||
+        state.videoAsset.durationLabel == '--:--') {
+      _refreshVideoDurationFromBackend();
+    }
+  }
+
+  /// 从后端获取视频真实时长并更新本地状态（用于快照恢复场景）。
+  Future<void> _refreshVideoDurationFromBackend() async {
+    try {
+      final videoService = ref.read(videoServiceProvider);
+      final resp = await videoService.getVideo(_repository.videoId);
+      final data = resp.data;
+      if (data != null && data.duration != null && data.duration! > 0) {
+        _updateVideoDuration(data.duration);
+      }
+    } catch (_) {
+      // 静默失败，用户仍可使用占位时长
+    }
   }
 
   TimestampRangeSelection _buildDefaultTimestampRange(String durationLabel) {

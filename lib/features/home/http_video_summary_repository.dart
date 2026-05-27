@@ -37,9 +37,11 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   final TaskPoller _taskPoller;
 
   /// 当前知识库 ID。
+  @override
   String kbid;
 
   /// 当前视频 ID。
+  @override
   String videoId;
 
   String? _taskId;
@@ -53,6 +55,14 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   void updateKbid(String newId) {
     kbid = newId;
   }
+
+  @override
+  void updateTaskId(String? newId) {
+    _taskId = newId;
+  }
+
+  @override
+  String? get activeTaskId => _taskId;
 
   // ---- VideoSummaryRepository 实现 ----
 

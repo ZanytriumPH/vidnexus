@@ -11,6 +11,9 @@ class VideoSummaryHistoryDrawer extends StatelessWidget {
     required this.onSessionSelected,
     required this.onSettingsPressed,
     required this.onSearchPressed,
+    this.isLoadingHistory = false,
+    this.errorMessage,
+    this.onRetryHistory,
     super.key,
   });
 
@@ -19,6 +22,83 @@ class VideoSummaryHistoryDrawer extends StatelessWidget {
   final ValueChanged<String> onSessionSelected;
   final VoidCallback onSettingsPressed;
   final VoidCallback onSearchPressed;
+  final bool isLoadingHistory;
+  final String? errorMessage;
+  final VoidCallback? onRetryHistory;
+
+  Widget _buildSessionList(BuildContext context) {
+    if (isLoadingHistory && sessions.length <= 1) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.only(top: 32),
+          child: Column(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(height: 12),
+              Text(
+                '加载历史会话中…',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textHint,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (errorMessage != null && sessions.length <= 1) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 32),
+          child: Column(
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                size: 28,
+                color: AppColors.textHint,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textHint,
+                ),
+              ),
+              if (onRetryHistory != null) ...[
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: onRetryHistory,
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('重试', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: EdgeInsets.zero,
+      itemCount: sessions.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final session = sessions[index];
+        return VideoSummaryDrawerSessionCard(
+          session: session,
+          onTap: () => onSessionSelected(session.id),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,18 +179,7 @@ class VideoSummaryHistoryDrawer extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Expanded(
-                child: ListView.separated(
-                  padding: EdgeInsets.zero,
-                  itemCount: sessions.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final session = sessions[index];
-                    return VideoSummaryDrawerSessionCard(
-                      session: session,
-                      onTap: () => onSessionSelected(session.id),
-                    );
-                  },
-                ),
+                child: _buildSessionList(context),
               ),
               const SizedBox(height: 14),
               // 用户区（已登录显示头像+用户名，未登录显示"去登录"）

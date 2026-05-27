@@ -187,6 +187,12 @@ class _WidgetTestVideoSummaryRepository extends VideoSummaryRepository {
 
   @override
   String get videoId => 'vid-widget-test';
+
+  @override
+  void updateTaskId(String? newId) {}
+
+  @override
+  String? get activeTaskId => null;
 }
 
 class _FakeVideoService extends Fake implements VideoService {

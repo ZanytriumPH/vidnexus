@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/video_summary_domain_models.dart';
@@ -17,21 +18,31 @@ class VideoSummarySessionHistoryState {
     required this.sessions,
     required this.activeSessionId,
     required this.createdSessionCount,
+    this.isLoadingHistory = false,
+    this.errorMessage,
   });
 
   final List<VideoSummarySessionHistoryEntry> sessions;
   final String activeSessionId;
   final int createdSessionCount;
+  final bool isLoadingHistory;
+  final String? errorMessage;
 
   VideoSummarySessionHistoryState copyWith({
     List<VideoSummarySessionHistoryEntry>? sessions,
     String? activeSessionId,
     int? createdSessionCount,
+    bool? isLoadingHistory,
+    String? errorMessage,
+    bool clearError = false,
   }) {
     return VideoSummarySessionHistoryState(
       sessions: sessions ?? this.sessions,
       activeSessionId: activeSessionId ?? this.activeSessionId,
       createdSessionCount: createdSessionCount ?? this.createdSessionCount,
+      isLoadingHistory: isLoadingHistory ?? this.isLoadingHistory,
+      errorMessage:
+          clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
 }
@@ -98,6 +109,7 @@ class VideoSummarySessionHistoryController
       sessions: [currentSession],
       activeSessionId: currentSession.id,
       createdSessionCount: 1,
+      isLoadingHistory: true,
     );
   }
 
@@ -123,7 +135,6 @@ class VideoSummarySessionHistoryController
   Future<void> _loadFromBackend() async {
     try {
       final tasks = await _repository.listTaskHistory();
-      if (tasks.isEmpty) return;
 
       final currentSession = state.sessions.first;
       final historyEntries = tasks.map(_mapTaskToEntry).toList();
@@ -131,10 +142,26 @@ class VideoSummarySessionHistoryController
       state = state.copyWith(
         sessions: [currentSession, ...historyEntries],
         createdSessionCount: 1 + historyEntries.length,
+        isLoadingHistory: false,
+        clearError: true,
       );
-    } catch (_) {
-      // 后端不可用时静默保持仅当前会话，不影响用户操作
+    } catch (e, stackTrace) {
+      // 记录错误详情以便调试
+      debugPrint(
+        '[SessionHistory] 加载历史会话失败: $e\n$stackTrace',
+      );
+      state = state.copyWith(
+        isLoadingHistory: false,
+        errorMessage: '历史会话加载失败，请下拉重试',
+      );
     }
+  }
+
+  /// 重试加载历史会话列表。
+  void retryLoadHistory() {
+    if (state.isLoadingHistory) return;
+    state = state.copyWith(isLoadingHistory: true, clearError: true);
+    _loadFromBackend();
   }
 
   /// 将后端 [VideoSummaryTaskInfo] 映射为侧边栏展示条目。
@@ -149,6 +176,13 @@ class VideoSummarySessionHistoryController
       detail: task.workflowState.label,
       snapshot: VideoSummarySessionSnapshot(
         flowSnapshot: VideoSummaryFlowSnapshot(
+          taskId: task.taskId,
+          videoAsset: VideoAssetInfo(
+            title: task.videoId,
+            durationLabel: '0m 00s',
+            sourceLabel: task.kbid,
+            fileName: '',
+          ),
           stage: stage,
           uploadHighlighted: stage != VideoSummaryStage.ready,
           processingExpanded: stage == VideoSummaryStage.processing,
