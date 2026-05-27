@@ -642,6 +642,11 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       _repository.updateVideoId(videoAsset.title);
     }
 
+    // 同步 repository 的 taskId，否则后续追问会报 "No active task"
+    if (snapshot.taskId != null && snapshot.taskId!.isNotEmpty) {
+      _repository.updateTaskId(snapshot.taskId);
+    }
+
     // 旧快照的 durationLabel 可能是占位值，异步从后端刷新真实时长
     if (state.videoAsset.durationLabel == '0m 00s' ||
         state.videoAsset.durationLabel == '--:--') {
@@ -655,8 +660,34 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       final videoService = ref.read(videoServiceProvider);
       final resp = await videoService.getVideo(_repository.videoId);
       final data = resp.data;
-      if (data != null && data.duration != null && data.duration! > 0) {
-        _updateVideoDuration(data.duration);
+      if (data == null) return;
+
+      // 优先使用后端返回的 duration 字段
+      int? effectiveDuration = data.duration;
+
+      // Fallback：后端 duration 可能为 0，从 keyframes 的最大时间戳推算
+      if ((effectiveDuration == null || effectiveDuration <= 0) &&
+          data.keyframes != null &&
+          data.keyframes!.isNotEmpty) {
+        for (final kf in data.keyframes!) {
+          final parts = (kf.time ?? '').split(':');
+          if (parts.length >= 2) {
+            final min = int.tryParse(parts[0]) ?? 0;
+            final sec = int.tryParse(parts[1]) ?? 0;
+            final total = min * 60 + sec;
+            if (total > (effectiveDuration ?? 0)) {
+              effectiveDuration = total;
+            }
+          }
+        }
+        // 加上一些余量（最后一个关键帧之后可能还有内容）
+        if (effectiveDuration != null && effectiveDuration > 0) {
+          effectiveDuration = effectiveDuration + 5;
+        }
+      }
+
+      if (effectiveDuration != null && effectiveDuration > 0) {
+        _updateVideoDuration(effectiveDuration);
       }
     } catch (_) {
       // 静默失败，用户仍可使用占位时长
