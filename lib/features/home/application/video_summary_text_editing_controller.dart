@@ -32,7 +32,7 @@ class VideoSummaryTextEditingController {
   final TextEditingController chatController = TextEditingController();
   final TextEditingController draftBodyController = TextEditingController();
 
-  bool _syncPaused = false;
+  int _syncPauseCount = 0;
 
   String get readyPreferenceText => readyPreferenceController.text;
   String get draftGuidanceText => draftGuidanceController.text;
@@ -77,12 +77,13 @@ class VideoSummaryTextEditingController {
   }
 
   /// 批量写入文本时暂时关闭同步，避免“恢复会话”又被误判为用户手动编辑。
+  /// 使用计数器支持嵌套调用。
   T runWithoutSync<T>(T Function() action) {
-    _syncPaused = true;
+    _syncPauseCount++;
     try {
       return action();
     } finally {
-      _syncPaused = false;
+      _syncPauseCount--;
     }
   }
 
@@ -97,7 +98,7 @@ class VideoSummaryTextEditingController {
       });
     }
 
-    if (_syncPaused) {
+    if (_syncPauseCount > 0) {
       return;
     }
 
@@ -114,7 +115,7 @@ class VideoSummaryTextEditingController {
   }
 
   void _syncEditableSnapshot() {
-    if (_syncPaused) {
+    if (_syncPauseCount > 0) {
       return;
     }
 
