@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 
 import '../../../services/service_providers.dart';
 import '../../../services/upload_service.dart';
+import '../../../services/models/common_dto.dart';
 import 'video_summary_result_mapper.dart';
 import '../domain/video_summary_time_utils.dart';
 import '../video_summary_models.dart';
@@ -652,6 +653,13 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         state.videoAsset.durationLabel == '--:--') {
       _refreshVideoDurationFromBackend();
     }
+
+    // 历史会话的 chatMessages 未持久化到快照，从后端 QA 记录异步回填
+    if (snapshot.stage == VideoSummaryStage.finalChat &&
+        snapshot.taskId != null &&
+        snapshot.taskId!.isNotEmpty) {
+      _refreshChatMessagesFromBackend(snapshot.taskId!);
+    }
   }
 
   /// 从后端获取视频真实时长并更新本地状态（用于快照恢复场景）。
@@ -691,6 +699,62 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       }
     } catch (_) {
       // 静默失败，用户仍可使用占位时长
+    }
+  }
+
+  /// 从后端拉取该任务的 Q&A 记录，回填到 chatMessages 中。
+  /// 用于历史会话恢复：快照中的 chatMessages 为空（后端未持久化），
+  /// 但 Q&A 记录已存入 video_qa_records 表，可据此重建对话列表。
+  Future<void> _refreshChatMessagesFromBackend(String taskId) async {
+    try {
+      final qaService = ref.read(videoQAServiceProvider);
+      final resp = await qaService.listQAs(
+        taskId,
+        params: PageParams(page: 1, pageSize: 100),
+      );
+      final qas = resp.data;
+      if (qas.isEmpty) return;
+
+      final messages = <ChatMessage>[];
+      for (final qa in qas) {
+        // 构建时间标签
+        String? timestampLabel;
+        if (qa.startTime != null && qa.startTime!.isNotEmpty) {
+          timestampLabel = qa.startTime!;
+          if (qa.endTime != null && qa.endTime!.isNotEmpty) {
+            timestampLabel = '$timestampLabel - ${qa.endTime}';
+          }
+        }
+
+        // 用户问题
+        if (qa.questionContent.isNotEmpty) {
+          messages.add(ChatMessage(
+            sender: SummaryChatSender.user,
+            text: qa.questionContent,
+            timestampLabel: timestampLabel,
+          ));
+        }
+
+        // 系统回答
+        if (qa.answerContent != null && qa.answerContent!.isNotEmpty) {
+          messages.add(ChatMessage(
+            sender: SummaryChatSender.system,
+            text: qa.answerContent!,
+            timestampLabel: timestampLabel,
+          ));
+        }
+      }
+
+      if (messages.isNotEmpty) {
+        state = state.copyWith(chatMessages: messages);
+        if (kDebugMode) {
+          debugPrint(
+            '[FlowCtrl] 从后端回填了 ${messages.length} 条 Q&A 聊天记录 — taskId=$taskId',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[FlowCtrl] 回填聊天记录失败: $e');
     }
   }
 
