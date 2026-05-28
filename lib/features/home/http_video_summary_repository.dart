@@ -47,6 +47,12 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
   String? _taskId;
 
+  /// 上次 WS 进度值（0.0~1.0），用于 progress=null 时保持不回退。
+  double _lastProgress = 0.0;
+
+  /// 去重集合：记录已处理的 scopeId:sequence，防止 Redis 双通道重复推送。
+  Set<String> _seenSequences = {};
+
   @override
   void updateVideoId(String newId) {
     videoId = newId;
@@ -173,6 +179,10 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   Stream<VideoSummaryProcessingData> startDraftGeneration({
     String? userInitialPreference,
   }) async* {
+    // 每次开始新任务时重置状态
+    _lastProgress = 0.0;
+    _seenSequences = {};
+
     if (kDebugMode) {
       debugPrint(
         '[HttpRepo] 开始创建任务 — kbid=$kbid videoId=$videoId '
@@ -244,9 +254,22 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
     wsSubscription = wsStream.listen(
       (env) {
+        // 防护：controller 已关闭则忽略后续事件（如重复 completed）
+        if (controller.isClosed) return;
+
         // 跳过重连确认事件
         if (env.eventType == WSEventType.reconnectAck) {
           return;
+        }
+
+        // 去重：后端 Redis Pub/Sub 发布到 tenant + control 双通道，
+        // 同一 sequence 的事件会到达两次，仅处理首次。
+        final seqKey = '${env.scopeId}:${env.sequence}';
+        if (_seenSequences.contains(seqKey)) return;
+        _seenSequences.add(seqKey);
+        // 限制去重集合大小，防止内存泄漏
+        if (_seenSequences.length > 200) {
+          _seenSequences = _seenSequences.skip(100).toSet();
         }
 
         // 收到第一个有效事件时：取消首事件超时，启动总超时
@@ -289,13 +312,21 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
           return;
         }
 
-        // progress / status_update 事件
-        final progressVal = (env.progress ?? 0) / 100.0;
+        // progress / status_update 事件：
+        // 后端仅在 [[PROGRESS]] 消息携带具体进度值，其余状态消息 progress=null。
+        // 对于 progress=null 的消息：保持上次进度不变，仅更新阶段和文本。
+        final hasProgress = env.progress != null;
+        final progressVal = hasProgress
+            ? env.progress! / 100.0
+            : _lastProgress; // 保持上次进度，不回退到 0
+        _lastProgress = progressVal;
+
         final currentStage = _mapWSStage(env.stage);
         final currentMessage = env.message ?? '';
 
         // 严格使用后端下发的 stage + progress 构建步骤进度
-        final steps = _buildWSSteps(env.stage, env.progress ?? 0);
+        final stepProgress = env.progress ?? (_lastProgress * 100).round();
+        final steps = _buildWSSteps(env.stage, stepProgress);
 
         controller.add(VideoSummaryProcessingData(
           progress: progressVal,
@@ -307,7 +338,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
         if (kDebugMode) {
           debugPrint(
             '[HttpRepo] WS进度 — stage=${env.stage?.name} '
-            'progress=${env.progress}% msg=${env.message}',
+            'hasProgress=$hasProgress progress=${env.progress}% '
+            'displayProgress=${(progressVal * 100).toStringAsFixed(0)}% '
+            'msg=${env.message}',
           );
         }
       },
