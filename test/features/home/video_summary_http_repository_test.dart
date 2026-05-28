@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -10,6 +12,8 @@ import 'package:vidnexus/services/polling/qa_poller.dart';
 import 'package:vidnexus/services/polling/task_poller.dart';
 import 'package:vidnexus/services/task_service.dart';
 import 'package:vidnexus/services/video_qa_service.dart';
+import 'package:vidnexus/services/websocket/ws_client.dart';
+import 'package:vidnexus/services/websocket/ws_models.dart';
 import 'package:vidnexus/services/sse/sse_models.dart';
 
 // ---- Mocks ----
@@ -18,6 +22,8 @@ class MockTaskService extends Mock implements TaskService {}
 
 class MockVideoQAService extends Mock implements VideoQAService {}
 
+class MockWsClient extends Mock implements WsClient {}
+
 class FakeTimeTravelQAStreamRequest extends Fake implements TimeTravelQAStreamRequest {}
 
 void main() {
@@ -25,6 +31,8 @@ void main() {
 
   late MockTaskService mockTaskService;
   late MockVideoQAService mockVideoQAService;
+  late MockWsClient mockWsClient;
+  late StreamController<WSEventEnvelope> wsTestController;
   late TaskPoller taskPoller;
   late QAPoller qaPoller;
 
@@ -71,9 +79,16 @@ void main() {
   setUp(() {
     mockTaskService = MockTaskService();
     mockVideoQAService = MockVideoQAService();
+    mockWsClient = MockWsClient();
+    wsTestController = StreamController<WSEventEnvelope>.broadcast();
 
     // Stub dio getter — HttpVideoSummaryRepository accesses _taskService.dio in kDebugMode.
     when(() => mockTaskService.dio).thenReturn(Dio(BaseOptions(baseUrl: 'http://localhost:8000')));
+
+    // WebSocket mock：ensureConnected 立即完成，eventStream 使用测试控制器
+    when(() => mockWsClient.ensureConnected(timeout: any(named: 'timeout')))
+        .thenAnswer((_) async {});
+    when(() => mockWsClient.eventStream).thenReturn(wsTestController.stream);
 
     // Stub the dio getter to prevent null access in debug logging.
     // We use a dynamic approach since dio is not easily mockable.
@@ -257,8 +272,8 @@ void main() {
   group('HttpVideoSummaryRepository', () {
     late HttpVideoSummaryRepository repository;
 
-    /// Helper: stub createTask + getTask so that startDraftGeneration
-    /// creates a task and the poller terminates immediately (WAITING_USER_APPROVAL).
+    /// Helper: stub createTask + startAnalysis so that startDraftGeneration
+    /// can proceed, then schedule a WS completed event so the stream terminates.
     void stubTaskCreationAndPollCompletion() {
       when(() => mockTaskService.createTask(
             kbid: testKbid,
@@ -269,20 +284,43 @@ void main() {
         ),
       );
 
+      when(() => mockTaskService.startAnalysis(testTaskId))
+          .thenAnswer((_) async => _apiResponse(
+                StartAnalysisResponseData(
+                  taskId: testTaskId,
+                  workflowState: 'DRAFT_GENERATING',
+                ),
+              ));
+
       // getTask returns WAITING_USER_APPROVAL so poller terminates after first tick.
       when(() => mockTaskService.getTask(testTaskId)).thenAnswer(
         (_) async => _apiResponse(
           _taskResponse(workflowState: 'WAITING_USER_APPROVAL'),
         ),
       );
+
+      // Schedule a WS completed event after pending microtasks,
+      // so startDraftGeneration's WS listener can terminate.
+      Future.microtask(() {
+        if (!wsTestController.isClosed) {
+          wsTestController.add(WSEventEnvelope(
+            eventId: 'evt-test',
+            eventType: WSEventType.completed,
+            scope: WSScope.videoSummaryTask,
+            scopeId: testTaskId,
+            sequence: 1,
+            message: 'Phase-1 analysis completed',
+          ));
+        }
+      });
     }
 
     setUp(() {
       repository = HttpVideoSummaryRepository(
         taskService: mockTaskService,
         videoQAService: mockVideoQAService,
+        wsClient: mockWsClient,
         taskPoller: taskPoller,
-        wsEventStream: const Stream.empty(),
         kbid: testKbid,
         videoId: testVideoId,
       );
@@ -366,7 +404,7 @@ void main() {
     test('fetchDraftResult throws StateError when no active task', () async {
       final freshRepo = HttpVideoSummaryRepository(
         taskService: mockTaskService,
-        wsEventStream: const Stream.empty(),
+        wsClient: mockWsClient,
         kbid: testKbid,
         videoId: testVideoId,
       );
@@ -469,7 +507,7 @@ void main() {
         () async {
       final repoWithoutQA = HttpVideoSummaryRepository(
         taskService: mockTaskService,
-        wsEventStream: const Stream.empty(),
+        wsClient: mockWsClient,
         kbid: testKbid,
         videoId: testVideoId,
       );

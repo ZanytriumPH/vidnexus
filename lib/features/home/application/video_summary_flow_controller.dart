@@ -332,10 +332,16 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     }
   }
 
-  /// 轮询等待视频转写和关键帧抽取完成，超时 120 秒。
-  /// 就绪后用后端返回的 duration 更新本地 videoAsset 和时间区间。
+  /// 轮询等待视频转写和关键帧抽取完成。
+  ///
+  /// 就绪条件与后端 createTask 的校验对齐：
+  ///   extract_completed_at IS NOT NULL
+  ///   AND transcribe_status = 'COMPLETED'
+  ///   AND frame_extraction_status = 'COMPLETED'
+  ///
+  /// 最多等待 20 秒；超时后不阻塞流程，交由后端 422 返回明确错误。
   Future<void> _waitForVideoReady() async {
-    const maxAttempts = 60; // 最多轮询 60 次
+    const maxAttempts = 10; // 10 × 2s = 20s
     const pollInterval = Duration(seconds: 2);
 
     for (int i = 0; i < maxAttempts; i++) {
@@ -344,6 +350,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         final resp = await videoService.getVideo(_repository.videoId);
         final data = resp.data;
         if (data != null &&
+            data.extractCompletedAt != null &&
             data.transcribeStatus == 'COMPLETED' &&
             data.frameExtractionStatus == 'COMPLETED') {
           if (kDebugMode) {
@@ -358,10 +365,10 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       }
       await Future.delayed(pollInterval);
     }
-    // 超时仍未就绪，抛出明确错误而非静默继续（否则后续 createTask 会报 422）
-    throw TimeoutException(
-      '视频处理超时：转写和关键帧抽取未在 ${maxAttempts * pollInterval.inSeconds} 秒内完成。'
-      '请确认 Celery Worker 正在运行。',
+    // 超时后不抛异常，交由后端 createTask 接口返回 422 明确错误
+    debugPrint(
+      '[FlowCtrl] 视频未在 ${maxAttempts * pollInterval.inSeconds}s 内就绪，'
+      '继续流程，由后端校验',
     );
   }
 
