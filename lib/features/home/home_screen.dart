@@ -117,7 +117,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   // 新建会话需要同时重置流程状态、文本状态和 session 历史，因此在这里做一次协调调用。
+  // 如果当前已经是空会话（未上传视频、未创建任务、处于 ready 阶段），跳过以避免虚假历史条目。
   void _createNewSession() {
+    final flowState = ref.read(videoSummaryFlowControllerProvider);
+    final isAlreadyEmpty = flowState.taskId == null &&
+        flowState.stage == VideoSummaryStage.ready &&
+        !flowState.uploadHighlighted;
+    if (isAlreadyEmpty) return;
+
     final flowController = ref.read(
       videoSummaryFlowControllerProvider.notifier,
     );
