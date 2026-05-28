@@ -167,7 +167,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   }
 
   @override
-  Stream<VideoSummaryProcessingData> startDraftGeneration() async* {
+  Stream<VideoSummaryProcessingData> startDraftGeneration({
+    String? userInitialPreference,
+  }) async* {
     if (kDebugMode) {
       debugPrint(
         '[HttpRepo] 开始创建任务 — kbid=$kbid videoId=$videoId '
@@ -175,10 +177,11 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       );
     }
 
-    // 1. 创建任务
+    // 1. 创建任务（传入用户总结偏好）
     final createResp = await _taskService.createTask(
       kbid: kbid,
       videoId: videoId,
+      userInitialPreference: userInitialPreference,
     );
     final data = createResp.data;
     if (data == null) {

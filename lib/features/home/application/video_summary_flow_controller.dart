@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -357,10 +358,11 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       }
       await Future.delayed(pollInterval);
     }
-    // 超时仍继续，让后端返回具体错误
-    if (kDebugMode) {
-      debugPrint('[FlowCtrl] 视频就绪等待超时 — videoId=${_repository.videoId}');
-    }
+    // 超时仍未就绪，抛出明确错误而非静默继续（否则后续 createTask 会报 422）
+    throw TimeoutException(
+      '视频处理超时：转写和关键帧抽取未在 ${maxAttempts * pollInterval.inSeconds} 秒内完成。'
+      '请确认 Celery Worker 正在运行。',
+    );
   }
 
   /// 将后端返回的视频时长（秒）同步到本地 videoAsset 和默认时间区间。
@@ -425,7 +427,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     );
   }
 
-  Future<void> startDraftGeneration() async {
+  Future<void> startDraftGeneration({String? userInitialPreference}) async {
     if (state.isGenerating) {
       return;
     }
@@ -450,7 +452,11 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       // 等待视频处理完成（转写 + 关键帧抽取），否则后端返回 422
       await _waitForVideoReady();
 
-      await for (final processingData in _repository.startDraftGeneration()) {
+      await for (final processingData in _repository.startDraftGeneration(
+        userInitialPreference: (userInitialPreference != null && userInitialPreference.isNotEmpty)
+            ? userInitialPreference
+            : null,
+      )) {
         state = state.copyWith(
           processingSnapshot: mapProcessingDataToSnapshot(processingData),
         );
@@ -470,7 +476,6 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       state = state.copyWith(
         stage: VideoSummaryStage.ready,
       );
-      rethrow;
     } finally {
       state = state.copyWith(isGenerating: false);
     }

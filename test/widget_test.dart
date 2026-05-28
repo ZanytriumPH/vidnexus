@@ -138,7 +138,7 @@ class _WidgetTestVideoSummaryRepository extends VideoSummaryRepository {
   }
 
   @override
-  Stream<VideoSummaryProcessingData> startDraftGeneration() {
+  Stream<VideoSummaryProcessingData> startDraftGeneration({String? userInitialPreference}) {
     final controller = StreamController<VideoSummaryProcessingData>();
     controller.onListen = () {
       controller.add(_processingData);

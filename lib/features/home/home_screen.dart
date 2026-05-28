@@ -278,9 +278,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           .setDraftEditMode,
       onStartPressed: flowState.isGenerating
           ? null
-          : ref
-                .read(videoSummaryFlowControllerProvider.notifier)
-                .startDraftGeneration,
+          : () {
+              final preference = ref
+                  .read(videoSummaryTextEditingControllerProvider)
+                  .readyPreferenceText;
+              ref
+                  .read(videoSummaryFlowControllerProvider.notifier)
+                  .startDraftGeneration(
+                    userInitialPreference:
+                        preference.isNotEmpty ? preference : null,
+                  );
+            },
       onGenerateFinalPressed: flowState.isGenerating
           ? null
           : _generateFinalSummary,
