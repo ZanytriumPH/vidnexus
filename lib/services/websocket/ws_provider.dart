@@ -28,7 +28,8 @@ final wsEventProvider = StreamProvider<WSEventEnvelope?>((ref) {
     onError: (e) => controller.addError(e),
   );
 
-  // 建立连接
+  // 建立连接（不 await，让 StreamProvider 尽早返回 stream；
+  // 调用方通过 wsClient.ensureConnected() 等待就绪）
   wsClient.connect();
 
   ref.onDispose(() {
@@ -38,6 +39,22 @@ final wsEventProvider = StreamProvider<WSEventEnvelope?>((ref) {
   });
 
   return controller.stream;
+});
+
+/// 确保 WebSocket 已连接的 Future Provider。
+///
+/// 在需要 WebSocket 就绪后才能进行的操作前 await 此 provider。
+final wsReadyProvider = FutureProvider<void>((ref) async {
+  final authState = ref.watch(authControllerProvider);
+  if (!authState.isLoggedIn) {
+    throw StateError('用户未登录，无法建立 WebSocket 连接');
+  }
+
+  // 触发 wsEventProvider 保持活跃（从而建立连接）
+  ref.listen(wsEventProvider, (prev, next) {});
+
+  final wsClient = ref.read(wsClientProvider);
+  await wsClient.ensureConnected(timeout: const Duration(seconds: 10));
 });
 
 /// WebSocket 客户端 Provider。

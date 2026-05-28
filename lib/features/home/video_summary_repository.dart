@@ -40,7 +40,7 @@ final videoSummaryRepositoryProvider = Provider<VideoSummaryRepository>((ref) {
   return HttpVideoSummaryRepository(
     taskService: ref.watch(taskServiceProvider),
     videoQAService: ref.watch(videoQAServiceProvider),
-    wsEventStream: ref.watch(wsClientProvider).eventStream,
+    wsClient: ref.watch(wsClientProvider),
     kbid: kbid,
     videoId: _defaultVideoId,
   );

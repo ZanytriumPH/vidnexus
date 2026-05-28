@@ -3,9 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../services/models/common_dto.dart';
-import '../../services/polling/task_poller.dart';
+import '../../services/polling/task_poller.dart'; // TaskFailedException
 import '../../services/task_service.dart';
 import '../../services/video_qa_service.dart';
+import '../../services/websocket/ws_client.dart';
 import '../../services/websocket/ws_models.dart';
 import '../../services/sse/sse_models.dart';
 import 'domain/video_summary_domain_models.dart';
@@ -21,19 +22,19 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   HttpVideoSummaryRepository({
     required TaskService taskService,
     VideoQAService? videoQAService,
+    required WsClient wsClient,
     TaskPoller? taskPoller,
-    required Stream<WSEventEnvelope?> wsEventStream,
     required this.kbid,
     required this.videoId,
   })  : _taskService = taskService,
         _videoQAService = videoQAService,
-        _wsEventStream = wsEventStream,
+        _wsClient = wsClient,
         _taskPoller = taskPoller ??
             TaskPoller(taskService: taskService);
 
   final TaskService _taskService;
   final VideoQAService? _videoQAService;
-  final Stream<WSEventEnvelope?> _wsEventStream;
+  final WsClient _wsClient;
   final TaskPoller _taskPoller;
 
   /// 当前知识库 ID。
@@ -111,6 +112,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       WSStage.extractingKeyframes => VideoSummaryProcessingStage.extractingFrames,
       WSStage.ragRetrieval => VideoSummaryProcessingStage.dispatchingChunks,
       WSStage.llmReasoning => VideoSummaryProcessingStage.analyzingAudioChunks,
+      WSStage.analysis => VideoSummaryProcessingStage.analyzingAudioChunks,
       WSStage.synthesis => VideoSummaryProcessingStage.synthesizingChunks,
       WSStage.cleanup => VideoSummaryProcessingStage.waitingHumanReview,
     };
@@ -132,6 +134,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
           break;
         case WSStage.ragRetrieval:
         case WSStage.llmReasoning:
+        case WSStage.analysis:
           preprocessProgress = 100;
           analysisProgress = progress.clamp(0, 100);
           break;
@@ -177,6 +180,17 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       );
     }
 
+    // 0. 确保 WebSocket 已连接（最多等待 10 秒）
+    try {
+      await _wsClient.ensureConnected(timeout: const Duration(seconds: 10));
+      if (kDebugMode) {
+        debugPrint('[HttpRepo] WebSocket 连接就绪');
+      }
+    } catch (e) {
+      debugPrint('[HttpRepo] WebSocket 连接失败（${e.toString().split('\n').first}），将无法接收实时进度');
+      throw TaskFailedException('WebSocket 未连接，无法启动任务');
+    }
+
     // 1. 创建任务（传入用户总结偏好）
     final createResp = await _taskService.createTask(
       kbid: kbid,
@@ -193,7 +207,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       debugPrint('[HttpRepo] 任务已创建 — taskId=$_taskId state=${data.workflowState}');
     }
 
-    // 2. 触发 Phase-1 分析工作流（new.md 新增 startAnalysis）
+    // 2. 触发 Phase-1 分析工作流
     try {
       await _taskService.startAnalysis(_taskId!);
       if (kDebugMode) {
@@ -203,31 +217,84 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       debugPrint('[HttpRepo] startAnalysis 失败（可能后端已自动启动）: $e');
     }
 
-    // 3. 监听进度 (WebSocket + 降级 Polling)
-    final wsStream = _wsEventStream.where((env) =>
-        env != null &&
+    // 3. 纯 WebSocket 监听进度 — 严格对齐后端 WSEventEnvelope 消息
+    final taskId = _taskId!;
+    final wsStream = _wsClient.eventStream.where((env) =>
         env.scope == WSScope.videoSummaryTask &&
-        env.scopeId == _taskId);
+        env.scopeId == taskId);
 
-    bool receivedWsEvent = false;
     final controller = StreamController<VideoSummaryProcessingData>();
+    StreamSubscription<WSEventEnvelope>? wsSubscription;
 
-    // 订阅 WS
-    StreamSubscription? wsSubscription;
+    // 首次事件超时：启动分析后 15 秒内必须收到第一条 WS 事件
+    Timer? firstEventTimeout;
+    firstEventTimeout = Timer(const Duration(seconds: 15), () {
+      if (!controller.isClosed) {
+        debugPrint('[HttpRepo] WebSocket 首事件超时（15s 内未收到任何进度消息）');
+        controller.addError(
+          TimeoutException('任务启动超时，未收到后端进度反馈，taskId=$taskId'),
+        );
+        controller.close();
+      }
+    });
+
+    // 总超时计时器：第一个事件到达后 180 秒内未收到 completed/error 事件则超时
+    Timer? totalTimeout;
+    const totalTimeoutDuration = Duration(seconds: 180);
+
     wsSubscription = wsStream.listen(
       (env) {
-        if (env == null) return;
-        receivedWsEvent = true;
+        // 跳过重连确认事件
+        if (env.eventType == WSEventType.reconnectAck) {
+          return;
+        }
+
+        // 收到第一个有效事件时：取消首事件超时，启动总超时
+        if (firstEventTimeout != null) {
+          firstEventTimeout!.cancel();
+          firstEventTimeout = null;
+
+          totalTimeout = Timer(totalTimeoutDuration, () {
+            if (!controller.isClosed) {
+              debugPrint('[HttpRepo] WebSocket 进度超时（${totalTimeoutDuration.inSeconds}s 内未完成）');
+              controller.addError(
+                TimeoutException(
+                  '任务处理超时（${totalTimeoutDuration.inSeconds}s），taskId=$taskId',
+                ),
+              );
+              controller.close();
+            }
+          });
+        }
 
         if (env.eventType == WSEventType.error) {
-          controller.addError(TaskFailedException(_taskId!));
+          debugPrint('[HttpRepo] 收到 error 事件: ${env.message}');
+          controller.addError(TaskFailedException(taskId));
           controller.close();
           return;
         }
 
+        if (env.eventType == WSEventType.completed) {
+          if (kDebugMode) {
+            debugPrint('[HttpRepo] 收到 completed 事件 — taskId=$taskId');
+          }
+          // 发送最终 100% 进度
+          controller.add(VideoSummaryProcessingData(
+            progress: 1.0,
+            currentStage: VideoSummaryProcessingStage.waitingHumanReview,
+            currentMessage: env.message ?? '初稿生成完成',
+            steps: _buildWSSteps(WSStage.cleanup, 100),
+          ));
+          controller.close();
+          return;
+        }
+
+        // progress / status_update 事件
         final progressVal = (env.progress ?? 0) / 100.0;
         final currentStage = _mapWSStage(env.stage);
         final currentMessage = env.message ?? '';
+
+        // 严格使用后端下发的 stage + progress 构建步骤进度
         final steps = _buildWSSteps(env.stage, env.progress ?? 0);
 
         controller.add(VideoSummaryProcessingData(
@@ -237,40 +304,31 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
           steps: steps,
         ));
 
-        if (env.eventType == WSEventType.completed) {
-          controller.close();
+        if (kDebugMode) {
+          debugPrint(
+            '[HttpRepo] WS进度 — stage=${env.stage?.name} '
+            'progress=${env.progress}% msg=${env.message}',
+          );
         }
       },
       onError: (e) {
         debugPrint('[HttpRepo] WebSocket stream error: $e');
+        if (!controller.isClosed) {
+          controller.addError(e);
+          controller.close();
+        }
+      },
+      onDone: () {
+        debugPrint('[HttpRepo] WebSocket stream done — taskId=$taskId');
+        if (!controller.isClosed) {
+          controller.close();
+        }
       },
     );
 
-    // 3秒后检查是否有收到 WS 消息，若没有，启动 Polling 降级方案以防卡死
-    Timer(const Duration(seconds: 3), () async {
-      if (!receivedWsEvent && !controller.isClosed) {
-        debugPrint('[HttpRepo] WebSocket 3秒内未收到消息，启用 Polling 降级方案');
-        try {
-          await for (final data in _taskPoller.pollTask(_taskId!)) {
-            if (!receivedWsEvent && !controller.isClosed) {
-              controller.add(data);
-            } else {
-              break;
-            }
-          }
-          if (!receivedWsEvent && !controller.isClosed) {
-            controller.close();
-          }
-        } catch (e) {
-          if (!receivedWsEvent && !controller.isClosed) {
-            controller.addError(e);
-            controller.close();
-          }
-        }
-      }
-    });
-
     controller.onCancel = () {
+      firstEventTimeout?.cancel();
+      totalTimeout?.cancel();
       wsSubscription?.cancel();
     };
 

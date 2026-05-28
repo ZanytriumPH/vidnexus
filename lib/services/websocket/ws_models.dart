@@ -25,6 +25,7 @@ enum WSStage {
   extractingKeyframes,
   ragRetrieval,
   llmReasoning,
+  analysis,
   synthesis,
   cleanup,
 }
@@ -106,6 +107,7 @@ class WSEventEnvelope {
         'extracting_keyframes' => WSStage.extractingKeyframes,
         'rag_retrieval' => WSStage.ragRetrieval,
         'llm_reasoning' => WSStage.llmReasoning,
+        'analysis' => WSStage.analysis,
         'synthesis' => WSStage.synthesis,
         'cleanup' => WSStage.cleanup,
         _ => WSStage.extraction,

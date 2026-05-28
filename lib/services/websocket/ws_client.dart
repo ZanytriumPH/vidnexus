@@ -42,6 +42,9 @@ class WsClient {
   int _reconnectAttempts = 0;
   int _lastSequence = 0;
 
+  /// 连接就绪 Completer，connect() 成功后 resolve，断开后重置。
+  Completer<void>? _connectedCompleter;
+
   /// 当前连接状态。
   WsConnectionState get state => _state;
 
@@ -55,6 +58,36 @@ class WsClient {
 
   static const _maxReconnectDelaySeconds = 30;
   static const _heartbeatIntervalSeconds = 30;
+
+  /// 确保 WebSocket 已连接，可选超时。
+  ///
+  /// 如果已经处于 connected 状态，立即返回。
+  /// 如果正在连接中，等待连接完成。
+  /// 如果断开，触发连接并等待。
+  Future<void> ensureConnected({Duration timeout = const Duration(seconds: 10)}) async {
+    if (_state == WsConnectionState.connected) {
+      return;
+    }
+
+    // 如果已有等待中的 Completer，复用
+    if (_connectedCompleter != null && !_connectedCompleter!.isCompleted) {
+      return _connectedCompleter!.future.timeout(
+        timeout,
+        onTimeout: () => throw TimeoutException('WebSocket 连接超时（${timeout.inSeconds}s）'),
+      );
+    }
+
+    _connectedCompleter = Completer<void>();
+    connect(); // 不等待，让 connect() 内部在成功时 resolve Completer
+
+    return _connectedCompleter!.future.timeout(
+      timeout,
+      onTimeout: () {
+        _connectedCompleter = null;
+        throw TimeoutException('WebSocket 连接超时（${timeout.inSeconds}s）');
+      },
+    );
+  }
 
   /// 建立连接。
   Future<void> connect() async {
@@ -90,6 +123,11 @@ class WsClient {
       _channel = WebSocketChannel.connect(uri);
       _state = WsConnectionState.connected;
       _reconnectAttempts = 0;
+
+      // 通知等待者连接已就绪
+      if (_connectedCompleter != null && !_connectedCompleter!.isCompleted) {
+        _connectedCompleter!.complete();
+      }
 
       _subscription = _channel!.stream.listen(
         _onMessage,
@@ -172,6 +210,10 @@ class WsClient {
     _channel?.sink.close();
     _channel = null;
     _state = WsConnectionState.disconnected;
+    // 重置连接 Completer，以便下次 ensureConnected 能重新等待
+    if (_connectedCompleter != null && !_connectedCompleter!.isCompleted) {
+      _connectedCompleter = null;
+    }
   }
 
   void _startHeartbeat() {
