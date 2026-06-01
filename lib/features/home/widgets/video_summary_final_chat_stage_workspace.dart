@@ -22,6 +22,7 @@ class FinalChatStageWorkspace extends StatefulWidget {
     required this.onSendChatPressed,
     required this.onTimestampScopeChanged,
     required this.onTimestampRangeChanged,
+    this.onAddToKbPressed,
     super.key,
   });
 
@@ -40,6 +41,7 @@ class FinalChatStageWorkspace extends StatefulWidget {
   final VoidCallback? onSendChatPressed;
   final ValueChanged<bool> onTimestampScopeChanged;
   final ValueChanged<TimestampRangeSelection> onTimestampRangeChanged;
+  final VoidCallback? onAddToKbPressed;
 
   @override
   State<FinalChatStageWorkspace> createState() =>
@@ -119,6 +121,7 @@ class _FinalChatStageWorkspaceState extends State<FinalChatStageWorkspace>
                 ChatThread(
                   summary: widget.finalSummaryData,
                   messages: widget.chatMessages,
+                  onAddToKbPressed: widget.onAddToKbPressed,
                 ),
                 if (widget.chatMessages.isNotEmpty) const MessageActionRow(),
                 const SizedBox(height: 12),

@@ -9,11 +9,13 @@ import 'application/video_summary_session_history_controller.dart';
 import 'application/video_summary_settings_controller.dart';
 import 'application/video_summary_text_editing_controller.dart';
 import 'video_summary_models.dart';
+import 'video_summary_repository.dart';
 import 'widgets/home_shell_widgets.dart';
 import 'widgets/session_settings_sheet.dart';
 import 'widgets/video_summary_content_widgets.dart';
 import 'widgets/video_summary_drawer_shared.dart';
 import 'widgets/video_summary_drawer_widgets.dart';
+import 'widgets/video_summary_final_chat_widgets.dart';
 
 /// 首页现在主要承担页面壳和装配职责，复杂状态迁移已下沉到 application 层。
 class HomeScreen extends ConsumerStatefulWidget {
@@ -308,6 +310,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           .setTimestampRange,
       isUploading: flowState.isUploading,
       uploadProgress: flowState.uploadProgress,
+      onAddToKbPressed: () {
+        final repo = ref.read(videoSummaryRepositoryProvider);
+        final videoId = repo.videoId;
+        if (videoId.isEmpty || videoId == 'vid_default') return;
+        showAddToKnowledgeBaseSheet(
+          context: context,
+          ref: ref,
+          videoId: videoId,
+        );
+      },
     );
   }
 }

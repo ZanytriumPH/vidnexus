@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
@@ -18,11 +19,33 @@ class AppMarkdownBody extends StatelessWidget {
       return Text('', style: bodyStyle);
     }
 
-    return MarkdownBody(
+    return _SafeMarkdownBody(
       data: data,
-      shrinkWrap: true,
-      selectable: true,
-      styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+      bodyStyle: bodyStyle,
+      theme: theme,
+    );
+  }
+}
+
+class _SafeMarkdownBody extends StatelessWidget {
+  const _SafeMarkdownBody({
+    required this.data,
+    required this.bodyStyle,
+    required this.theme,
+  });
+
+  final String data;
+  final TextStyle bodyStyle;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    try {
+      return MarkdownBody(
+        data: data,
+        shrinkWrap: true,
+        selectable: true,
+        styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
         p: bodyStyle,
         h1: bodyStyle.copyWith(
           fontSize: 22,
@@ -77,7 +100,14 @@ class AppMarkdownBody extends StatelessWidget {
           decorationColor: const Color(0xFF275FD8),
         ),
       ),
-      onTapLink: (text, href, title) {},
-    );
+        onTapLink: (text, href, title) {},
+      );
+    } catch (e) {
+      debugPrint('[AppMarkdownBody] Markdown render error, falling back to plain text: $e');
+      return SelectableText(
+        data,
+        style: bodyStyle,
+      );
+    }
   }
 }

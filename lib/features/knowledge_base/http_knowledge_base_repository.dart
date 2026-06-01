@@ -125,6 +125,11 @@ class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
   }
 
   @override
+  Future<void> bindVideo({required String kbid, required String videoId}) async {
+    await _kbService.bindVideo(kbid: kbid, videoId: videoId);
+  }
+
+  @override
   Future<List<KnowledgeSourceItem>> listSources(String kbid) async {
     final resp = await _kbService.listVideos(kbid);
     return resp.data.map((video) {

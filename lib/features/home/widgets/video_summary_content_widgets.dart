@@ -40,6 +40,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
     required this.onTimestampRangeChanged,
     required this.isUploading,
     required this.uploadProgress,
+    this.onAddToKbPressed,
     super.key,
   });
 
@@ -73,6 +74,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
   final ValueChanged<TimestampRangeSelection> onTimestampRangeChanged;
   final bool isUploading;
   final double uploadProgress;
+  final VoidCallback? onAddToKbPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -124,6 +126,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
           onSendChatPressed: onSendChatPressed,
           onTimestampScopeChanged: onTimestampScopeChanged,
           onTimestampRangeChanged: onTimestampRangeChanged,
+          onAddToKbPressed: onAddToKbPressed,
         ),
       _ => const SizedBox.shrink(),
     };

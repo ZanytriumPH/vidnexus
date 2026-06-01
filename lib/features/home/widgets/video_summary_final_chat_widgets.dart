@@ -1,19 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_buttons.dart';
 import '../../../app/widgets/composer_attachment_button.dart';
+import '../../../services/service_providers.dart';
+import '../../knowledge_base/application/knowledge_base_controller.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
 import 'timestamp_interval_picker_sheet.dart';
 import 'video_summary_markdown_body.dart';
 
 class ChatThread extends StatelessWidget {
-  const ChatThread({required this.summary, required this.messages, super.key});
+  const ChatThread({
+    required this.summary,
+    required this.messages,
+    this.onAddToKbPressed,
+    super.key,
+  });
 
   final FinalSummaryData summary;
   final List<ChatMessage> messages;
+  final VoidCallback? onAddToKbPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +32,10 @@ class ChatThread extends StatelessWidget {
       children: [
         Padding(
           padding: EdgeInsets.only(bottom: messageStyles.messageSpacing),
-          child: _FinalSummaryBubble(summary: summary),
+          child: _FinalSummaryBubble(
+            summary: summary,
+            onAddToKbPressed: onAddToKbPressed,
+          ),
         ),
         ...messages.map(
           (message) => Padding(
@@ -37,9 +49,13 @@ class ChatThread extends StatelessWidget {
 }
 
 class _FinalSummaryBubble extends StatelessWidget {
-  const _FinalSummaryBubble({required this.summary});
+  const _FinalSummaryBubble({
+    required this.summary,
+    this.onAddToKbPressed,
+  });
 
   final FinalSummaryData summary;
+  final VoidCallback? onAddToKbPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -77,6 +93,10 @@ class _FinalSummaryBubble extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              if (onAddToKbPressed != null) ...[
+                _AddToKbButton(onPressed: onAddToKbPressed),
+                const SizedBox(width: 6),
+              ],
               const ActionIconButton(icon: Icons.copy_all_outlined),
               const SizedBox(width: 6),
               const ActionIconButton(icon: Icons.note_alt_outlined),
@@ -199,6 +219,34 @@ class ActionIconButton extends StatelessWidget {
         border: Border.all(color: const Color(0xFFD7DFE7)),
       ),
       child: Icon(icon, size: 13, color: AppColors.textSecondary),
+    );
+  }
+}
+
+class _AddToKbButton extends StatelessWidget {
+  const _AddToKbButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          color: const Color(0xFFE7F0FF),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFFBFD1FF)),
+        ),
+        child: const Icon(
+          Icons.library_books_outlined,
+          size: 13,
+          color: Color(0xFF275FD8),
+        ),
+      ),
     );
   }
 }
@@ -513,3 +561,210 @@ class _TimestampActionTile extends StatelessWidget {
 }
 
 enum _TimestampAction { edit, disable }
+
+/// 弹出知识库选择底部弹窗，用户选择后将当前视频加入对应知识库。
+Future<void> showAddToKnowledgeBaseSheet({
+  required BuildContext context,
+  required WidgetRef ref,
+  required String videoId,
+}) async {
+  final librariesAsync = ref.read(libraryListControllerProvider);
+
+  // 确保知识库列表已加载
+  if (librariesAsync.libraries.isEmpty && !librariesAsync.isLoading) {
+    ref.read(libraryListControllerProvider.notifier).refresh();
+  }
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    showDragHandle: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (sheetContext) {
+      return _AddToKnowledgeBaseSheet(
+        ref: ref,
+        videoId: videoId,
+      );
+    },
+  );
+}
+
+class _AddToKnowledgeBaseSheet extends ConsumerWidget {
+  const _AddToKnowledgeBaseSheet({
+    required this.ref,
+    required this.videoId,
+  });
+
+  final WidgetRef ref;
+  final String videoId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef widgetRef) {
+    final l10n = _KbSheetStrings.of(context);
+    final librariesState = widgetRef.watch(libraryListControllerProvider);
+    final kbService = widgetRef.watch(knowledgeBaseServiceProvider);
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (librariesState.isLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else if (librariesState.libraries.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(
+                    l10n.emptyHint,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                ),
+              )
+            else
+              ...librariesState.libraries.map(
+                (library) => _KnowledgeBaseTile(
+                  title: library.title,
+                  meta: library.meta,
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    try {
+                      await kbService.bindVideo(
+                        kbid: library.id,
+                        videoId: videoId,
+                      );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(l10n.success(library.title)),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(l10n.failure(e.toString())),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KnowledgeBaseTile extends StatelessWidget {
+  const _KnowledgeBaseTile({
+    required this.title,
+    required this.meta,
+    required this.onTap,
+  });
+
+  final String title;
+  final String meta;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F9FC),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFD7DFE7)),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.library_books_outlined,
+                size: 20,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        meta,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 11,
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: AppColors.textSecondary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 简单本地化字符串封装，避免散写中文。
+class _KbSheetStrings {
+  const _KbSheetStrings._();
+
+  static _KbSheetStrings of(BuildContext context) =>
+      const _KbSheetStrings._();
+
+  String get title => '加入知识库';
+  String get emptyHint => '暂无知识库，请先创建';
+  String success(String kbName) => '已加入知识库「$kbName」';
+  String failure(String error) => '加入失败：$error';
+}

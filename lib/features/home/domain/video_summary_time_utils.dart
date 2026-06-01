@@ -28,9 +28,16 @@ String formatVideoSummaryRangeLength(int totalSeconds) {
 
 int parseVideoSummaryClockLabel(String value) {
   final parts = value.split(':').map(int.parse).toList();
+  if (parts.isEmpty) {
+    return 0;
+  }
+  if (parts.length == 1) {
+    return parts[0]; // raw seconds
+  }
   if (parts.length == 2) {
     return parts[0] * 60 + parts[1];
   }
+  // length >= 3: HH:MM:SS (取前三段，忽略多余段)
   return parts[0] * 3600 + parts[1] * 60 + parts[2];
 }
 

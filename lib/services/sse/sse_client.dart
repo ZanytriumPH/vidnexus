@@ -85,10 +85,15 @@ class SseClient {
   }
 
   /// 将字节流转换为按行分割的字符串流。
+  ///
+  /// 使用 [utf8.decoder] 作为 StreamTransformer，而非对每个 chunk 独立调用
+  /// [utf8.decode]。当 UTF-8 多字节字符（如中文）被分割到两个 chunk 边界时，
+  /// StreamTransformer 会自动将不完整的尾部字节保留到下一个 chunk 合并解码，
+  /// 避免 "Unfinished UTF-8 octet sequence" 错误。
   Stream<String> _toLines(Stream<List<int>> byteStream) async* {
     final buffer = StringBuffer();
-    await for (final chunk in byteStream) {
-      buffer.write(utf8.decode(chunk));
+    await for (final chunk in byteStream.transform(utf8.decoder)) {
+      buffer.write(chunk);
       while (true) {
         final newlineIndex = buffer.toString().indexOf('\n');
         if (newlineIndex == -1) break;

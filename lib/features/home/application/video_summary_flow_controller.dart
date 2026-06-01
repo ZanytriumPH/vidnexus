@@ -287,8 +287,9 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       final newVideoId = createVideoResp.data?.videoId ?? fileName;
       final createdDuration = createVideoResp.data?.duration;
 
-      // 4. 更新 repository 中的 videoId
+      // 4. 更新 repository 和 provider 中的 videoId
       _repository.updateVideoId(newVideoId);
+      ref.read(currentVideoIdProvider.notifier).state = newVideoId;
 
       // 5. 更新本地状态中的视频资产信息
       final durationLabel = createdDuration != null && createdDuration > 0
@@ -360,8 +361,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           _updateVideoDuration(data.duration);
           return;
         }
-      } catch (_) {
-        // 忽略单次轮询失败，继续重试
+      } catch (e) {
+        debugPrint('[FlowCtrl] _waitForVideoReady poll attempt ${i + 1}/$maxAttempts failed: $e');
       }
       await Future.delayed(pollInterval);
     }
@@ -649,10 +650,11 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       chatMessages: List<ChatMessage>.from(snapshot.chatMessages),
     );
 
-    // 同步 repository 的 videoId（从快照的 videoAsset.title 中获取）
+    // 同步 repository 和 provider 的 videoId（从快照的 videoAsset.title 中获取）
     if (videoAsset.title.isNotEmpty &&
         videoAsset.title != 'vid_default') {
       _repository.updateVideoId(videoAsset.title);
+      ref.read(currentVideoIdProvider.notifier).state = videoAsset.title;
     }
 
     // 同步 repository 的 taskId，否则后续追问会报 "No active task"

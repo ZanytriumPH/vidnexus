@@ -10,6 +10,10 @@ import 'video_summary_models.dart';
 /// 默认视频 ID（后续由上传/选择视频时动态设置）。
 const String _defaultVideoId = 'vid_default';
 
+/// 当前视频 ID，独立于 repository provider，避免 defaultKbidProvider 解析时
+/// repository 重建导致 videoId 被重置为 _defaultVideoId。
+final currentVideoIdProvider = StateProvider<String>((ref) => _defaultVideoId);
+
 /// 获取当前用户的默认知识库 ID（不存在则自动创建）。
 final defaultKbidProvider = FutureProvider<String>((ref) async {
   // 监听 authControllerProvider 的变化。当 authState 变化时，这个 FutureProvider 会自动重新计算并重新获取数据
@@ -37,12 +41,15 @@ final videoSummaryRepositoryProvider = Provider<VideoSummaryRepository>((ref) {
   final kbidAsync = ref.watch(defaultKbidProvider);
   final kbid = kbidAsync.valueOrNull ?? '';
 
+  // 从独立 provider 读取 videoId，不受 repository 重建影响
+  final videoId = ref.watch(currentVideoIdProvider);
+
   return HttpVideoSummaryRepository(
     taskService: ref.watch(taskServiceProvider),
     videoQAService: ref.watch(videoQAServiceProvider),
     wsClient: ref.watch(wsClientProvider),
     kbid: kbid,
-    videoId: _defaultVideoId,
+    videoId: videoId,
   );
 });
 
