@@ -200,6 +200,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
   void reset() {
     _repository.updateTaskId(null);
+    _repository.updateVideoId(defaultVideoId);
+    ref.read(currentVideoIdProvider.notifier).state = defaultVideoId;
     final settings = ref.read(videoSummarySettingsProvider);
     final defaultRange = _buildDefaultTimestampRange(state.videoAsset.durationLabel);
     state = state.copyWith(
@@ -238,6 +240,21 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       final fileName = result.files.single.name;
       final fileSize = result.files.single.size;
 
+      // 1. 预先注册视频资源记录（必须先于 TUS 上传）。
+      //    后端 Celery async_finalize_upload 通过 (owner_id + file_name + oss_key 为空)
+      //    查找预注册记录来关联上传文件和视频资源。如果 TUS 上传先完成而 createVideo
+      //    尚未调用，Celery 会匹配到旧的同名 stale record 或创建全新记录，导致前后端
+      //    videoId 不一致，后续 createTask 时后端返回 422 video_not_ready。
+      final createVideoResp = await ref.read(videoServiceProvider).createVideo(
+        fileName: fileName,
+      );
+      final newVideoId = createVideoResp.data?.videoId ?? fileName;
+      final createdDuration = createVideoResp.data?.duration;
+
+      // 2. 立即同步 videoId 到 repository 和 provider
+      _repository.updateVideoId(newVideoId);
+      ref.read(currentVideoIdProvider.notifier).state = newVideoId;
+
       state = state.copyWith(
         isUploading: true,
         uploadProgress: 0.0,
@@ -245,7 +262,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
       final uploadService = ref.read(uploadServiceProvider);
 
-      // 1. 初始化上传
+      // 3. 初始化 TUS 上传
       final initResp = await uploadService.initUpload(
         fileName: fileName,
         totalSize: fileSize,
@@ -255,7 +272,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         throw Exception('Failed to initialize upload: empty upload_id');
       }
 
-      // 2. 分片上传 (每片 10 MiB)
+      // 4. 分片上传 (每片 10 MiB)
       final file = File(filePath);
       final raf = await file.open(mode: FileMode.read);
       int offset = 0;
@@ -279,17 +296,6 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       } finally {
         await raf.close();
       }
-
-      // 3. 注册视频资源
-      final createVideoResp = await ref.read(videoServiceProvider).createVideo(
-        fileName: fileName,
-      );
-      final newVideoId = createVideoResp.data?.videoId ?? fileName;
-      final createdDuration = createVideoResp.data?.duration;
-
-      // 4. 更新 repository 和 provider 中的 videoId
-      _repository.updateVideoId(newVideoId);
-      ref.read(currentVideoIdProvider.notifier).state = newVideoId;
 
       // 5. 更新本地状态中的视频资产信息
       final durationLabel = createdDuration != null && createdDuration > 0

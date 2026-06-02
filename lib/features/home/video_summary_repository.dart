@@ -8,11 +8,11 @@ import 'http_video_summary_repository.dart';
 import 'video_summary_models.dart';
 
 /// 默认视频 ID（后续由上传/选择视频时动态设置）。
-const String _defaultVideoId = 'vid_default';
+const String defaultVideoId = 'vid_default';
 
 /// 当前视频 ID，独立于 repository provider，避免 defaultKbidProvider 解析时
-/// repository 重建导致 videoId 被重置为 _defaultVideoId。
-final currentVideoIdProvider = StateProvider<String>((ref) => _defaultVideoId);
+/// repository 重建导致 videoId 被重置为 [defaultVideoId]。
+final currentVideoIdProvider = StateProvider<String>((ref) => defaultVideoId);
 
 /// 获取当前用户的默认知识库 ID（不存在则自动创建）。
 final defaultKbidProvider = FutureProvider<String>((ref) async {

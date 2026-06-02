@@ -248,9 +248,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       }
     });
 
-    // 总超时计时器：第一个事件到达后 180 秒内未收到 completed/error 事件则超时
+    // 总超时计时器：第一个事件到达后 900 秒内未收到 completed/error 事件则超时
     Timer? totalTimeout;
-    const totalTimeoutDuration = Duration(seconds: 180);
+    const totalTimeoutDuration = Duration(seconds: 900);
 
     wsSubscription = wsStream.listen(
       (env) {
