@@ -1,16 +1,38 @@
 /// 这些模型专门服务 UI 展示，通常由 application 层 mapper 产出。
 enum SummaryChatSender { system, user }
 
-class ProcessingStep {
-  const ProcessingStep({
+/// 单轨分片进度条数据。
+class ChunkProgressBar {
+  const ChunkProgressBar({
     required this.label,
-    required this.detail,
-    required this.progress,
+    required this.icon,
+    required this.done,
+    required this.total,
+    required this.percent,
   });
 
   final String label;
-  final String detail;
-  final int progress;
+  final String icon;
+  final int done;
+  final int total;
+  final int percent;
+}
+
+/// 对标 Streamlit 分片进度面板的 4 轨并行进度快照。
+class ChunkProgressSnapshot {
+  const ChunkProgressSnapshot({
+    required this.audioBar,
+    required this.visionBar,
+    required this.synthesisBar,
+    required this.overallBar,
+    required this.statusLog,
+  });
+
+  final ChunkProgressBar audioBar;
+  final ChunkProgressBar visionBar;
+  final ChunkProgressBar synthesisBar;
+  final ChunkProgressBar overallBar;
+  final List<String> statusLog;
 }
 
 class ProcessingSnapshot {
@@ -18,13 +40,24 @@ class ProcessingSnapshot {
     required this.progress,
     required this.statusLabel,
     required this.etaLabel,
-    required this.steps,
+    this.chunkProgress,
+    this.statusLog = const [],
   });
 
+  /// 整体进度 0.0–1.0，驱动 HeroCard 总体进度条。
   final double progress;
+
+  /// 状态标签，显示在 HeroCard 的 pill 中。
   final String statusLabel;
+
+  /// 副标题/eta 行，显示在 HeroCard 标题下方。
   final String etaLabel;
-  final List<ProcessingStep> steps;
+
+  /// 对标 Streamlit 的 4 轨并行分片进度（新 UI 主数据源）。
+  final ChunkProgressSnapshot? chunkProgress;
+
+  /// 最近 N 条后端状态消息，用于分片面板底部的滚动日志。
+  final List<String> statusLog;
 }
 
 class DraftResult {

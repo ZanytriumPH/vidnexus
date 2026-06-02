@@ -2,148 +2,111 @@ import '../domain/video_summary_domain_models.dart';
 import '../domain/video_summary_time_utils.dart';
 import '../video_summary_presentation_models.dart';
 
+int _safePercent(int done, int total) {
+  if (total <= 0) return 0;
+  return ((done / total) * 100).round().clamp(0, 100);
+}
+
 ProcessingSnapshot buildInitialProcessingSnapshot() {
-  return const ProcessingSnapshot(
+  return ProcessingSnapshot(
     progress: 0,
     statusLabel: '处理中',
     etaLabel: '正在连接处理事件流并初始化第一阶段。',
-    steps: [
-      ProcessingStep(
-        label: '素材预处理',
-        detail: '正在准备视频文件、音轨和关键帧处理任务。',
-        progress: 0,
+    // 立即显示 3 轨进度条（全零初始态），不等后端第一条 [[PROGRESS]]
+    chunkProgress: const ChunkProgressSnapshot(
+      audioBar: ChunkProgressBar(
+        label: '音频分片',
+        icon: '🎧',
+        done: 0,
+        total: 5,
+        percent: 0,
       ),
-      ProcessingStep(
-        label: '分片并行分析',
-        detail: '等待工作流启动后下发分片任务。',
-        progress: 0,
+      visionBar: ChunkProgressBar(
+        label: '视觉分片',
+        icon: '📸',
+        done: 0,
+        total: 5,
+        percent: 0,
       ),
-      ProcessingStep(
-        label: '融合输出与待审稿',
-        detail: '等待首批分片结果回流后进入融合。',
-        progress: 0,
+      synthesisBar: ChunkProgressBar(
+        label: '融合分片',
+        icon: '🧩',
+        done: 0,
+        total: 5,
+        percent: 0,
       ),
-    ],
+      overallBar: ChunkProgressBar(
+        label: '总体进度',
+        icon: '📦',
+        done: 0,
+        total: 10,
+        percent: 0,
+      ),
+      statusLog: [],
+    ),
+    statusLog: [],
   );
 }
 
 /// 把稳定的 processing 数据翻译成当前 UI 需要的展示结构和文案。
 ProcessingSnapshot mapProcessingDataToSnapshot(VideoSummaryProcessingData data) {
+  final chunkData = data.chunkProgress;
+
   return ProcessingSnapshot(
     progress: data.progress,
-    statusLabel: _statusLabelForProcessing(data),
-    etaLabel: _etaLabelForProcessing(data),
-    steps: data.steps.map((step) => mapProcessingStepToUiStep(step, data)).toList(),
+    statusLabel: data.progress >= 1 ? '处理完成' : '处理中',
+    etaLabel: _buildEtaLabel(data),
+    chunkProgress: chunkData != null
+        ? ChunkProgressSnapshot(
+            audioBar: ChunkProgressBar(
+              label: '音频分片',
+              icon: '🎧',
+              done: chunkData.audioDone,
+              total: chunkData.totalChunks,
+              percent: _safePercent(chunkData.audioDone, chunkData.totalChunks),
+            ),
+            visionBar: ChunkProgressBar(
+              label: '视觉分片',
+              icon: '📸',
+              done: chunkData.visionDone,
+              total: chunkData.totalChunks,
+              percent:
+                  _safePercent(chunkData.visionDone, chunkData.totalChunks),
+            ),
+            synthesisBar: ChunkProgressBar(
+              label: '融合分片',
+              icon: '🧩',
+              done: chunkData.synthesisDone,
+              total: chunkData.totalChunks,
+              percent:
+                  _safePercent(chunkData.synthesisDone, chunkData.totalChunks),
+            ),
+            overallBar: ChunkProgressBar(
+              label: '总体进度',
+              icon: '📦',
+              done: chunkData.overallDone,
+              total: chunkData.overallTotal,
+              percent: chunkData.overallPercent,
+            ),
+            statusLog: data.statusLog,
+          )
+        : null,
+    statusLog: data.statusLog,
   );
 }
 
-String _statusLabelForProcessing(VideoSummaryProcessingData data) {
-  if (data.currentStage == VideoSummaryProcessingStage.waitingHumanReview) {
-    return '待进入初稿';
+/// 对标 Streamlit 的 eta 标签：简短显示各轨完成数。
+String _buildEtaLabel(VideoSummaryProcessingData data) {
+  final cp = data.chunkProgress;
+  if (cp == null) {
+    return data.currentMessage.isNotEmpty
+        ? data.currentMessage
+        : '正在准备处理内容。';
   }
 
-  return data.progress >= 1 ? '处理完成' : '处理中';
-}
-
-String _etaLabelForProcessing(VideoSummaryProcessingData data) {
-  final chunkProgress = data.chunkProgress;
-  if (chunkProgress == null) {
-    return data.currentMessage;
-  }
-
-  final progressLine =
-      '音频 ${chunkProgress.audioDone}/${chunkProgress.totalChunks} · '
-      '视觉 ${chunkProgress.visionDone}/${chunkProgress.totalChunks} · '
-      '融合 ${chunkProgress.synthesisDone}/${chunkProgress.totalChunks}';
-
-  return '${data.currentMessage} 当前分片进度：$progressLine。';
-}
-
-ProcessingStep mapProcessingStepToUiStep(
-  VideoSummaryProcessingStepData step,
-  VideoSummaryProcessingData data,
-) {
-  return switch (step.phase) {
-    VideoSummaryProcessingPhase.preprocessing => ProcessingStep(
-      label: '素材预处理',
-      detail: _preprocessingDetail(step, data),
-      progress: step.progress,
-    ),
-    VideoSummaryProcessingPhase.analysis => ProcessingStep(
-      label: '分片并行分析',
-      detail: _analysisDetail(step, data),
-      progress: step.progress,
-    ),
-    VideoSummaryProcessingPhase.synthesis => ProcessingStep(
-      label: '融合输出与待审稿',
-      detail: _synthesisDetail(step, data),
-      progress: step.progress,
-    ),
-  };
-}
-
-String _preprocessingDetail(
-  VideoSummaryProcessingStepData step,
-  VideoSummaryProcessingData data,
-) {
-  if (step.progress >= 100) {
-    return '${step.completedUnits}/${step.totalUnits} 项素材准备已完成，转录文本和关键帧已就绪。';
-  }
-
-  return switch (data.currentStage) {
-    VideoSummaryProcessingStage.acquiringVideo => '正在获取并保存视频文件，准备进入本地预处理。',
-    VideoSummaryProcessingStage.extractingAudio => '正在从视频流中分离音轨，检查后续转录输入。',
-    VideoSummaryProcessingStage.extractingFrames => '正在抽取关键帧，准备建立视觉证据索引。',
-    VideoSummaryProcessingStage.transcribingAudio => '正在调用 Whisper 生成带时间戳的转录文本。',
-    _ => data.currentMessage,
-  };
-}
-
-String _analysisDetail(
-  VideoSummaryProcessingStepData step,
-  VideoSummaryProcessingData data,
-) {
-  final chunkProgress = data.chunkProgress;
-  if (chunkProgress == null) {
-    return data.currentMessage;
-  }
-
-  if (step.progress >= 100) {
-    return '共 ${chunkProgress.totalChunks} 个分片的音频与视觉分析已完成并回传。';
-  }
-
-  return switch (data.currentStage) {
-    VideoSummaryProcessingStage.bootingWorkflow => 'LangGraph 已启动，正在装配 thread、状态机和并发模式。',
-    VideoSummaryProcessingStage.planningChunks => '正在以时间线锚点规划分片，准备建立并发任务。',
-    VideoSummaryProcessingStage.dispatchingChunks => '正在下发分片任务，等待音频与视觉 worker 回传。',
-    VideoSummaryProcessingStage.analyzingAudioChunks => '音频分片已完成 ${chunkProgress.audioDone}/${chunkProgress.totalChunks}，视觉分支继续并行。',
-    VideoSummaryProcessingStage.analyzingVisionChunks => '视觉分片已完成 ${chunkProgress.visionDone}/${chunkProgress.totalChunks}，正在与音频证据对齐。',
-    _ => data.currentMessage,
-  };
-}
-
-String _synthesisDetail(
-  VideoSummaryProcessingStepData step,
-  VideoSummaryProcessingData data,
-) {
-  final chunkProgress = data.chunkProgress;
-  if (data.currentStage == VideoSummaryProcessingStage.waitingHumanReview) {
-    return '聚合稿已整理完成，准备进入待审阅初稿阶段。';
-  }
-
-  if (step.progress >= 100) {
-    return '分片融合、聚合和待审稿封装已完成。';
-  }
-
-  if (chunkProgress == null) {
-    return data.currentMessage;
-  }
-
-  return switch (data.currentStage) {
-    VideoSummaryProcessingStage.synthesizingChunks => '融合分片已完成 ${chunkProgress.synthesisDone}/${chunkProgress.totalChunks}，正在写入中间摘要。',
-    VideoSummaryProcessingStage.aggregatingChunks => '全部分片已回流，正在按时间线整合为统一证据底稿。',
-    _ => data.currentMessage,
-  };
+  return '音频 ${cp.audioDone}/${cp.totalChunks} · '
+      '视觉 ${cp.visionDone}/${cp.totalChunks} · '
+      '融合 ${cp.synthesisDone}/${cp.totalChunks}';
 }
 
 /// draft 数据本身只包含段落，页面展示需要的交互提示在 widget 层处理。

@@ -9,13 +9,20 @@ void main() {
 
       expect(snapshot.progress, 0);
       expect(snapshot.statusLabel, '处理中');
-      expect(snapshot.steps, hasLength(3));
+      expect(snapshot.etaLabel, contains('正在连接处理事件流'));
+      expect(snapshot.chunkProgress, isNotNull);
+      expect(snapshot.chunkProgress!.audioBar.label, '音频分片');
+      expect(snapshot.chunkProgress!.audioBar.total, 5);
+      expect(snapshot.chunkProgress!.audioBar.done, 0);
+      expect(snapshot.chunkProgress!.visionBar.total, 5);
+      expect(snapshot.chunkProgress!.synthesisBar.total, 5);
+      expect(snapshot.chunkProgress!.overallBar.total, 10);
+      expect(snapshot.statusLog, isEmpty);
     });
 
     test('maps chunk analysis processing data into mobile-facing labels', () {
       const data = VideoSummaryProcessingData(
         progress: 0.58,
-        currentStage: VideoSummaryProcessingStage.analyzingVisionChunks,
         currentMessage: '视觉 worker 正在补齐画面...',
         chunkProgress: VideoSummaryChunkProgressData(
           stage: VideoSummaryChunkProgressStage.running,
@@ -27,39 +34,28 @@ void main() {
           overallTotal: 24,
           overallPercent: 38,
         ),
-        steps: [
-          VideoSummaryProcessingStepData(
-            phase: VideoSummaryProcessingPhase.preprocessing,
-            progress: 100,
-            completedUnits: 4,
-            totalUnits: 4,
-          ),
-          VideoSummaryProcessingStepData(
-            phase: VideoSummaryProcessingPhase.analysis,
-            progress: 61,
-            completedUnits: 8,
-            totalUnits: 16,
-          ),
-          VideoSummaryProcessingStepData(
-            phase: VideoSummaryProcessingPhase.synthesis,
-            progress: 28,
-            completedUnits: 1,
-            totalUnits: 10,
-          ),
-        ],
+        statusLog: ['开始处理', '音频分片完成'],
       );
 
       final snapshot = mapProcessingDataToSnapshot(data);
 
       expect(snapshot.statusLabel, '处理中');
+      expect(snapshot.progress, 0.58);
       expect(snapshot.etaLabel, contains('音频 5/8 · 视觉 3/8 · 融合 1/8'));
-      expect(snapshot.steps[1].detail, contains('视觉分片已完成 3/8'));
+      expect(snapshot.chunkProgress, isNotNull);
+      expect(snapshot.chunkProgress!.audioBar.done, 5);
+      expect(snapshot.chunkProgress!.audioBar.total, 8);
+      expect(snapshot.chunkProgress!.visionBar.done, 3);
+      expect(snapshot.chunkProgress!.synthesisBar.done, 1);
+      expect(snapshot.chunkProgress!.overallBar.done, 9);
+      expect(snapshot.chunkProgress!.overallBar.percent, 38);
+      expect(snapshot.statusLog, hasLength(2));
+      expect(snapshot.statusLog, contains('开始处理'));
     });
 
-    test('maps waitingHumanReview into completion-facing copy', () {
+    test('maps finished processing into completion-facing copy', () {
       const data = VideoSummaryProcessingData(
-        progress: 1,
-        currentStage: VideoSummaryProcessingStage.waitingHumanReview,
+        progress: 1.0,
         currentMessage: '待审稿',
         chunkProgress: VideoSummaryChunkProgressData(
           stage: VideoSummaryChunkProgressStage.finished,
@@ -71,32 +67,49 @@ void main() {
           overallTotal: 24,
           overallPercent: 100,
         ),
-        steps: [
-          VideoSummaryProcessingStepData(
-            phase: VideoSummaryProcessingPhase.preprocessing,
-            progress: 100,
-            completedUnits: 4,
-            totalUnits: 4,
-          ),
-          VideoSummaryProcessingStepData(
-            phase: VideoSummaryProcessingPhase.analysis,
-            progress: 100,
-            completedUnits: 16,
-            totalUnits: 16,
-          ),
-          VideoSummaryProcessingStepData(
-            phase: VideoSummaryProcessingPhase.synthesis,
-            progress: 100,
-            completedUnits: 10,
-            totalUnits: 10,
-          ),
-        ],
+        statusLog: ['处理完成'],
       );
 
       final snapshot = mapProcessingDataToSnapshot(data);
 
-      expect(snapshot.statusLabel, '待进入初稿');
-      expect(snapshot.steps[2].detail, '聚合稿已整理完成，准备进入待审阅初稿阶段。');
+      expect(snapshot.statusLabel, '处理完成');
+      expect(snapshot.etaLabel, contains('音频 8/8 · 视觉 8/8 · 融合 8/8'));
+      expect(snapshot.chunkProgress!.audioBar.percent, 100);
+      expect(snapshot.chunkProgress!.visionBar.percent, 100);
+      expect(snapshot.chunkProgress!.synthesisBar.percent, 100);
+      expect(snapshot.chunkProgress!.overallBar.percent, 100);
+      expect(snapshot.chunkProgress!.audioBar.done, 8);
+      expect(snapshot.chunkProgress!.visionBar.done, 8);
+      expect(snapshot.chunkProgress!.synthesisBar.done, 8);
+    });
+
+    test('maps processing data without chunkProgress gracefully', () {
+      const data = VideoSummaryProcessingData(
+        progress: 0.3,
+        currentMessage: '正在启动分析引擎...',
+        statusLog: [],
+      );
+
+      final snapshot = mapProcessingDataToSnapshot(data);
+
+      expect(snapshot.progress, 0.3);
+      expect(snapshot.statusLabel, '处理中');
+      // When chunkProgress is null, etaLabel falls back to currentMessage.
+      expect(snapshot.etaLabel, '正在启动分析引擎...');
+      expect(snapshot.chunkProgress, isNull);
+    });
+
+    test('maps processing data without chunkProgress and empty message', () {
+      const data = VideoSummaryProcessingData(
+        progress: 0.0,
+        currentMessage: '',
+        statusLog: [],
+      );
+
+      final snapshot = mapProcessingDataToSnapshot(data);
+
+      expect(snapshot.etaLabel, '正在准备处理内容。');
+      expect(snapshot.chunkProgress, isNull);
     });
   });
 }

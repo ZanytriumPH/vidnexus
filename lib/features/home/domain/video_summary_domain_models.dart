@@ -1,22 +1,6 @@
 import '../video_summary_models.dart';
 
 /// 这里只放 repository 可稳定返回的业务结果数据，不放界面展示结构。
-enum VideoSummaryProcessingPhase { preprocessing, analysis, synthesis }
-
-enum VideoSummaryProcessingStage {
-  acquiringVideo,
-  extractingAudio,
-  extractingFrames,
-  transcribingAudio,
-  bootingWorkflow,
-  planningChunks,
-  dispatchingChunks,
-  analyzingAudioChunks,
-  analyzingVisionChunks,
-  synthesizingChunks,
-  aggregatingChunks,
-  waitingHumanReview,
-}
 
 enum VideoSummaryChunkProgressStage { running, finished }
 
@@ -40,36 +24,108 @@ class VideoSummaryChunkProgressData {
   final int overallDone;
   final int overallTotal;
   final int overallPercent;
-}
 
-class VideoSummaryProcessingStepData {
-  const VideoSummaryProcessingStepData({
-    required this.phase,
-    required this.progress,
-    required this.completedUnits,
-    required this.totalUnits,
-  });
+  /// 从 WS 下发的 overall_percent 推导 3 轨分片进度。
+  ///
+  /// 后端 WebSocket 仅下发单一 `progress` 值（即 overall_percent），
+  /// 不含 audio_done / vision_done / synthesis_done 分片粒度数据。
+  /// 本工厂使用**平滑曲线**从 overall 值反推各轨进度：
+  ///
+  /// - 音频分片：overall 0%→60% 期间线性增长到 100%
+  /// - 视觉分片：overall 20%→80% 期间线性增长到 100%
+  /// - 融合分片：overall 50%→95% 期间线性增长到 100%
+  ///
+  /// [wsProgress] 为 WS 下发的 0-100 整体百分比。
+  /// [wsStageLabel] 已废弃——新模型不再依赖阶段判断。
+  /// [previous] 为上一次估算结果，用于保证各轨不回退。
+  factory VideoSummaryChunkProgressData.estimate({
+    required int wsProgress,
+    String? wsStageLabel,
+    VideoSummaryChunkProgressData? previous,
+  }) {
+    final totalChunks = previous?.totalChunks ?? 5;
+    final fraction = (wsProgress / 100).clamp(0.0, 1.0);
 
-  final VideoSummaryProcessingPhase phase;
-  final int progress;
-  final int completedUnits;
-  final int totalUnits;
+    // ── 平滑曲线：各轨随 overall 推进而增长 ──
+    int audioDone;
+    if (fraction <= 0.0) {
+      audioDone = 0;
+    } else if (fraction >= 0.6) {
+      audioDone = totalChunks;
+    } else {
+      audioDone = (fraction / 0.6 * totalChunks).round();
+    }
+
+    int visionDone;
+    if (fraction <= 0.2) {
+      visionDone = 0;
+    } else if (fraction >= 0.8) {
+      visionDone = totalChunks;
+    } else {
+      visionDone = ((fraction - 0.2) / 0.6 * totalChunks).round();
+    }
+
+    int synthesisDone;
+    if (fraction <= 0.5) {
+      synthesisDone = 0;
+    } else if (fraction >= 0.95) {
+      synthesisDone = totalChunks;
+    } else {
+      synthesisDone = ((fraction - 0.5) / 0.45 * totalChunks).round();
+    }
+
+    // ── 夹紧 + 不回退 ──
+    audioDone = audioDone.clamp(0, totalChunks);
+    visionDone = visionDone.clamp(0, totalChunks);
+    synthesisDone = synthesisDone.clamp(0, totalChunks);
+
+    if (previous != null) {
+      audioDone = audioDone < previous.audioDone ? previous.audioDone : audioDone;
+      visionDone = visionDone < previous.visionDone ? previous.visionDone : visionDone;
+      synthesisDone =
+          synthesisDone < previous.synthesisDone ? previous.synthesisDone : synthesisDone;
+    }
+
+    final overallTotal = totalChunks * 2;
+    final overallDone = (audioDone + visionDone).clamp(0, overallTotal);
+    final overallPercent = overallTotal > 0
+        ? (overallDone / overallTotal * 100).round()
+        : 0;
+
+    return VideoSummaryChunkProgressData(
+      stage: wsProgress >= 100
+          ? VideoSummaryChunkProgressStage.finished
+          : VideoSummaryChunkProgressStage.running,
+      totalChunks: totalChunks,
+      audioDone: audioDone,
+      visionDone: visionDone,
+      synthesisDone: synthesisDone,
+      overallDone: overallDone,
+      overallTotal: overallTotal,
+      overallPercent: overallPercent,
+    );
+  }
 }
 
 class VideoSummaryProcessingData {
   const VideoSummaryProcessingData({
     required this.progress,
-    required this.currentStage,
     required this.currentMessage,
-    required this.steps,
     this.chunkProgress,
+    this.statusLog = const [],
   });
 
+  /// 整体进度 0.0–1.0，驱动 HeroCard 总体进度条。
   final double progress;
-  final VideoSummaryProcessingStage currentStage;
+
+  /// 当前后端状态消息，用于 eta 标签展示。
   final String currentMessage;
-  final List<VideoSummaryProcessingStepData> steps;
+
+  /// 3 轨分片进度，用于 StreamlitProgressCard。
   final VideoSummaryChunkProgressData? chunkProgress;
+
+  /// 最近 N 条后端状态消息，用于分片面板底部的滚动日志。
+  final List<String> statusLog;
 }
 
 class VideoSummaryDraftData {
