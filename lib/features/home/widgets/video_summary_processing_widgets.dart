@@ -96,7 +96,7 @@ class HeroCard extends StatelessWidget {
               Text(
                 title,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: AppColors.textPrimary,
                 ),
@@ -106,7 +106,7 @@ class HeroCard extends StatelessWidget {
                 Text(
                   subtitle,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 10,
+                    fontSize: 12,
                     color: const Color(0xFF384A59),
                     fontWeight: FontWeight.w600,
                     height: 1.45,
@@ -119,7 +119,7 @@ class HeroCard extends StatelessWidget {
                   '${videoAsset.fileName} · ${videoAsset.durationLabel}',
                   softWrap: true,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 10,
+                    fontSize: 12,
                     color: const Color(0xFF51606D),
                   ),
                 ),
@@ -138,7 +138,7 @@ class HeroCard extends StatelessWidget {
                       '${(processingSnapshot!.progress * 100).round()}%',
                       textAlign: TextAlign.left,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontSize: 16,
+                        fontSize: 18,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -310,7 +310,7 @@ class StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 28,
+      height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: const Color(0xFFF7FCFF),
@@ -320,7 +320,7 @@ class StatusPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
         ),
@@ -351,13 +351,14 @@ class WhiteButtonBar extends StatelessWidget {
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(leadingIcon, size: 18, color: AppColors.textPrimary),
+          Icon(leadingIcon, size: 20, color: AppColors.textPrimary),
           const SizedBox(width: 4),
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
             ),

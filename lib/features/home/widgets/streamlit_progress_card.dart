@@ -40,7 +40,7 @@ class StreamlitProgressCard extends StatelessWidget {
             Text(
               '📊 分片进度面板：Send API 实时 fan-out/fan-in',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 11,
+                    fontSize: 13,
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.w600,
                   ),
@@ -234,7 +234,7 @@ class _StatusLogSection extends StatelessWidget {
         Text(
           '状态日志',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 11,
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textSecondary,
               ),
@@ -246,7 +246,7 @@ class _StatusLogSection extends StatelessWidget {
             child: Text(
               line,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 10,
+                    fontSize: 12,
                     color: AppColors.textHint,
                     height: 1.3,
                   ),
