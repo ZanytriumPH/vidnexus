@@ -120,6 +120,7 @@ class WsClient {
         },
       );
 
+      debugPrint('[WS] Connecting to: $uri');
       _channel = WebSocketChannel.connect(uri);
       _state = WsConnectionState.connected;
       _reconnectAttempts = 0;
