@@ -180,11 +180,11 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     final controller = StreamController<VideoSummaryProcessingData>();
     StreamSubscription<WSEventEnvelope>? wsSubscription;
 
-    // 首次事件超时：启动分析后 15 秒内必须收到第一条 WS 事件
+    // 首次事件超时：启动分析后 60 秒内必须收到第一条 WS 事件
     Timer? firstEventTimeout;
-    firstEventTimeout = Timer(const Duration(seconds: 15), () {
+    firstEventTimeout = Timer(const Duration(seconds: 60), () {
       if (!controller.isClosed) {
-        debugPrint('[HttpRepo] WebSocket 首事件超时（15s 内未收到任何进度消息）');
+        debugPrint('[HttpRepo] WebSocket 首事件超时（60s 内未收到任何进度消息）');
         controller.addError(
           TimeoutException('任务启动超时，未收到后端进度反馈，taskId=$taskId'),
         );
