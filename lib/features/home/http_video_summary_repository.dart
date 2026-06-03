@@ -168,19 +168,16 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
         debugPrint('[HttpRepo] 后端已有初稿，跳过 WS 直接返回');
       }
       final shortcutController = StreamController<VideoSummaryProcessingData>();
-      shortcutController.add(VideoSummaryProcessingData(
+      shortcutController.add(const VideoSummaryProcessingData(
         progress: 1.0,
         currentMessage: '初稿已生成',
-        chunkProgress: VideoSummaryChunkProgressData.estimate(
-          wsProgress: 100,
-          previous: _estimator.estimate(
-            wsProgress: 100,
-            wsMessage: '初稿已生成',
-            wsStageLabel: null,
-            substage: null,
-          ),
+        chunkProgress: VideoSummaryChunkProgressData(
+          stage: VideoSummaryChunkProgressStage.finished,
+          totalChunks: 1,
+          doneCount: 1,
+          overallPercent: 100,
         ),
-        statusLog: const [],
+        statusLog: [],
       ));
       shortcutController.close();
       yield* shortcutController.stream;
@@ -271,19 +268,18 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
           if (kDebugMode) {
             debugPrint('[HttpRepo] 收到 completed 事件 — taskId=$taskId');
           }
-          // 发送最终 100% 进度
+          // 驱动估算器到 100% 后取最终状态
+          final finalChunkProgress = _estimator.estimate(
+            wsProgress: 100,
+            wsMessage: env.message,
+            wsStageLabel: env.stage?.name,
+            substage: env.substage,
+            payload: env.payload,
+          );
           controller.add(VideoSummaryProcessingData(
             progress: 1.0,
             currentMessage: env.message ?? '初稿生成完成',
-            chunkProgress: VideoSummaryChunkProgressData.estimate(
-              wsProgress: 100,
-              previous: _estimator.estimate(
-                wsProgress: 100,
-                wsMessage: env.message,
-                wsStageLabel: env.stage?.name,
-                substage: env.substage,
-              ),
-            ),
+            chunkProgress: finalChunkProgress,
             statusLog: List<String>.from(_statusLog),
           ));
           controller.close();
@@ -305,24 +301,20 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
           }
         }
 
-        // ── 估算 4 轨分片进度（必须先于 progressVal，确保模拟值可用）──
+        // ── 单轨分片进度（优先从 payload 读取）──
         final chunkProgress = _estimator.estimate(
           wsProgress: env.progress,
           wsMessage: env.message,
           wsStageLabel: env.stage?.name,
           substage: env.substage,
+          payload: env.payload,
         );
 
-        // progress / status_update 事件：
-        // 后端仅在 [[PROGRESS]] 消息携带具体进度值，其余状态消息 progress=null。
-        // 当 WS 无显式 progress 时，从估算器的 lastDrivingProgress 取值，
-        // 确保 HeroCard 总体进度条与子进度条同步推进。
-        final hasProgress = env.progress != null;
-        final progressVal = hasProgress
+        // env.progress 现在准确（旧后端始终为 0），直接使用。
+        // 对于纯文本状态消息（progress=null），保持上次值不变。
+        final progressVal = env.progress != null
             ? env.progress! / 100.0
-            : (_estimator.lastDrivingProgress > (_lastProgress * 100).round()
-                ? _estimator.lastDrivingProgress / 100.0
-                : _lastProgress);
+            : _lastProgress;
         _lastProgress = progressVal;
 
         final currentMessage = env.message ?? '';
@@ -337,7 +329,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
         if (kDebugMode) {
           debugPrint(
             '[HttpRepo] WS进度 — stage=${env.stage?.name} '
-            'hasProgress=$hasProgress progress=${env.progress}% '
+            'progress=${env.progress}% '
             'displayProgress=${(progressVal * 100).toStringAsFixed(0)}% '
             'msg=${env.message}',
           );

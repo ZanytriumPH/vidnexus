@@ -48,12 +48,8 @@ class StreamlitProgressCard extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // ── 3 条并行分片进度条（总体进度已在上方 HeroCard 中展示）──
-            ChunkProgressBarTile(bar: chunk.audioBar),
-            const SizedBox(height: 8),
-            ChunkProgressBarTile(bar: chunk.visionBar),
-            const SizedBox(height: 8),
-            ChunkProgressBarTile(bar: chunk.synthesisBar),
+            // ── 单轨分片分析进度 ──
+            ChunkProgressBarTile(bar: chunk.chunkBar),
 
             // ── 状态日志 ──
             if (statusLog.isNotEmpty) ...[
@@ -189,7 +185,7 @@ class ChunkProgressBarTile extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  '${bar.label}：${bar.done}/${bar.total}',
+                  bar.label,
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,

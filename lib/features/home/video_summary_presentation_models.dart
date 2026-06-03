@@ -18,20 +18,14 @@ class ChunkProgressBar {
   final int percent;
 }
 
-/// 对标 Streamlit 分片进度面板的 4 轨并行进度快照。
+/// 单轨分片进度快照。
 class ChunkProgressSnapshot {
   const ChunkProgressSnapshot({
-    required this.audioBar,
-    required this.visionBar,
-    required this.synthesisBar,
-    required this.overallBar,
+    required this.chunkBar,
     required this.statusLog,
   });
 
-  final ChunkProgressBar audioBar;
-  final ChunkProgressBar visionBar;
-  final ChunkProgressBar synthesisBar;
-  final ChunkProgressBar overallBar;
+  final ChunkProgressBar chunkBar;
   final List<String> statusLog;
 }
 

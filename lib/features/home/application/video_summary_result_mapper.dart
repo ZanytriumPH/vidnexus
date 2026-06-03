@@ -2,10 +2,6 @@ import '../domain/video_summary_domain_models.dart';
 import '../domain/video_summary_time_utils.dart';
 import '../video_summary_presentation_models.dart';
 
-int _safePercent(int done, int total) {
-  if (total <= 0) return 0;
-  return ((done / total) * 100).round().clamp(0, 100);
-}
 
 ProcessingSnapshot buildInitialProcessingSnapshot() {
   return ProcessingSnapshot(
@@ -14,32 +10,11 @@ ProcessingSnapshot buildInitialProcessingSnapshot() {
     etaLabel: '正在连接处理事件流并初始化第一阶段。',
     // 立即显示 3 轨进度条（全零初始态），不等后端第一条 [[PROGRESS]]
     chunkProgress: const ChunkProgressSnapshot(
-      audioBar: ChunkProgressBar(
-        label: '音频分片',
-        icon: '🎧',
-        done: 0,
-        total: 5,
-        percent: 0,
-      ),
-      visionBar: ChunkProgressBar(
-        label: '视觉分片',
-        icon: '📸',
-        done: 0,
-        total: 5,
-        percent: 0,
-      ),
-      synthesisBar: ChunkProgressBar(
-        label: '融合分片',
-        icon: '🧩',
-        done: 0,
-        total: 5,
-        percent: 0,
-      ),
-      overallBar: ChunkProgressBar(
-        label: '总体进度',
+      chunkBar: ChunkProgressBar(
+        label: '分片分析',
         icon: '📦',
         done: 0,
-        total: 10,
+        total: 5,
         percent: 0,
       ),
       statusLog: [],
@@ -58,34 +33,11 @@ ProcessingSnapshot mapProcessingDataToSnapshot(VideoSummaryProcessingData data) 
     etaLabel: _buildEtaLabel(data),
     chunkProgress: chunkData != null
         ? ChunkProgressSnapshot(
-            audioBar: ChunkProgressBar(
-              label: '音频分片',
-              icon: '🎧',
-              done: chunkData.audioDone,
-              total: chunkData.totalChunks,
-              percent: _safePercent(chunkData.audioDone, chunkData.totalChunks),
-            ),
-            visionBar: ChunkProgressBar(
-              label: '视觉分片',
-              icon: '📸',
-              done: chunkData.visionDone,
-              total: chunkData.totalChunks,
-              percent:
-                  _safePercent(chunkData.visionDone, chunkData.totalChunks),
-            ),
-            synthesisBar: ChunkProgressBar(
-              label: '融合分片',
-              icon: '🧩',
-              done: chunkData.synthesisDone,
-              total: chunkData.totalChunks,
-              percent:
-                  _safePercent(chunkData.synthesisDone, chunkData.totalChunks),
-            ),
-            overallBar: ChunkProgressBar(
-              label: '总体进度',
+            chunkBar: ChunkProgressBar(
+              label: '分片分析',
               icon: '📦',
-              done: chunkData.overallDone,
-              total: chunkData.overallTotal,
+              done: chunkData.doneCount,
+              total: chunkData.totalChunks,
               percent: chunkData.overallPercent,
             ),
             statusLog: data.statusLog,
@@ -104,9 +56,7 @@ String _buildEtaLabel(VideoSummaryProcessingData data) {
         : '正在准备处理内容。';
   }
 
-  return '音频 ${cp.audioDone}/${cp.totalChunks} · '
-      '视觉 ${cp.visionDone}/${cp.totalChunks} · '
-      '融合 ${cp.synthesisDone}/${cp.totalChunks}';
+  return '分片 ${cp.doneCount}/${cp.totalChunks} 完成';
 }
 
 /// draft 数据本身只包含段落，页面展示需要的交互提示在 widget 层处理。

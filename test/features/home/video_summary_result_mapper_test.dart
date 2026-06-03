@@ -11,44 +11,35 @@ void main() {
       expect(snapshot.statusLabel, '处理中');
       expect(snapshot.etaLabel, contains('正在连接处理事件流'));
       expect(snapshot.chunkProgress, isNotNull);
-      expect(snapshot.chunkProgress!.audioBar.label, '音频分片');
-      expect(snapshot.chunkProgress!.audioBar.total, 5);
-      expect(snapshot.chunkProgress!.audioBar.done, 0);
-      expect(snapshot.chunkProgress!.visionBar.total, 5);
-      expect(snapshot.chunkProgress!.synthesisBar.total, 5);
-      expect(snapshot.chunkProgress!.overallBar.total, 10);
+      expect(snapshot.chunkProgress!.chunkBar.label, '分片分析');
+      expect(snapshot.chunkProgress!.chunkBar.total, 5);
+      expect(snapshot.chunkProgress!.chunkBar.done, 0);
+      expect(snapshot.chunkProgress!.chunkBar.percent, 0);
       expect(snapshot.statusLog, isEmpty);
     });
 
     test('maps chunk analysis processing data into mobile-facing labels', () {
       const data = VideoSummaryProcessingData(
-        progress: 0.58,
-        currentMessage: '视觉 worker 正在补齐画面...',
+        progress: 0.38,
+        currentMessage: '正在分析分片：3/8 完成',
         chunkProgress: VideoSummaryChunkProgressData(
           stage: VideoSummaryChunkProgressStage.running,
           totalChunks: 8,
-          audioDone: 5,
-          visionDone: 3,
-          synthesisDone: 1,
-          overallDone: 9,
-          overallTotal: 24,
+          doneCount: 3,
           overallPercent: 38,
         ),
-        statusLog: ['开始处理', '音频分片完成'],
+        statusLog: ['开始处理', '正在分析分片'],
       );
 
       final snapshot = mapProcessingDataToSnapshot(data);
 
       expect(snapshot.statusLabel, '处理中');
-      expect(snapshot.progress, 0.58);
-      expect(snapshot.etaLabel, contains('音频 5/8 · 视觉 3/8 · 融合 1/8'));
+      expect(snapshot.progress, 0.38);
+      expect(snapshot.etaLabel, contains('分片 3/8 完成'));
       expect(snapshot.chunkProgress, isNotNull);
-      expect(snapshot.chunkProgress!.audioBar.done, 5);
-      expect(snapshot.chunkProgress!.audioBar.total, 8);
-      expect(snapshot.chunkProgress!.visionBar.done, 3);
-      expect(snapshot.chunkProgress!.synthesisBar.done, 1);
-      expect(snapshot.chunkProgress!.overallBar.done, 9);
-      expect(snapshot.chunkProgress!.overallBar.percent, 38);
+      expect(snapshot.chunkProgress!.chunkBar.done, 3);
+      expect(snapshot.chunkProgress!.chunkBar.total, 8);
+      expect(snapshot.chunkProgress!.chunkBar.percent, 38);
       expect(snapshot.statusLog, hasLength(2));
       expect(snapshot.statusLog, contains('开始处理'));
     });
@@ -56,15 +47,11 @@ void main() {
     test('maps finished processing into completion-facing copy', () {
       const data = VideoSummaryProcessingData(
         progress: 1.0,
-        currentMessage: '待审稿',
+        currentMessage: '分片分析全部完成：共 8 个分片',
         chunkProgress: VideoSummaryChunkProgressData(
           stage: VideoSummaryChunkProgressStage.finished,
           totalChunks: 8,
-          audioDone: 8,
-          visionDone: 8,
-          synthesisDone: 8,
-          overallDone: 24,
-          overallTotal: 24,
+          doneCount: 8,
           overallPercent: 100,
         ),
         statusLog: ['处理完成'],
@@ -73,14 +60,10 @@ void main() {
       final snapshot = mapProcessingDataToSnapshot(data);
 
       expect(snapshot.statusLabel, '处理完成');
-      expect(snapshot.etaLabel, contains('音频 8/8 · 视觉 8/8 · 融合 8/8'));
-      expect(snapshot.chunkProgress!.audioBar.percent, 100);
-      expect(snapshot.chunkProgress!.visionBar.percent, 100);
-      expect(snapshot.chunkProgress!.synthesisBar.percent, 100);
-      expect(snapshot.chunkProgress!.overallBar.percent, 100);
-      expect(snapshot.chunkProgress!.audioBar.done, 8);
-      expect(snapshot.chunkProgress!.visionBar.done, 8);
-      expect(snapshot.chunkProgress!.synthesisBar.done, 8);
+      expect(snapshot.etaLabel, contains('分片 8/8 完成'));
+      expect(snapshot.chunkProgress!.chunkBar.percent, 100);
+      expect(snapshot.chunkProgress!.chunkBar.done, 8);
+      expect(snapshot.chunkProgress!.chunkBar.total, 8);
     });
 
     test('maps processing data without chunkProgress gracefully', () {

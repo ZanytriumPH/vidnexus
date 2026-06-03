@@ -108,8 +108,13 @@ class TaskPoller {
     return VideoSummaryProcessingData(
       progress: progress,
       currentMessage: message,
-      chunkProgress: VideoSummaryChunkProgressData.estimate(
-        wsProgress: progressPercent,
+      chunkProgress: VideoSummaryChunkProgressData(
+        stage: progressPercent >= 100
+            ? VideoSummaryChunkProgressStage.finished
+            : VideoSummaryChunkProgressStage.running,
+        totalChunks: 5,
+        doneCount: ((progressPercent / 100) * 5).round().clamp(0, 5),
+        overallPercent: progressPercent,
       ),
     );
   }

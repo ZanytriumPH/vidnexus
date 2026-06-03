@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vidnexus/features/home/domain/video_summary_domain_models.dart';
 import 'package:vidnexus/services/websocket/ws_models.dart';
 
 void main() {
@@ -21,8 +22,13 @@ void main() {
         'substage': 'chunk_processing',
         'status': 'RUNNING',
         'progress': 45,
-        'message': 'Chunk processing: 9/20',
-        'payload': {},
+        'message': '正在分析分片：9/20 完成',
+        'payload': {
+          'total_chunks': 20,
+          'done_count': 9,
+          'overall_percent': 45,
+          'stage': 'running',
+        },
         'source': {
           'service': 'progress_publish_service',
           'instance_id': 'worker-01',
@@ -39,7 +45,11 @@ void main() {
       expect(event.stage, WSStage.ragRetrieval);
       expect(event.status, 'RUNNING');
       expect(event.progress, 45);
-      expect(event.message, 'Chunk processing: 9/20');
+      expect(event.message, '正在分析分片：9/20 完成');
+      expect(event.payload['total_chunks'], 20);
+      expect(event.payload['done_count'], 9);
+      expect(event.payload['overall_percent'], 45);
+      expect(event.payload['stage'], 'running');
       expect(event.userId, 'usr_001');
     });
 
@@ -242,6 +252,59 @@ void main() {
       expect(event.eventType, WSEventType.statusUpdate);
       expect(event.scope, WSScope.videoSummaryTask);
       expect(event.stage, WSStage.extraction);
+    });
+  });
+
+  // ──── VideoSummaryChunkProgressData.fromPayload ────
+
+  group('VideoSummaryChunkProgressData.fromPayload', () {
+    test('parses payload with chunk progress data', () {
+      final data = VideoSummaryChunkProgressData.fromPayload({
+        'total_chunks': 10,
+        'done_count': 4,
+        'overall_percent': 40,
+        'stage': 'running',
+      });
+      expect(data.totalChunks, 10);
+      expect(data.doneCount, 4);
+      expect(data.overallPercent, 40);
+      expect(data.stage, VideoSummaryChunkProgressStage.running);
+    });
+
+    test('parses finished stage', () {
+      final data = VideoSummaryChunkProgressData.fromPayload({
+        'total_chunks': 8,
+        'done_count': 8,
+        'overall_percent': 100,
+        'stage': 'finished',
+      });
+      expect(data.stage, VideoSummaryChunkProgressStage.finished);
+      expect(data.doneCount, 8);
+      expect(data.overallPercent, 100);
+    });
+
+    test('handles empty payload gracefully', () {
+      final data = VideoSummaryChunkProgressData.fromPayload({});
+      expect(data.totalChunks, 5); // fallback
+      expect(data.doneCount, 0);
+      expect(data.overallPercent, 0);
+      expect(data.stage, VideoSummaryChunkProgressStage.running);
+    });
+
+    test('handles null payload gracefully', () {
+      final data = VideoSummaryChunkProgressData.fromPayload(null);
+      expect(data.totalChunks, 5);
+      expect(data.doneCount, 0);
+      expect(data.overallPercent, 0);
+    });
+
+    test('falls back to specified totalChunks when payload missing them', () {
+      final data = VideoSummaryChunkProgressData.fromPayload(
+        {'done_count': 2},
+        fallbackTotalChunks: 12,
+      );
+      expect(data.totalChunks, 12);
+      expect(data.doneCount, 2);
     });
   });
 }

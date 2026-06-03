@@ -8,100 +8,46 @@ class VideoSummaryChunkProgressData {
   const VideoSummaryChunkProgressData({
     required this.stage,
     required this.totalChunks,
-    required this.audioDone,
-    required this.visionDone,
-    required this.synthesisDone,
-    required this.overallDone,
-    required this.overallTotal,
+    required this.doneCount,
     required this.overallPercent,
   });
 
   final VideoSummaryChunkProgressStage stage;
   final int totalChunks;
-  final int audioDone;
-  final int visionDone;
-  final int synthesisDone;
-  final int overallDone;
-  final int overallTotal;
+  final int doneCount;
   final int overallPercent;
 
-  /// 从 WS 下发的 overall_percent 推导 3 轨分片进度。
+  /// 从 WS 下发的 payload 直接构造（新后端单轨 honest 数据）。
   ///
-  /// 后端 WebSocket 仅下发单一 `progress` 值（即 overall_percent），
-  /// 不含 audio_done / vision_done / synthesis_done 分片粒度数据。
-  /// 本工厂使用**平滑曲线**从 overall 值反推各轨进度：
-  ///
-  /// - 音频分片：overall 0%→60% 期间线性增长到 100%
-  /// - 视觉分片：overall 20%→80% 期间线性增长到 100%
-  /// - 融合分片：overall 50%→95% 期间线性增长到 100%
-  ///
-  /// [wsProgress] 为 WS 下发的 0-100 整体百分比。
-  /// [wsStageLabel] 已废弃——新模型不再依赖阶段判断。
-  /// [previous] 为上一次估算结果，用于保证各轨不回退。
-  factory VideoSummaryChunkProgressData.estimate({
-    required int wsProgress,
-    String? wsStageLabel,
-    VideoSummaryChunkProgressData? previous,
+  /// 后端 WebSocket payload 下发：
+  /// - total_chunks: 总分片数
+  /// - done_count: 已完成分片数
+  /// - overall_percent: 完成百分比 0-100
+  /// - stage: "running" | "finished"
+  factory VideoSummaryChunkProgressData.fromPayload(
+    Map<String, dynamic>? payload, {
+    int fallbackTotalChunks = 5,
   }) {
-    final totalChunks = previous?.totalChunks ?? 5;
-    final fraction = (wsProgress / 100).clamp(0.0, 1.0);
-
-    // ── 平滑曲线：各轨随 overall 推进而增长 ──
-    int audioDone;
-    if (fraction <= 0.0) {
-      audioDone = 0;
-    } else if (fraction >= 0.6) {
-      audioDone = totalChunks;
-    } else {
-      audioDone = (fraction / 0.6 * totalChunks).round();
+    if (payload == null || payload.isEmpty) {
+      return VideoSummaryChunkProgressData(
+        stage: VideoSummaryChunkProgressStage.running,
+        totalChunks: fallbackTotalChunks,
+        doneCount: 0,
+        overallPercent: 0,
+      );
     }
-
-    int visionDone;
-    if (fraction <= 0.2) {
-      visionDone = 0;
-    } else if (fraction >= 0.8) {
-      visionDone = totalChunks;
-    } else {
-      visionDone = ((fraction - 0.2) / 0.6 * totalChunks).round();
-    }
-
-    int synthesisDone;
-    if (fraction <= 0.5) {
-      synthesisDone = 0;
-    } else if (fraction >= 0.95) {
-      synthesisDone = totalChunks;
-    } else {
-      synthesisDone = ((fraction - 0.5) / 0.45 * totalChunks).round();
-    }
-
-    // ── 夹紧 + 不回退 ──
-    audioDone = audioDone.clamp(0, totalChunks);
-    visionDone = visionDone.clamp(0, totalChunks);
-    synthesisDone = synthesisDone.clamp(0, totalChunks);
-
-    if (previous != null) {
-      audioDone = audioDone < previous.audioDone ? previous.audioDone : audioDone;
-      visionDone = visionDone < previous.visionDone ? previous.visionDone : visionDone;
-      synthesisDone =
-          synthesisDone < previous.synthesisDone ? previous.synthesisDone : synthesisDone;
-    }
-
-    final overallTotal = totalChunks * 2;
-    final overallDone = (audioDone + visionDone).clamp(0, overallTotal);
-    final overallPercent = overallTotal > 0
-        ? (overallDone / overallTotal * 100).round()
-        : 0;
-
+    final totalChunks =
+        (payload['total_chunks'] as int?) ?? fallbackTotalChunks;
+    final doneCount = (payload['done_count'] as int?) ?? 0;
+    final overallPercent = (payload['overall_percent'] as int?) ??
+        (totalChunks > 0 ? ((doneCount / totalChunks) * 100).round() : 0);
+    final stageStr = payload['stage'] as String?;
     return VideoSummaryChunkProgressData(
-      stage: wsProgress >= 100
+      stage: stageStr == 'finished'
           ? VideoSummaryChunkProgressStage.finished
           : VideoSummaryChunkProgressStage.running,
       totalChunks: totalChunks,
-      audioDone: audioDone,
-      visionDone: visionDone,
-      synthesisDone: synthesisDone,
-      overallDone: overallDone,
-      overallTotal: overallTotal,
+      doneCount: doneCount,
       overallPercent: overallPercent,
     );
   }
@@ -121,7 +67,7 @@ class VideoSummaryProcessingData {
   /// 当前后端状态消息，用于 eta 标签展示。
   final String currentMessage;
 
-  /// 3 轨分片进度，用于 StreamlitProgressCard。
+  /// 单轨分片进度，用于 StreamlitProgressCard。
   final VideoSummaryChunkProgressData? chunkProgress;
 
   /// 最近 N 条后端状态消息，用于分片面板底部的滚动日志。
