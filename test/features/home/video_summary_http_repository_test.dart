@@ -28,6 +28,7 @@ class FakeTimeTravelQAStreamRequest extends Fake implements TimeTravelQAStreamRe
 
 void main() {
   registerFallbackValue(FakeTimeTravelQAStreamRequest());
+  registerFallbackValue(Duration.zero);
 
   late MockTaskService mockTaskService;
   late MockVideoQAService mockVideoQAService;
@@ -88,7 +89,7 @@ void main() {
     // WebSocket mock：ensureConnected 立即完成，eventStream 使用测试控制器
     when(() => mockWsClient.ensureConnected(timeout: any(named: 'timeout')))
         .thenAnswer((_) async {});
-    when(() => mockWsClient.eventStream).thenReturn(wsTestController.stream);
+    when(() => mockWsClient.eventStream).thenAnswer((_) => wsTestController.stream);
 
     // Stub the dio getter to prevent null access in debug logging.
     // We use a dynamic approach since dio is not easily mockable.
@@ -186,8 +187,6 @@ void main() {
       }
 
       expect(events, isNotEmpty);
-      expect(events.first.currentStage,
-          VideoSummaryProcessingStage.dispatchingChunks);
       expect(events.first.currentMessage, contains('生成'));
     });
 
@@ -299,9 +298,9 @@ void main() {
         ),
       );
 
-      // Schedule a WS completed event after pending microtasks,
-      // so startDraftGeneration's WS listener can terminate.
-      Future.microtask(() {
+      // Schedule a WS completed event after a short delay,
+      // so startDraftGeneration's WS listener has time to be set up.
+      Future.delayed(const Duration(milliseconds: 50), () {
         if (!wsTestController.isClosed) {
           wsTestController.add(WSEventEnvelope(
             eventId: 'evt-test',

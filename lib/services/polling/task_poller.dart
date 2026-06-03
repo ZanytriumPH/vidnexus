@@ -101,27 +101,17 @@ class TaskPoller {
     WorkflowState state,
     int tick,
   ) {
-    final stage = _mapStage(state);
     final message = _mapMessage(state, dto);
     final progress = _estimateProgress(state, tick, dto);
+    final int progressPercent = (progress * 100).round();
 
     return VideoSummaryProcessingData(
       progress: progress,
-      currentStage: stage,
       currentMessage: message,
-      steps: _buildSteps(state, progress),
+      chunkProgress: VideoSummaryChunkProgressData.estimate(
+        wsProgress: progressPercent,
+      ),
     );
-  }
-
-  /// WorkflowState → VideoSummaryProcessingStage 映射。
-  VideoSummaryProcessingStage _mapStage(WorkflowState state) {
-    return switch (state) {
-      WorkflowState.draftGenerating => VideoSummaryProcessingStage.dispatchingChunks,
-      WorkflowState.waitingUserApproval => VideoSummaryProcessingStage.waitingHumanReview,
-      WorkflowState.finalGenerating => VideoSummaryProcessingStage.aggregatingChunks,
-      WorkflowState.completed => VideoSummaryProcessingStage.waitingHumanReview,
-      WorkflowState.failed => VideoSummaryProcessingStage.acquiringVideo,
-    };
   }
 
   /// 阶段中文消息。
@@ -144,67 +134,15 @@ class TaskPoller {
   ) {
     switch (state) {
       case WorkflowState.draftGenerating:
-        // 10 ticks 内从 0.1 → 0.85
         return (0.1 + (tick * 0.075)).clamp(0.0, 0.85);
       case WorkflowState.waitingUserApproval:
         return 0.9;
       case WorkflowState.finalGenerating:
-        // 5 ticks 内从 0.9 → 0.99
         return (0.85 + (tick * 0.03)).clamp(0.0, 0.99);
       case WorkflowState.completed:
         return 1.0;
       case WorkflowState.failed:
         return 0.0;
     }
-  }
-
-  /// 构造处理步骤列表。
-  List<VideoSummaryProcessingStepData> _buildSteps(
-    WorkflowState state,
-    double progress,
-  ) {
-    final preprocessProgress = state == WorkflowState.draftGenerating ||
-            state == WorkflowState.finalGenerating ||
-            state == WorkflowState.waitingUserApproval ||
-            state == WorkflowState.completed
-        ? 100
-        : 0;
-
-    final analysisProgress = switch (state) {
-      WorkflowState.waitingUserApproval || WorkflowState.completed => 100,
-      WorkflowState.draftGenerating ||
-      WorkflowState.finalGenerating =>
-        ((progress - 0.1) / 0.75 * 100).round().clamp(0, 100),
-      _ => 0,
-    };
-
-    final synthesisProgress = switch (state) {
-      WorkflowState.completed => 100,
-      WorkflowState.waitingUserApproval => 85,
-      WorkflowState.finalGenerating =>
-        ((progress - 0.85) / 0.14 * 100).round().clamp(0, 100),
-      _ => 0,
-    };
-
-    return [
-      VideoSummaryProcessingStepData(
-        phase: VideoSummaryProcessingPhase.preprocessing,
-        progress: preprocessProgress,
-        completedUnits: preprocessProgress,
-        totalUnits: 100,
-      ),
-      VideoSummaryProcessingStepData(
-        phase: VideoSummaryProcessingPhase.analysis,
-        progress: analysisProgress,
-        completedUnits: analysisProgress,
-        totalUnits: 100,
-      ),
-      VideoSummaryProcessingStepData(
-        phase: VideoSummaryProcessingPhase.synthesis,
-        progress: synthesisProgress,
-        completedUnits: synthesisProgress,
-        totalUnits: 100,
-      ),
-    ];
   }
 }

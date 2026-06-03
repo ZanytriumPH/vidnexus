@@ -9,6 +9,7 @@ import '../../services/video_qa_service.dart';
 import '../../services/websocket/ws_client.dart';
 import '../../services/websocket/ws_models.dart';
 import '../../services/sse/sse_models.dart';
+import 'domain/chunk_progress_estimator.dart';
 import 'domain/video_summary_domain_models.dart';
 import 'video_summary_models.dart';
 import 'video_summary_repository.dart';
@@ -52,6 +53,12 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
   /// 去重集合：记录已处理的 scopeId:sequence，防止 Redis 双通道重复推送。
   Set<String> _seenSequences = {};
+
+  /// 分片进度估算器：从 WS 单值 + 阶段推导 4 轨并行进度。
+  final ChunkProgressEstimator _estimator = ChunkProgressEstimator();
+
+  /// 状态日志缓冲区：保留最近 20 条后端消息。
+  final List<String> _statusLog = [];
 
   @override
   void updateVideoId(String newId) {
@@ -110,71 +117,6 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     );
   }
 
-  VideoSummaryProcessingStage _mapWSStage(WSStage? stage) {
-    if (stage == null) return VideoSummaryProcessingStage.acquiringVideo;
-    return switch (stage) {
-      WSStage.extraction => VideoSummaryProcessingStage.acquiringVideo,
-      WSStage.transcribing => VideoSummaryProcessingStage.transcribingAudio,
-      WSStage.extractingKeyframes => VideoSummaryProcessingStage.extractingFrames,
-      WSStage.ragRetrieval => VideoSummaryProcessingStage.dispatchingChunks,
-      WSStage.llmReasoning => VideoSummaryProcessingStage.analyzingAudioChunks,
-      WSStage.analysis => VideoSummaryProcessingStage.analyzingAudioChunks,
-      WSStage.synthesis => VideoSummaryProcessingStage.synthesizingChunks,
-      WSStage.cleanup => VideoSummaryProcessingStage.waitingHumanReview,
-    };
-  }
-
-  List<VideoSummaryProcessingStepData> _buildWSSteps(WSStage? stage, int progress) {
-    int preprocessProgress = 0;
-    int analysisProgress = 0;
-    int synthesisProgress = 0;
-
-    if (stage == null) {
-      preprocessProgress = progress;
-    } else {
-      switch (stage) {
-        case WSStage.extraction:
-        case WSStage.transcribing:
-        case WSStage.extractingKeyframes:
-          preprocessProgress = progress.clamp(0, 100);
-          break;
-        case WSStage.ragRetrieval:
-        case WSStage.llmReasoning:
-        case WSStage.analysis:
-          preprocessProgress = 100;
-          analysisProgress = progress.clamp(0, 100);
-          break;
-        case WSStage.synthesis:
-        case WSStage.cleanup:
-          preprocessProgress = 100;
-          analysisProgress = 100;
-          synthesisProgress = progress.clamp(0, 100);
-          break;
-      }
-    }
-
-    return [
-      VideoSummaryProcessingStepData(
-        phase: VideoSummaryProcessingPhase.preprocessing,
-        progress: preprocessProgress,
-        completedUnits: preprocessProgress,
-        totalUnits: 100,
-      ),
-      VideoSummaryProcessingStepData(
-        phase: VideoSummaryProcessingPhase.analysis,
-        progress: analysisProgress,
-        completedUnits: analysisProgress,
-        totalUnits: 100,
-      ),
-      VideoSummaryProcessingStepData(
-        phase: VideoSummaryProcessingPhase.synthesis,
-        progress: synthesisProgress,
-        completedUnits: synthesisProgress,
-        totalUnits: 100,
-      ),
-    ];
-  }
-
   @override
   Stream<VideoSummaryProcessingData> startDraftGeneration({
     String? userInitialPreference,
@@ -182,6 +124,8 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     // 每次开始新任务时重置状态
     _lastProgress = 0.0;
     _seenSequences = {};
+    _estimator.reset();
+    _statusLog.clear();
 
     if (kDebugMode) {
       debugPrint(
@@ -304,9 +248,17 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
           // 发送最终 100% 进度
           controller.add(VideoSummaryProcessingData(
             progress: 1.0,
-            currentStage: VideoSummaryProcessingStage.waitingHumanReview,
             currentMessage: env.message ?? '初稿生成完成',
-            steps: _buildWSSteps(WSStage.cleanup, 100),
+            chunkProgress: VideoSummaryChunkProgressData.estimate(
+              wsProgress: 100,
+              previous: _estimator.estimate(
+                wsProgress: 100,
+                wsMessage: env.message,
+                wsStageLabel: env.stage?.name,
+                substage: env.substage,
+              ),
+            ),
+            statusLog: List<String>.from(_statusLog),
           ));
           controller.close();
           return;
@@ -315,24 +267,45 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
         // progress / status_update 事件：
         // 后端仅在 [[PROGRESS]] 消息携带具体进度值，其余状态消息 progress=null。
         // 对于 progress=null 的消息：保持上次进度不变，仅更新阶段和文本。
+
+        // ── 状态日志：非 chunk_processing 的消息追加到日志 ──
+        final msg = env.message;
+        if (msg != null &&
+            msg.isNotEmpty &&
+            env.substage != 'chunk_processing') {
+          _statusLog.add(msg);
+          if (_statusLog.length > 20) {
+            _statusLog.removeAt(0);
+          }
+        }
+
+        // ── 估算 4 轨分片进度（必须先于 progressVal，确保模拟值可用）──
+        final chunkProgress = _estimator.estimate(
+          wsProgress: env.progress,
+          wsMessage: env.message,
+          wsStageLabel: env.stage?.name,
+          substage: env.substage,
+        );
+
+        // progress / status_update 事件：
+        // 后端仅在 [[PROGRESS]] 消息携带具体进度值，其余状态消息 progress=null。
+        // 当 WS 无显式 progress 时，从估算器的 lastDrivingProgress 取值，
+        // 确保 HeroCard 总体进度条与子进度条同步推进。
         final hasProgress = env.progress != null;
         final progressVal = hasProgress
             ? env.progress! / 100.0
-            : _lastProgress; // 保持上次进度，不回退到 0
+            : (_estimator.lastDrivingProgress > (_lastProgress * 100).round()
+                ? _estimator.lastDrivingProgress / 100.0
+                : _lastProgress);
         _lastProgress = progressVal;
 
-        final currentStage = _mapWSStage(env.stage);
         final currentMessage = env.message ?? '';
-
-        // 严格使用后端下发的 stage + progress 构建步骤进度
-        final stepProgress = env.progress ?? (_lastProgress * 100).round();
-        final steps = _buildWSSteps(env.stage, stepProgress);
 
         controller.add(VideoSummaryProcessingData(
           progress: progressVal,
-          currentStage: currentStage,
           currentMessage: currentMessage,
-          steps: steps,
+          chunkProgress: chunkProgress,
+          statusLog: List<String>.from(_statusLog),
         ));
 
         if (kDebugMode) {
