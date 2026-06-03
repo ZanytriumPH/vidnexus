@@ -38,6 +38,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         flowState.stage == VideoSummaryStage.ready ||
         flowState.stage == VideoSummaryStage.finalChat;
 
+    ref.listen(videoSummaryFlowControllerProvider, (prev, next) {
+      final msg = next.errorMessage;
+      if (msg != null && msg != prev?.errorMessage) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        ref.read(videoSummaryFlowControllerProvider.notifier).clearError();
+      }
+    });
+
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Colors.white,

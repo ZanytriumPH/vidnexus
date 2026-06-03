@@ -161,6 +161,32 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       debugPrint('[HttpRepo] 任务已创建 — taskId=$_taskId state=${data.workflowState}');
     }
 
+    // 短路优化：后端已有初稿时（Phase-1 已完成），跳过 startAnalysis + WS，直接返回完成事件。
+    // 避免重复执行（旧行为 bug）和不必要的 60s WS 等待。
+    if (data.draftSummary != null && data.draftSummary!.isNotEmpty) {
+      if (kDebugMode) {
+        debugPrint('[HttpRepo] 后端已有初稿，跳过 WS 直接返回');
+      }
+      final shortcutController = StreamController<VideoSummaryProcessingData>();
+      shortcutController.add(VideoSummaryProcessingData(
+        progress: 1.0,
+        currentMessage: '初稿已生成',
+        chunkProgress: VideoSummaryChunkProgressData.estimate(
+          wsProgress: 100,
+          previous: _estimator.estimate(
+            wsProgress: 100,
+            wsMessage: '初稿已生成',
+            wsStageLabel: null,
+            substage: null,
+          ),
+        ),
+        statusLog: const [],
+      ));
+      shortcutController.close();
+      yield* shortcutController.stream;
+      return;
+    }
+
     // 2. 触发 Phase-1 分析工作流
     try {
       await _taskService.startAnalysis(_taskId!);

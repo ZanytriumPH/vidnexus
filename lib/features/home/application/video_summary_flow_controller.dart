@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -39,6 +40,7 @@ class VideoSummaryFlowState {
     required this.chatMessages,
     required this.isUploading,
     required this.uploadProgress,
+    this.errorMessage,
   });
 
   final String? taskId;
@@ -58,6 +60,7 @@ class VideoSummaryFlowState {
   final List<ChatMessage> chatMessages;
   final bool isUploading;
   final double uploadProgress;
+  final String? errorMessage;
 
   factory VideoSummaryFlowState.initial({required VideoAssetInfo videoAsset, String? taskId}) {
     return VideoSummaryFlowState(
@@ -79,6 +82,7 @@ class VideoSummaryFlowState {
       chatMessages: const [],
       isUploading: false,
       uploadProgress: 0.0,
+      errorMessage: null,
     );
   }
 
@@ -103,6 +107,8 @@ class VideoSummaryFlowState {
     List<ChatMessage>? chatMessages,
     bool? isUploading,
     double? uploadProgress,
+    Object? errorMessage = _unset,
+    bool clearError = false,
   }) {
     return VideoSummaryFlowState(
       taskId: taskId == _unset ? this.taskId : taskId as String?,
@@ -130,6 +136,9 @@ class VideoSummaryFlowState {
       chatMessages: chatMessages ?? this.chatMessages,
       isUploading: isUploading ?? this.isUploading,
       uploadProgress: uploadProgress ?? this.uploadProgress,
+      errorMessage: clearError
+          ? null
+          : (errorMessage == _unset ? this.errorMessage : errorMessage as String?),
     );
   }
 }
@@ -219,7 +228,13 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       draftResult: null,
       finalSummaryData: null,
       chatMessages: const [],
+      errorMessage: null,
     );
+  }
+
+  /// 清除错误提示（SnackBar 弹出后由 UI 调用）。
+  void clearError() {
+    state = state.copyWith(clearError: true);
   }
 
   Future<void> pickAndUploadVideo() async {
@@ -486,9 +501,12 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       );
     } catch (e) {
       debugPrint('[FlowCtrl] Start draft generation failed: $e');
-      // 发生错误时将阶段重置回 ready，使用户可以重新尝试
+      final errorMsg = (e is DioException)
+          ? ApiError.fromDioException(e).userMessage
+          : '生成草稿失败，请稍后重试';
       state = state.copyWith(
         stage: VideoSummaryStage.ready,
+        errorMessage: errorMsg,
       );
     } finally {
       state = state.copyWith(isGenerating: false);
