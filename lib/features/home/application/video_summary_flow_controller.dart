@@ -755,13 +755,13 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
       final messages = <ChatMessage>[];
       for (final qa in qas) {
-        // 构建时间标签
+        // 构建时间标签：当 startTime == endTime 时说明用户未开启时间区间，
+        // 此时不生成标签（与 sendChatMessage 中 isTimestampScoped=false 行为一致）
         String? timestampLabel;
-        if (qa.startTime != null && qa.startTime!.isNotEmpty) {
-          timestampLabel = qa.startTime!;
-          if (qa.endTime != null && qa.endTime!.isNotEmpty) {
-            timestampLabel = '$timestampLabel - ${qa.endTime}';
-          }
+        final st = qa.startTime;
+        final et = qa.endTime;
+        if (st != null && st.isNotEmpty && et != null && et.isNotEmpty && st != et) {
+          timestampLabel = '$st - $et';
         }
 
         // 用户问题
