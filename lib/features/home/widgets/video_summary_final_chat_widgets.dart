@@ -17,16 +17,21 @@ class ChatThread extends StatelessWidget {
     required this.summary,
     required this.messages,
     this.onAddToKbPressed,
+    this.isWaiting = false,
     super.key,
   });
 
   final FinalSummaryData summary;
   final List<ChatMessage> messages;
   final VoidCallback? onAddToKbPressed;
+  final bool isWaiting;
 
   @override
   Widget build(BuildContext context) {
     final messageStyles = context.appMessageStyles;
+    // 空系统消息不渲染（此时 typing indicator 正在展示）
+    final visibleMessages = messages.where((m) =>
+        m.sender == SummaryChatSender.user || m.text.isNotEmpty);
 
     return Column(
       children: [
@@ -37,12 +42,14 @@ class ChatThread extends StatelessWidget {
             onAddToKbPressed: onAddToKbPressed,
           ),
         ),
-        ...messages.map(
+        ...visibleMessages.map(
           (message) => Padding(
             padding: EdgeInsets.only(bottom: messageStyles.messageSpacing),
             child: _SummaryChatBubble(message: message),
           ),
         ),
+        if (isWaiting)
+          const _SummaryTypingIndicator(),
       ],
     );
   }
@@ -97,13 +104,6 @@ class _FinalSummaryBubble extends StatelessWidget {
                 _AddToKbButton(onPressed: onAddToKbPressed),
                 const SizedBox(width: 6),
               ],
-              const ActionIconButton(icon: Icons.copy_all_outlined),
-              const SizedBox(width: 6),
-              const ActionIconButton(icon: Icons.note_alt_outlined),
-              const SizedBox(width: 6),
-              const ActionIconButton(icon: Icons.image_outlined),
-              const SizedBox(width: 6),
-              const ActionIconButton(icon: Icons.photo_outlined),
             ],
           ),
           SizedBox(height: messageStyles.messageSpacing),
@@ -184,45 +184,6 @@ class _SummaryChatBubbleBody extends StatelessWidget {
   }
 }
 
-class MessageActionRow extends StatelessWidget {
-  const MessageActionRow({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: const [
-        ActionIconButton(icon: Icons.copy_all_outlined),
-        SizedBox(width: 6),
-        ActionIconButton(icon: Icons.note_alt_outlined),
-        SizedBox(width: 6),
-        ActionIconButton(icon: Icons.image_outlined),
-        SizedBox(width: 6),
-        ActionIconButton(icon: Icons.photo_outlined),
-      ],
-    );
-  }
-}
-
-class ActionIconButton extends StatelessWidget {
-  const ActionIconButton({required this.icon, super.key});
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 22,
-      height: 22,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFD7DFE7)),
-      ),
-      child: Icon(icon, size: 13, color: AppColors.textSecondary),
-    );
-  }
-}
-
 class _AddToKbButton extends StatelessWidget {
   const _AddToKbButton({required this.onPressed});
 
@@ -232,19 +193,42 @@ class _AddToKbButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(18),
       child: Container(
-        width: 22,
-        height: 22,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFFE7F0FF),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFFBFD1FF)),
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF3B6CEE), Color(0xFF275FD8)],
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x30275FD8),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ],
         ),
-        child: const Icon(
-          Icons.library_books_outlined,
-          size: 13,
-          color: Color(0xFF275FD8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(
+              Icons.library_books_rounded,
+              size: 15,
+              color: Colors.white,
+            ),
+            SizedBox(width: 5),
+            Text(
+              '加入知识库',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -751,6 +735,92 @@ class _KnowledgeBaseTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// AI 正在思考的动画指示器（与知识库聊天的 typing indicator 样式一致）。
+class _SummaryTypingIndicator extends StatefulWidget {
+  const _SummaryTypingIndicator();
+
+  @override
+  State<_SummaryTypingIndicator> createState() =>
+      _SummaryTypingIndicatorState();
+}
+
+class _SummaryTypingIndicatorState extends State<_SummaryTypingIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _animation,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 280),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F5F9),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              _SummaryTypingDot(),
+              SizedBox(width: 6),
+              _SummaryTypingDot(),
+              SizedBox(width: 6),
+              _SummaryTypingDot(),
+              SizedBox(width: 10),
+              Text(
+                'AI 正在思考…',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF8E8E93),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryTypingDot extends StatelessWidget {
+  const _SummaryTypingDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: const BoxDecoration(
+        color: Color(0xFF8E8E93),
+        shape: BoxShape.circle,
       ),
     );
   }
