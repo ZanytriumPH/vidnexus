@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/routing/app_router.dart';
 import '../../app/routing/app_route_arguments.dart';
 import '../../app/widgets/app_bottom_nav.dart';
+import '../../services/api/api_client.dart';
+import '../../services/video_service.dart';
 import 'application/video_summary_flow_controller.dart';
 import 'application/video_summary_session_history_controller.dart';
 import 'application/video_summary_settings_controller.dart';
@@ -16,6 +18,7 @@ import 'widgets/video_summary_content_widgets.dart';
 import 'widgets/video_summary_drawer_shared.dart';
 import 'widgets/video_summary_drawer_widgets.dart';
 import 'widgets/video_summary_final_chat_widgets.dart';
+import 'widgets/video_player_page.dart';
 
 /// 首页现在主要承担页面壳和装配职责，复杂状态迁移已下沉到 application 层。
 class HomeScreen extends ConsumerStatefulWidget {
@@ -259,6 +262,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         .sendChatMessage(message);
   }
 
+  Future<void> _openVideoPlayback() async {
+    final flowState = ref.read(videoSummaryFlowControllerProvider);
+    final videoId = flowState.videoAsset.title;
+    if (videoId.isEmpty || videoId == 'vid_default') return;
+
+    // 显示加载中
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final videoService = const VideoService();
+      final resp = await videoService.getVideo(videoId);
+      final data = resp.data;
+      var videoUrl = data?.presignedUrl ?? '';
+      final ossKey = data?.ossKey;
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // 关闭 loading
+
+      // 本地开发模式 presigned_url 是 file:// 路径，转换为 HTTP 流式端点
+      if (videoUrl.startsWith('file://') && ossKey != null && ossKey.isNotEmpty) {
+        final baseUrl = ApiClient.instance.options.baseUrl;
+        videoUrl = '$baseUrl/api/v1/files/stream?object_key=${Uri.encodeComponent(ossKey)}';
+      }
+
+      if (videoUrl.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('视频地址暂不可用，请稍后重试')),
+        );
+        return;
+      }
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => VideoPlayerPage(
+            videoUrl: videoUrl,
+            title: flowState.videoAsset.fileName,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // 关闭 loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('获取视频播放地址失败: $e')),
+      );
+    }
+  }
+
   VideoSummaryWorkspace _buildWorkspace(
     VideoSummaryFlowState flowState,
     VideoSummaryTextEditingController textEditing,
@@ -323,6 +380,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           .setTimestampRange,
       isUploading: flowState.isUploading,
       uploadProgress: flowState.uploadProgress,
+      onVideoPlayback: _openVideoPlayback,
       onAddToKbPressed: () {
         final repo = ref.read(videoSummaryRepositoryProvider);
         final videoId = repo.videoId;

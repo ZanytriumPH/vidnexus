@@ -15,6 +15,7 @@ class HeroCard extends StatelessWidget {
     this.isUploading = false,
     this.uploadProgress = 0.0,
     this.onTap,
+    this.onVideoPlayback,
     super.key,
   });
 
@@ -26,6 +27,7 @@ class HeroCard extends StatelessWidget {
   final bool isUploading;
   final double uploadProgress;
   final VoidCallback? onTap;
+  final VoidCallback? onVideoPlayback;
 
   @override
   Widget build(BuildContext context) {
@@ -146,9 +148,10 @@ class HeroCard extends StatelessWidget {
                 ),
               ],
               if (isDraft || isFinal)
-                const WhiteButtonBar(
+                WhiteButtonBar(
                   label: '视频回放',
                   leadingIcon: Icons.play_arrow_rounded,
+                  onTap: onVideoPlayback,
                 ),
             ],
           ),
@@ -333,37 +336,47 @@ class WhiteButtonBar extends StatelessWidget {
   const WhiteButtonBar({
     required this.label,
     required this.leadingIcon,
+    this.onTap,
     super.key,
   });
 
   final String label;
   final IconData leadingIcon;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 36,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD4DCE5)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(leadingIcon, size: 20, color: AppColors.textPrimary),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
+        child: Container(
+          height: 36,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFD4DCE5)),
           ),
-        ],
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(leadingIcon, size: 20, color: AppColors.textPrimary),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
