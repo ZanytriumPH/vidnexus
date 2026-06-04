@@ -197,19 +197,9 @@ class _AddToKbButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF3B6CEE), Color(0xFF275FD8)],
-          ),
+          color: const Color(0xFFE7F0FF),
           borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x30275FD8),
-              blurRadius: 6,
-              offset: Offset(0, 2),
-            ),
-          ],
+          border: Border.all(color: const Color(0xFFBFD1FF)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -217,15 +207,15 @@ class _AddToKbButton extends StatelessWidget {
             Icon(
               Icons.library_books_rounded,
               size: 15,
-              color: Colors.white,
+              color: Color(0xFF275FD8),
             ),
             SizedBox(width: 5),
             Text(
               '加入知识库',
               style: TextStyle(
                 fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF275FD8),
               ),
             ),
           ],
@@ -576,7 +566,7 @@ Future<void> showAddToKnowledgeBaseSheet({
   );
 }
 
-class _AddToKnowledgeBaseSheet extends ConsumerWidget {
+class _AddToKnowledgeBaseSheet extends ConsumerStatefulWidget {
   const _AddToKnowledgeBaseSheet({
     required this.ref,
     required this.videoId,
@@ -586,10 +576,85 @@ class _AddToKnowledgeBaseSheet extends ConsumerWidget {
   final String videoId;
 
   @override
-  Widget build(BuildContext context, WidgetRef widgetRef) {
+  ConsumerState<_AddToKnowledgeBaseSheet> createState() =>
+      _AddToKnowledgeBaseSheetState();
+}
+
+class _AddToKnowledgeBaseSheetState
+    extends ConsumerState<_AddToKnowledgeBaseSheet> {
+  bool _isCreating = false;
+
+  Future<void> _createAndBind(BuildContext context) async {
+    final nameController = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('新建知识库'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(hintText: '知识库名称'),
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) => Navigator.pop(ctx, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, nameController.text.trim()),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+
+    if (name == null || name.isEmpty || !mounted) return;
+
+    setState(() => _isCreating = true);
+
+    try {
+      final controller = ref.read(libraryListControllerProvider.notifier);
+      final newLibrary = await controller.createLibrary(name: name);
+      if (newLibrary == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('创建知识库失败，请重试')),
+        );
+        return;
+      }
+
+      final kbService = ref.read(knowledgeBaseServiceProvider);
+      await kbService.bindVideo(kbid: newLibrary.id, videoId: widget.videoId);
+
+      if (!mounted) return;
+      final navigator = Navigator.of(context);
+      final messenger = ScaffoldMessenger.of(context);
+      navigator.pop(); // 关闭选择 sheet
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('已创建「$name」并加入'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('操作失败：$e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = _KbSheetStrings.of(context);
-    final librariesState = widgetRef.watch(libraryListControllerProvider);
-    final kbService = widgetRef.watch(knowledgeBaseServiceProvider);
+    final librariesState = ref.watch(libraryListControllerProvider);
+    final kbService = ref.watch(knowledgeBaseServiceProvider);
 
     return SafeArea(
       top: false,
@@ -608,6 +673,12 @@ class _AddToKnowledgeBaseSheet extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
+            // 新建知识库 — 固定置顶
+            _NewKbTile(
+              isLoading: _isCreating,
+              onTap: _isCreating ? null : () => _createAndBind(context),
+            ),
+            const SizedBox(height: 8),
             if (librariesState.isLoading)
               const Center(
                 child: Padding(
@@ -637,7 +708,7 @@ class _AddToKnowledgeBaseSheet extends ConsumerWidget {
                     try {
                       await kbService.bindVideo(
                         kbid: library.id,
-                        videoId: videoId,
+                        videoId: widget.videoId,
                       );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -661,6 +732,78 @@ class _AddToKnowledgeBaseSheet extends ConsumerWidget {
                 ),
               ),
             const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 新建知识库条目，固定在列表顶部。
+class _NewKbTile extends StatelessWidget {
+  const _NewKbTile({required this.isLoading, this.onTap});
+
+  final bool isLoading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F4FF),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFD0DAF0),
+            strokeAlign: BorderSide.strokeAlignInside,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE0E8F8),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: Padding(
+                        padding: EdgeInsets.all(7),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF5B7EC2),
+                        ),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.add_rounded,
+                      size: 18,
+                      color: Color(0xFF5B7EC2),
+                    ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              '新建知识库',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF3B5FA0),
+              ),
+            ),
+            const Spacer(),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: Color(0xFF8FA8D0),
+            ),
           ],
         ),
       ),
