@@ -667,6 +667,95 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   }
 
   @override
+  Future<VideoSummaryFinalResultData> resumeFinalGeneration(String taskId) async {
+    _taskId = taskId;
+
+    // 先检查任务是否已完成（短路优化 + 竞态窗口守护）
+    try {
+      final checkResp = await _taskService.getTask(taskId);
+      final checkData = checkResp.data;
+      if (checkData != null) {
+        final state = WorkflowState.fromApi(checkData.workflowState);
+        if (state == WorkflowState.completed) {
+          if (kDebugMode) {
+            debugPrint('[HttpRepo] resumeFinalGeneration — 后端已完成，直接获取数据');
+          }
+          final finalText = checkData.finalSummary ?? checkData.draftSummary ?? '';
+          return VideoSummaryFinalResultData(
+            body: finalText,
+            references: const [],
+          );
+        }
+      }
+    } catch (_) {
+      // 短路检查失败不影响后续 WS 监听
+    }
+
+    if (kDebugMode) {
+      debugPrint('[HttpRepo] resumeFinalGeneration — 开始监听 WS taskId=$taskId');
+    }
+
+    // 监听 WebSocket 等待终稿完成（与 generateFinalSummary 相同的 WS 逻辑，
+    // 但不调用 approveAndFinalize）
+    final wsStream = _wsClient.eventStream.where(
+      (env) => env.scope == WSScope.videoSummaryTask && env.scopeId == taskId,
+    );
+
+    final completer = Completer<void>();
+    StreamSubscription<WSEventEnvelope>? wsSubscription;
+    Timer? timeout;
+
+    wsSubscription = wsStream.listen(
+      (env) {
+        if (env.eventType == WSEventType.completed) {
+          if (kDebugMode) {
+            debugPrint('[HttpRepo] resumeFinalGeneration — WS completed taskId=$taskId');
+          }
+          if (!completer.isCompleted) completer.complete();
+        } else if (env.eventType == WSEventType.error) {
+          debugPrint('[HttpRepo] resumeFinalGeneration — WS error taskId=$taskId');
+          if (!completer.isCompleted) {
+            completer.completeError(TaskFailedException(taskId));
+          }
+        }
+      },
+      onError: (e) {
+        if (!completer.isCompleted) completer.completeError(e);
+      },
+    );
+
+    timeout = Timer(const Duration(seconds: 900), () {
+      if (!completer.isCompleted) {
+        debugPrint('[HttpRepo] resumeFinalGeneration — WS 超时（900s）taskId=$taskId');
+        completer.completeError(
+          TimeoutException('终稿生成超时（900s），taskId=$taskId'),
+        );
+      }
+    });
+
+    try {
+      await completer.future;
+    } finally {
+      wsSubscription.cancel();
+      timeout.cancel();
+    }
+
+    // 获取最终任务数据
+    final resp = await _taskService.getTask(taskId);
+    final dto = resp.data;
+    if (dto == null) {
+      throw StateError('Task $taskId not found after final generation');
+    }
+
+    final finalText = dto.finalSummary ?? dto.draftSummary ?? '';
+
+    return VideoSummaryFinalResultData(
+      body: finalText,
+      references: const [],
+    );
+  }
+
+  @override
   Stream<VideoSummaryChatReplyData> sendSummaryChatMessage(
     String message, {
     required String timestamp,

@@ -757,11 +757,18 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     }
 
     // 恢复 processing 阶段的会话时，查询后端确认任务的实际进度。
-    // 防止出现"任务已在后台完成但快照仍停在 processing"的卡死问题。
     if (snapshot.stage == VideoSummaryStage.processing &&
         snapshot.taskId != null &&
         snapshot.taskId!.isNotEmpty) {
       _recoverProcessingFromBackend(snapshot.taskId!);
+    }
+
+    // 恢复 draft 阶段的会话时，查询后端是否已进入终稿生成或已完成。
+    // 防止用户在终稿生成期间切走，回来时卡在草稿页。
+    if (snapshot.stage == VideoSummaryStage.draft &&
+        snapshot.taskId != null &&
+        snapshot.taskId!.isNotEmpty) {
+      _recoverDraftFromBackend(snapshot.taskId!);
     }
   }
 
@@ -922,6 +929,130 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       }
     } catch (e) {
       debugPrint('[FlowCtrl] 恢复处理中会话异常 — taskId=$taskId: $e');
+    }
+  }
+
+  /// 恢复 draft 阶段的会话时，查询后端确认终稿生成的实际进度。
+  Future<void> _recoverDraftFromBackend(String taskId) async {
+    final owningSessionKey = _activeSessionKey;
+    try {
+      final taskInfo = await _repository.getTaskStatus(taskId);
+      if (taskInfo == null || _activeSessionKey != owningSessionKey) return;
+
+      if (kDebugMode) {
+        debugPrint(
+          '[FlowCtrl] 恢复草稿阶段会话 — taskId=$taskId'
+          ' workflowState=${taskInfo.workflowState.name}',
+        );
+      }
+
+      switch (taskInfo.workflowState) {
+        case WorkflowState.completed:
+          // 终稿已生成完毕，直接获取并跳转到 finalChat
+          await _transitionToFinalChatFromBackend(taskId, owningSessionKey);
+          break;
+
+        case WorkflowState.finalGenerating:
+          // 终稿生成仍在运行，重新订阅 WS 等待完成
+          _resumeFinalGeneration(taskId, owningSessionKey);
+          break;
+
+        case WorkflowState.waitingUserApproval:
+          // 仍在等待用户审批，正常停留在 draft 页面即可
+          break;
+
+        case WorkflowState.failed:
+          if (_activeSessionKey != owningSessionKey) return;
+          state = state.copyWith(
+            errorMessage: '终稿生成失败，请重试',
+          );
+          break;
+
+        case WorkflowState.draftGenerating:
+          // 理论上 draft 阶段不应该出现此状态，但做防御处理
+          _recoverProcessingFromBackend(taskId);
+          break;
+      }
+    } catch (e) {
+      debugPrint('[FlowCtrl] 恢复草稿阶段会话异常 — taskId=$taskId: $e');
+    }
+  }
+
+  /// 重新订阅 WS 等待终稿生成完成（Phase 2）。
+  /// 不调用 approveAndFinalize，仅等待已有任务的 WS completed 事件。
+  Future<void> _resumeFinalGeneration(String taskId, Object owningSessionKey) async {
+    if (kDebugMode) {
+      debugPrint('[FlowCtrl] 开始恢复终稿生成 WS 监听 — taskId=$taskId');
+    }
+
+    try {
+      // resumeFinalGeneration 内部已处理"已完成"的短路情况
+      final summary = await _repository.resumeFinalGeneration(taskId);
+
+      if (_activeSessionKey != owningSessionKey) return;
+
+      final summaryData = mapFinalResultDataToSummary(summary);
+      final seededRange = _buildRangeFromSummary(summaryData);
+      state = state.copyWith(
+        finalSummaryData: summaryData,
+        chatMessages: List<ChatMessage>.from(summaryData.messages),
+        stage: VideoSummaryStage.finalChat,
+        selectedTimestampStartSeconds: seededRange.startSeconds,
+        selectedTimestampEndSeconds: seededRange.endSeconds,
+      );
+
+      if (kDebugMode) {
+        debugPrint('[FlowCtrl] 恢复的终稿生成已完成 — taskId=$taskId');
+      }
+    } catch (e) {
+      if (_activeSessionKey != owningSessionKey) return;
+      debugPrint('[FlowCtrl] 恢复终稿生成失败 — taskId=$taskId: $e');
+      state = state.copyWith(
+        errorMessage: '终稿生成恢复失败，请重试',
+      );
+    }
+  }
+
+  /// 从后端获取终稿结果并跳转到 finalChat 阶段。
+  Future<void> _transitionToFinalChatFromBackend(String taskId, Object owningSessionKey) async {
+    try {
+      _repository.updateTaskId(taskId);
+
+      // 先获取草稿信息
+      final draft = mapDraftDataToResult(await _repository.fetchDraftResult());
+      if (_activeSessionKey != owningSessionKey) return;
+
+      // 通过 getTask 获取终稿数据
+      final taskInfo = await _repository.getTaskStatus(taskId);
+      if (taskInfo == null || _activeSessionKey != owningSessionKey) return;
+
+      final finalBody = taskInfo.finalSummary ?? taskInfo.draftSummary ?? '';
+      final summaryData = FinalSummaryData(
+        summaryTitle: taskInfo.title ?? '',
+        summaryBody: finalBody,
+        timestampChips: const [],
+        messages: const [],
+      );
+
+      final seededRange = _buildRangeFromSummary(summaryData);
+      state = state.copyWith(
+        draftResult: draft,
+        finalSummaryData: summaryData,
+        chatMessages: List<ChatMessage>.from(summaryData.messages),
+        stage: VideoSummaryStage.finalChat,
+        selectedTimestampStartSeconds: seededRange.startSeconds,
+        selectedTimestampEndSeconds: seededRange.endSeconds,
+      );
+
+      if (kDebugMode) {
+        debugPrint('[FlowCtrl] 后台终稿已完成，已跳转到 finalChat — taskId=$taskId');
+      }
+    } catch (e) {
+      debugPrint('[FlowCtrl] 获取后台终稿失败 — taskId=$taskId: $e');
+      if (_activeSessionKey != owningSessionKey) return;
+      state = state.copyWith(
+        errorMessage: '获取终稿失败，请重试',
+      );
     }
   }
 

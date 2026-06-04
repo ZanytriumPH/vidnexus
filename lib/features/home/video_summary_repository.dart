@@ -89,8 +89,12 @@ abstract class VideoSummaryRepository {
   Future<VideoSummaryTaskInfo?> getTaskStatus(String taskId);
 
   /// 恢复对已有任务的 WebSocket 进度监听（不创建新任务）。
-  /// 用于会话切回时重新接收实时 WS 进度推送。
+  /// 用于 Phase 1 切回时重新接收实时 WS 进度推送。
   Stream<VideoSummaryProcessingData> resumeTaskProgress(String taskId);
+
+  /// 恢复对已有任务的终稿生成监听（不重新调用 approveAndFinalize）。
+  /// 用于 Phase 2 切回时重新等待 WS completed 事件。
+  Future<VideoSummaryFinalResultData> resumeFinalGeneration(String taskId);
 
   void updateVideoId(String newId);
   void updateKbid(String newId);
