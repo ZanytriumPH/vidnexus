@@ -23,6 +23,7 @@ class FinalChatStageWorkspace extends StatefulWidget {
     required this.onTimestampScopeChanged,
     required this.onTimestampRangeChanged,
     this.onAddToKbPressed,
+    this.onVideoPlayback,
     super.key,
   });
 
@@ -42,6 +43,7 @@ class FinalChatStageWorkspace extends StatefulWidget {
   final ValueChanged<bool> onTimestampScopeChanged;
   final ValueChanged<TimestampRangeSelection> onTimestampRangeChanged;
   final VoidCallback? onAddToKbPressed;
+  final VoidCallback? onVideoPlayback;
 
   @override
   State<FinalChatStageWorkspace> createState() =>
@@ -116,6 +118,7 @@ class _FinalChatStageWorkspaceState extends State<FinalChatStageWorkspace>
                   processingSnapshot: null,
                   processingExpanded: false,
                   onTap: widget.onUploadCardPressed,
+                  onVideoPlayback: widget.onVideoPlayback,
                 ),
                 const SizedBox(height: 12),
                 ChatThread(

@@ -41,6 +41,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
     required this.isUploading,
     required this.uploadProgress,
     this.onAddToKbPressed,
+    this.onVideoPlayback,
     super.key,
   });
 
@@ -75,6 +76,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
   final bool isUploading;
   final double uploadProgress;
   final VoidCallback? onAddToKbPressed;
+  final VoidCallback? onVideoPlayback;
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +110,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
         onUploadCardPressed: onUploadCardPressed,
         onDraftEditModeChanged: onDraftEditModeChanged,
         onGenerateFinalPressed: onGenerateFinalPressed,
+        onVideoPlayback: onVideoPlayback,
       ),
       VideoSummaryStage.finalChat when finalSummaryData != null =>
         FinalChatStageWorkspace(
@@ -127,6 +130,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
           onTimestampScopeChanged: onTimestampScopeChanged,
           onTimestampRangeChanged: onTimestampRangeChanged,
           onAddToKbPressed: onAddToKbPressed,
+          onVideoPlayback: onVideoPlayback,
         ),
       _ => const SizedBox.shrink(),
     };
