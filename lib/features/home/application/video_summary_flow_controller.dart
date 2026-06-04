@@ -9,6 +9,7 @@ import '../../../services/service_providers.dart';
 import '../../../services/upload_service.dart';
 import '../../../services/models/common_dto.dart';
 import 'video_summary_result_mapper.dart';
+import '../domain/video_summary_domain_models.dart';
 import '../domain/video_summary_time_utils.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
@@ -182,6 +183,13 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
   VideoSummaryRepository get _repository => ref.read(videoSummaryRepositoryProvider);
 
+  /// 当前活跃会话的唯一标识。每次 reset() / restoreSnapshot() 都会重新生成。
+  /// 异步生成流程用捕获的局部变量与此比对，防止旧结果污染新会话的状态。
+  Object _activeSessionKey = Object();
+
+  /// 处理中阶段的轮询定时器，用于会话恢复后等待后台任务完成。
+  Timer? _processingPollTimer;
+
   @override
   VideoSummaryFlowState build() {
     final videoAsset = _repository.getVideoAsset();
@@ -208,6 +216,10 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       );
 
   void reset() {
+    // 切换会话标识，使所有正在执行的旧异步生成流程的守卫失效
+    _activeSessionKey = Object();
+    _cancelProcessingPoll();
+
     _repository.updateTaskId(null);
     _repository.updateVideoId(defaultVideoId);
     ref.read(currentVideoIdProvider.notifier).state = defaultVideoId;
@@ -242,6 +254,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       return;
     }
 
+    final owningSessionKey = _activeSessionKey;
+
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.video,
@@ -250,6 +264,9 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       if (result == null || result.files.single.path == null) {
         return;
       }
+
+      // 文件选择器是模态弹窗，期间用户可能通过其他方式切换了会话
+      if (_activeSessionKey != owningSessionKey) return;
 
       final filePath = result.files.single.path!;
       final fileName = result.files.single.name;
@@ -263,6 +280,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       final createVideoResp = await ref.read(videoServiceProvider).createVideo(
         fileName: fileName,
       );
+      if (_activeSessionKey != owningSessionKey) return;
+
       final newVideoId = createVideoResp.data?.videoId ?? fileName;
       final createdDuration = createVideoResp.data?.duration;
 
@@ -282,6 +301,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         fileName: fileName,
         totalSize: fileSize,
       );
+      if (_activeSessionKey != owningSessionKey) return;
+
       final uploadId = initResp.uploadId;
       if (uploadId.isEmpty) {
         throw Exception('Failed to initialize upload: empty upload_id');
@@ -304,12 +325,21 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
             bytes: Uint8List.fromList(bytes),
           );
           offset += lengthToRead;
-          state = state.copyWith(
-            uploadProgress: offset / fileSize,
-          );
+          // 分片上传期间会话切换：停止更新进度，但继续完成上传（后端已接收的数据不浪费）
+          if (_activeSessionKey == owningSessionKey) {
+            state = state.copyWith(
+              uploadProgress: offset / fileSize,
+            );
+          }
         }
       } finally {
         await raf.close();
+      }
+
+      // 上传已完成，但会话已切换：不更新当前会话的 state
+      if (_activeSessionKey != owningSessionKey) {
+        debugPrint('[FlowCtrl] 上传完成但会话已切换，跳过状态更新');
+        return;
       }
 
       // 5. 更新本地状态中的视频资产信息
@@ -328,6 +358,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         ),
       );
     } catch (e) {
+      // 错误只展示给发起上传的会话
+      if (_activeSessionKey != owningSessionKey) return;
       state = state.copyWith(
         isUploading: false,
         uploadProgress: 0.0,
@@ -434,6 +466,11 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       chatMessages: const [],
     );
 
+    // 捕获当前会话标识，后续所有异步回调都以此校验所有权。
+    // 使用局部变量 + Object 引用比对，reset()/restoreSnapshot() 会创建新 Object，
+    // 使旧异步流程的引用自动失效，不受 state.taskId 可能为 null 的影响。
+    final owningSessionKey = _activeSessionKey;
+
     try {
       // 确保 kbid 已解析（等待 defaultKbidProvider 完成）
       await _ensureKbidResolved();
@@ -443,13 +480,43 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
             ? userInitialPreference
             : null,
       )) {
+        // 若在 SSE 流期间发生了会话切换，则停止消费后续事件
+        if (_activeSessionKey != owningSessionKey) {
+          if (kDebugMode) {
+            debugPrint('[FlowCtrl] SSE 流中止 — 会话已切换');
+          }
+          return;
+        }
+
+        // 首帧到达时 task 已创建完毕，同步 taskId 到 state，
+        // 确保后续 captureSnapshot() 能拿到正确的 taskId
+        if (state.taskId == null && _repository.activeTaskId != null) {
+          state = state.copyWith(taskId: _repository.activeTaskId);
+        }
         state = state.copyWith(
           processingSnapshot: mapProcessingDataToSnapshot(processingData),
         );
       }
 
+      // 若在 await for 期间发生了会话切换，不再继续
+      if (_activeSessionKey != owningSessionKey) {
+        if (kDebugMode) {
+          debugPrint('[FlowCtrl] 跳过草稿获取 — 会话已切换');
+        }
+        return;
+      }
+
       // repository 返回的是 raw draft data，进入页面前统一转换成 presentation model。
       final draft = mapDraftDataToResult(await _repository.fetchDraftResult());
+
+      // 再次校验：获取草稿期间可能发生会话切换
+      if (_activeSessionKey != owningSessionKey) {
+        if (kDebugMode) {
+          debugPrint('[FlowCtrl] 跳过草稿更新 — 会话已切换');
+        }
+        return;
+      }
+
       state = state.copyWith(
         draftResult: draft,
         stage: VideoSummaryStage.draft,
@@ -457,6 +524,13 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         isDraftEditMode: false,
       );
     } catch (e) {
+      // 只有当前会话未改变时才展示错误
+      if (_activeSessionKey != owningSessionKey) {
+        if (kDebugMode) {
+          debugPrint('[FlowCtrl] 跳过错误展示 — 会话已切换');
+        }
+        return;
+      }
       debugPrint('[FlowCtrl] Start draft generation failed: $e');
       final errorMsg = (e is DioException)
           ? ApiError.fromDioException(e).userMessage
@@ -466,7 +540,10 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         errorMessage: errorMsg,
       );
     } finally {
-      state = state.copyWith(isGenerating: false);
+      // 仅当本此生成未被取消时才重置标志位
+      if (_activeSessionKey == owningSessionKey) {
+        state = state.copyWith(isGenerating: false);
+      }
     }
   }
 
@@ -479,7 +556,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       return;
     }
 
-    // 最终稿生成基于“当前可编辑文本框中的内容”，而不是仅基于最初草稿结果。
+    // 最终稿生成基于”当前可编辑文本框中的内容”，而不是仅基于最初草稿结果。
     final editedParagraphs = draftBodyText
         .split(RegExp(r'\n\s*\n'))
         .map((paragraph) => paragraph.trim())
@@ -490,6 +567,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       suggestionHint: draft.suggestionHint,
     );
 
+    final owningSessionKey = _activeSessionKey;
     state = state.copyWith(isGenerating: true);
 
     try {
@@ -497,6 +575,9 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         guidance: guidance,
         draftParagraphs: effectiveDraft.paragraphs,
       );
+      // 异步等待期间可能发生会话切换
+      if (_activeSessionKey != owningSessionKey) return;
+
       final summaryData = mapFinalResultDataToSummary(summary);
       // 进入 finalChat 时，会用总结中的首个时间片段给时间旅行功能提供默认范围。
       final seededRange = _buildRangeFromSummary(summaryData);
@@ -509,7 +590,9 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         selectedTimestampEndSeconds: seededRange.endSeconds,
       );
     } finally {
-      state = state.copyWith(isGenerating: false);
+      if (_activeSessionKey == owningSessionKey) {
+        state = state.copyWith(isGenerating: false);
+      }
     }
   }
 
@@ -525,6 +608,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     if (state.isSendingChat || message.isEmpty) {
       return;
     }
+
+    final owningSessionKey = _activeSessionKey;
 
     // 时间旅行模式开启时，把当前时间范围一起附着到用户消息上，便于 UI 回显上下文。
     final timestampLabel = state.isTimestampScoped
@@ -565,6 +650,13 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       );
 
       await for (final reply in sseStream) {
+        // 若在 SSE 流期间发生了会话切换，则停止消费
+        if (_activeSessionKey != owningSessionKey) {
+          if (kDebugMode) {
+            debugPrint('[FlowCtrl] 聊天 SSE 流中止 — 会话已切换');
+          }
+          return;
+        }
         final currentMessages = List<ChatMessage>.from(state.chatMessages);
         if (currentMessages.isNotEmpty) {
           final lastMsg = currentMessages.last;
@@ -577,6 +669,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         }
       }
     } catch (e) {
+      // 错误只展示给发起消息的会话
+      if (_activeSessionKey != owningSessionKey) return;
       debugPrint('[FlowController] SSE QA failed: $e');
       final currentMessages = List<ChatMessage>.from(state.chatMessages);
       if (currentMessages.isNotEmpty) {
@@ -589,7 +683,9 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         state = state.copyWith(chatMessages: currentMessages);
       }
     } finally {
-      state = state.copyWith(isSendingChat: false);
+      if (_activeSessionKey == owningSessionKey) {
+        state = state.copyWith(isSendingChat: false);
+      }
     }
   }
 
@@ -612,6 +708,10 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   }
 
   void restoreSnapshot(VideoSummaryFlowSnapshot snapshot) {
+    // 切换会话标识，使所有正在执行的旧异步生成流程的守卫失效
+    _activeSessionKey = Object();
+    _cancelProcessingPoll();
+
     final videoAsset = snapshot.videoAsset ?? state.videoAsset;
     state = state.copyWith(
       taskId: snapshot.taskId,
@@ -655,15 +755,28 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         snapshot.taskId!.isNotEmpty) {
       _refreshChatMessagesFromBackend(snapshot.taskId!);
     }
+
+    // 恢复 processing 阶段的会话时，查询后端确认任务的实际进度。
+    // 防止出现"任务已在后台完成但快照仍停在 processing"的卡死问题。
+    if (snapshot.stage == VideoSummaryStage.processing &&
+        snapshot.taskId != null &&
+        snapshot.taskId!.isNotEmpty) {
+      _recoverProcessingFromBackend(snapshot.taskId!);
+    }
   }
 
   /// 从后端获取视频真实时长并更新本地状态（用于快照恢复场景）。
   Future<void> _refreshVideoDurationFromBackend() async {
+    // 捕获当前 videoId，防止异步返回时已切换到其他会话
+    final capturedVideoId = _repository.videoId;
     try {
       final videoService = ref.read(videoServiceProvider);
       final resp = await videoService.getVideo(_repository.videoId);
       final data = resp.data;
       if (data == null) return;
+
+      // 若在异步等待期间发生了会话切换，放弃本次结果
+      if (_repository.videoId != capturedVideoId) return;
 
       // 优先使用后端返回的 duration 字段
       int? effectiveDuration = data.duration;
@@ -740,7 +853,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         }
       }
 
-      if (messages.isNotEmpty) {
+      if (messages.isNotEmpty && state.taskId == taskId) {
         state = state.copyWith(chatMessages: messages);
         if (kDebugMode) {
           debugPrint(
@@ -751,6 +864,201 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     } catch (e) {
       debugPrint('[FlowCtrl] 回填聊天记录失败: $e');
     }
+  }
+
+  /// 取消处理中阶段的轮询定时器。
+  void _cancelProcessingPoll() {
+    _processingPollTimer?.cancel();
+    _processingPollTimer = null;
+  }
+
+  /// 恢复 processing 阶段的会话时，查询后端确认任务的实际进度。
+  ///
+  /// 场景：用户在 SSE 生成期间切走，任务在后台完成/失败，切回来时快照
+  /// 仍为 processing — 若不做后端检查就会卡在进度页。
+  Future<void> _recoverProcessingFromBackend(String taskId) async {
+    final owningSessionKey = _activeSessionKey;
+    try {
+      final taskInfo = await _repository.getTaskStatus(taskId);
+      if (taskInfo == null) {
+        debugPrint('[FlowCtrl] 恢复处理中会话失败 — taskId=$taskId 不存在');
+        return;
+      }
+
+      // 再次校验：恢复期间用户可能又切走了
+      if (_activeSessionKey != owningSessionKey) return;
+
+      if (kDebugMode) {
+        debugPrint(
+          '[FlowCtrl] 恢复处理中会话 — taskId=$taskId'
+          ' workflowState=${taskInfo.workflowState.name}',
+        );
+      }
+
+      switch (taskInfo.workflowState) {
+        case WorkflowState.waitingUserApproval:
+          // 草稿已生成完毕，直接获取并跳转
+          await _transitionToDraftFromBackend(taskId, owningSessionKey);
+          break;
+
+        case WorkflowState.completed:
+          // 已最终完成：先取草稿，再构建终稿数据跳转到 finalChat
+          await _transitionToDraftFromBackend(taskId, owningSessionKey);
+          break;
+
+        case WorkflowState.failed:
+          if (_activeSessionKey != owningSessionKey) return;
+          state = state.copyWith(
+            stage: VideoSummaryStage.ready,
+            errorMessage: '视频处理失败，请重试',
+          );
+          break;
+
+        case WorkflowState.draftGenerating:
+        case WorkflowState.finalGenerating:
+          // 任务仍在后端运行，重新订阅 WS 实时进度
+          _resumeDraftGeneration(taskId, owningSessionKey);
+          break;
+      }
+    } catch (e) {
+      debugPrint('[FlowCtrl] 恢复处理中会话异常 — taskId=$taskId: $e');
+    }
+  }
+
+  /// 从后端获取草稿结果并跳转到 draft 阶段。
+  Future<void> _transitionToDraftFromBackend(String taskId, Object owningSessionKey) async {
+    try {
+      // 先确保 repository 的 taskId 指向正确任务
+      _repository.updateTaskId(taskId);
+      final draft = mapDraftDataToResult(await _repository.fetchDraftResult());
+
+      // 校验：获取期间用户可能又切走了
+      if (_activeSessionKey != owningSessionKey) return;
+
+      state = state.copyWith(
+        draftResult: draft,
+        stage: VideoSummaryStage.draft,
+        processingExpanded: false,
+        isDraftEditMode: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('[FlowCtrl] 后台任务已完成，已跳转到草稿页 — taskId=$taskId');
+      }
+    } catch (e) {
+      debugPrint('[FlowCtrl] 获取后台草稿失败 — taskId=$taskId: $e');
+      if (_activeSessionKey != owningSessionKey) return;
+      state = state.copyWith(
+        stage: VideoSummaryStage.ready,
+        errorMessage: '获取草稿失败，请重试',
+      );
+    }
+  }
+
+  /// 重新订阅 WS 实时进度流（用于切回 processing 阶段会话时恢复监听）。
+  Future<void> _resumeDraftGeneration(String taskId, Object owningSessionKey) async {
+    if (kDebugMode) {
+      debugPrint('[FlowCtrl] 开始恢复 WS 监听 — taskId=$taskId');
+    }
+
+    // 确保 taskId 已同步到 state，否则后续 captureSnapshot() 拿不到
+    if (state.taskId != taskId) {
+      state = state.copyWith(taskId: taskId);
+    }
+
+    try {
+      await for (final processingData in _repository.resumeTaskProgress(taskId)) {
+        if (_activeSessionKey != owningSessionKey) {
+          if (kDebugMode) {
+            debugPrint('[FlowCtrl] 恢复 WS 流中止 — 会话已切换');
+          }
+          return;
+        }
+        state = state.copyWith(
+          processingSnapshot: mapProcessingDataToSnapshot(processingData),
+        );
+      }
+
+      // WS 流正常结束（收到 completed），获取草稿并跳转
+      if (_activeSessionKey != owningSessionKey) return;
+
+      _repository.updateTaskId(taskId);
+      final draft = mapDraftDataToResult(await _repository.fetchDraftResult());
+
+      if (_activeSessionKey != owningSessionKey) return;
+
+      state = state.copyWith(
+        draftResult: draft,
+        stage: VideoSummaryStage.draft,
+        processingExpanded: false,
+        isDraftEditMode: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('[FlowCtrl] 恢复的 WS 任务已完成，已跳转到草稿页 — taskId=$taskId');
+      }
+    } catch (e) {
+      if (_activeSessionKey != owningSessionKey) return;
+      debugPrint('[FlowCtrl] 恢复 WS 监听失败 — taskId=$taskId: $e');
+      // WS 恢复失败时回退到轮询
+      _startProcessingPoll(taskId, owningSessionKey);
+    }
+  }
+
+  /// 启动轮询，每 5 秒检查一次后端任务状态，直到完成或失败。
+  /// 作为 WS 实时监听的兜底方案。
+  void _startProcessingPoll(String taskId, Object owningSessionKey) {
+    _cancelProcessingPoll();
+
+    void poll() async {
+      // 轮询期间会话可能已切换
+      if (_activeSessionKey != owningSessionKey) {
+        _cancelProcessingPoll();
+        return;
+      }
+
+      try {
+        final taskInfo = await _repository.getTaskStatus(taskId);
+        if (taskInfo == null || _activeSessionKey != owningSessionKey) {
+          _cancelProcessingPoll();
+          return;
+        }
+
+        switch (taskInfo.workflowState) {
+          case WorkflowState.waitingUserApproval:
+          case WorkflowState.completed:
+            _cancelProcessingPoll();
+            await _transitionToDraftFromBackend(taskId, owningSessionKey);
+            break;
+
+          case WorkflowState.failed:
+            _cancelProcessingPoll();
+            if (_activeSessionKey != owningSessionKey) return;
+            state = state.copyWith(
+              stage: VideoSummaryStage.ready,
+              errorMessage: '视频处理失败，请重试',
+            );
+            break;
+
+          case WorkflowState.draftGenerating:
+          case WorkflowState.finalGenerating:
+            // 仍在运行，继续轮询
+            if (_activeSessionKey == owningSessionKey) {
+              _processingPollTimer = Timer(const Duration(seconds: 5), poll);
+            }
+            break;
+        }
+      } catch (e) {
+        debugPrint('[FlowCtrl] 轮询任务状态失败 — taskId=$taskId: $e');
+        // 出错后仍然继续轮询（5 秒后重试）
+        if (_activeSessionKey == owningSessionKey) {
+          _processingPollTimer = Timer(const Duration(seconds: 5), poll);
+        }
+      }
+    }
+
+    debugPrint('[FlowCtrl] 开始轮询后台任务进度 — taskId=$taskId');
+    _processingPollTimer = Timer(const Duration(seconds: 5), poll);
   }
 
   TimestampRangeSelection _buildDefaultTimestampRange(String durationLabel) {

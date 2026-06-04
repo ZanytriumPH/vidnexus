@@ -85,6 +85,13 @@ abstract class VideoSummaryRepository {
     int? windowSeconds,
   });
 
+  /// 查询单个任务的状态，用于会话恢复时判断后台任务是否已完成。
+  Future<VideoSummaryTaskInfo?> getTaskStatus(String taskId);
+
+  /// 恢复对已有任务的 WebSocket 进度监听（不创建新任务）。
+  /// 用于会话切回时重新接收实时 WS 进度推送。
+  Stream<VideoSummaryProcessingData> resumeTaskProgress(String taskId);
+
   void updateVideoId(String newId);
   void updateKbid(String newId);
   void updateTaskId(String? newId);

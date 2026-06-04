@@ -100,6 +100,206 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   }
 
   @override
+  Future<VideoSummaryTaskInfo?> getTaskStatus(String taskId) async {
+    try {
+      final resp = await _taskService.getTask(taskId);
+      final dto = resp.data;
+      if (dto == null) return null;
+      return VideoSummaryTaskInfo(
+        taskId: dto.taskId,
+        videoId: dto.videoId,
+        kbid: dto.kbid,
+        workflowState: WorkflowState.fromApi(dto.workflowState),
+        draftSummary: dto.draftSummary,
+        finalSummary: dto.finalSummary,
+        title: dto.title,
+        userInitialPreference: dto.userInitialPreference,
+      );
+    } catch (e) {
+      debugPrint('[HttpRepo] getTaskStatus 失败 — taskId=$taskId: $e');
+      return null;
+    }
+  }
+
+  @override
+  Stream<VideoSummaryProcessingData> resumeTaskProgress(String taskId) async* {
+    // 重置状态追踪器（和 startDraftGeneration 保持一致）
+    _lastProgress = 0.0;
+    _seenSequences = {};
+    _estimator.reset();
+    _statusLog.clear();
+    _taskId = taskId;
+
+    if (kDebugMode) {
+      debugPrint('[HttpRepo] resumeTaskProgress — 开始监听 WS 事件 taskId=$taskId');
+    }
+
+    // 订阅 WebSocket 事件（与 startDraftGeneration 相同的处理逻辑）
+    final wsStream = _wsClient.eventStream.where((env) =>
+        env.scope == WSScope.videoSummaryTask &&
+        env.scopeId == taskId);
+
+    final controller = StreamController<VideoSummaryProcessingData>();
+    StreamSubscription<WSEventEnvelope>? wsSubscription;
+
+    // 恢复场景的首事件超时缩短为 60s（任务已在运行中）
+    Timer? firstEventTimeout;
+    firstEventTimeout = Timer(const Duration(seconds: 60), () {
+      if (!controller.isClosed) {
+        debugPrint('[HttpRepo] resumeTaskProgress — 首事件超时（60s）taskId=$taskId');
+        controller.addError(
+          TimeoutException('恢复进度监听超时，taskId=$taskId'),
+        );
+        controller.close();
+      }
+    });
+
+    Timer? totalTimeout;
+    const totalTimeoutDuration = Duration(seconds: 900);
+
+    wsSubscription = wsStream.listen(
+      (env) {
+        if (controller.isClosed) return;
+        if (env.eventType == WSEventType.reconnectAck) return;
+
+        final seqKey = '${env.scopeId}:${env.sequence}';
+        if (_seenSequences.contains(seqKey)) return;
+        _seenSequences.add(seqKey);
+        if (_seenSequences.length > 200) {
+          _seenSequences = _seenSequences.skip(100).toSet();
+        }
+
+        if (firstEventTimeout != null) {
+          firstEventTimeout!.cancel();
+          firstEventTimeout = null;
+          totalTimeout = Timer(totalTimeoutDuration, () {
+            if (!controller.isClosed) {
+              debugPrint('[HttpRepo] resumeTaskProgress — 总超时 taskId=$taskId');
+              controller.addError(
+                TimeoutException('任务处理超时（${totalTimeoutDuration.inSeconds}s），taskId=$taskId'),
+              );
+              controller.close();
+            }
+          });
+        }
+
+        if (env.eventType == WSEventType.error) {
+          debugPrint('[HttpRepo] resumeTaskProgress — error: ${env.message}');
+          controller.addError(TaskFailedException(taskId));
+          controller.close();
+          return;
+        }
+
+        if (env.eventType == WSEventType.completed) {
+          if (kDebugMode) {
+            debugPrint('[HttpRepo] resumeTaskProgress — completed taskId=$taskId');
+          }
+          final finalChunkProgress = _estimator.estimate(
+            wsProgress: 100,
+            wsMessage: env.message,
+            wsStageLabel: env.stage?.name,
+            substage: env.substage,
+            payload: env.payload,
+          );
+          controller.add(VideoSummaryProcessingData(
+            progress: 1.0,
+            currentMessage: env.message ?? '初稿生成完成',
+            chunkProgress: finalChunkProgress,
+            statusLog: List<String>.from(_statusLog),
+          ));
+          controller.close();
+          return;
+        }
+
+        final msg = env.message;
+        if (msg != null && msg.isNotEmpty && env.substage != 'chunk_processing') {
+          _statusLog.add(msg);
+          if (_statusLog.length > 20) _statusLog.removeAt(0);
+        }
+
+        final chunkProgress = _estimator.estimate(
+          wsProgress: env.progress,
+          wsMessage: env.message,
+          wsStageLabel: env.stage?.name,
+          substage: env.substage,
+          payload: env.payload,
+        );
+
+        final progressVal = env.progress != null
+            ? env.progress! / 100.0
+            : _lastProgress;
+        _lastProgress = progressVal;
+
+        controller.add(VideoSummaryProcessingData(
+          progress: progressVal,
+          currentMessage: env.message ?? '',
+          chunkProgress: chunkProgress,
+          statusLog: List<String>.from(_statusLog),
+        ));
+
+        if (kDebugMode) {
+          debugPrint(
+            '[HttpRepo] WS进度(恢复) — stage=${env.stage?.name} '
+            'progress=${env.progress}% '
+            'displayProgress=${(progressVal * 100).toStringAsFixed(0)}% '
+            'msg=${env.message}',
+          );
+        }
+      },
+      onError: (e) {
+        debugPrint('[HttpRepo] resumeTaskProgress — WS error: $e');
+        if (!controller.isClosed) {
+          controller.addError(e);
+          controller.close();
+        }
+      },
+      onDone: () {
+        debugPrint('[HttpRepo] resumeTaskProgress — WS stream done taskId=$taskId');
+        if (!controller.isClosed) controller.close();
+      },
+    );
+
+    controller.onCancel = () {
+      firstEventTimeout?.cancel();
+      totalTimeout?.cancel();
+      wsSubscription?.cancel();
+    };
+
+    // 竞态窗口守护：WS 订阅已就绪，再次检查后端是否在订阅建立间隙已完成。
+    // 若已完成则直接推送 completion 事件，避免漏掉已发出的 completed 消息。
+    try {
+      final gapCheckResp = await _taskService.getTask(taskId);
+      final gapData = gapCheckResp.data;
+      if (!controller.isClosed &&
+          gapData != null &&
+          gapData.draftSummary != null &&
+          gapData.draftSummary!.isNotEmpty) {
+        if (kDebugMode) {
+          debugPrint('[HttpRepo] resumeTaskProgress — 竞态窗口守护：后端已有初稿，直接闭合');
+        }
+        final finalChunkProgress = _estimator.estimate(
+          wsProgress: 100,
+          wsMessage: '初稿已生成',
+          wsStageLabel: null,
+          substage: null,
+          payload: null,
+        );
+        controller.add(VideoSummaryProcessingData(
+          progress: 1.0,
+          currentMessage: '初稿已生成',
+          chunkProgress: finalChunkProgress,
+          statusLog: List<String>.from(_statusLog),
+        ));
+        controller.close();
+      }
+    } catch (_) {
+      // 守护检查失败不影响 WS 监听
+    }
+
+    yield* controller.stream;
+  }
+
+  @override
   VideoAssetInfo getVideoAsset() {
     // 同步方法，返回合法默认值；真实数据通过 fetchDraftResult 异步获取。
     // durationLabel 必须是 parseVideoSummaryDurationLabel 可解析的格式：
