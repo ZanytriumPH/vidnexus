@@ -9,7 +9,6 @@ import 'package:vidnexus/services/models/common_dto.dart';
 import 'package:vidnexus/services/models/video_qa_dto.dart';
 import 'package:vidnexus/services/models/video_summary_task_dto.dart';
 import 'package:vidnexus/services/polling/qa_poller.dart';
-import 'package:vidnexus/services/polling/task_poller.dart';
 import 'package:vidnexus/services/task_service.dart';
 import 'package:vidnexus/services/video_qa_service.dart';
 import 'package:vidnexus/services/websocket/ws_client.dart';
@@ -34,7 +33,6 @@ void main() {
   late MockVideoQAService mockVideoQAService;
   late MockWsClient mockWsClient;
   late StreamController<WSEventEnvelope> wsTestController;
-  late TaskPoller taskPoller;
   late QAPoller qaPoller;
 
   const testKbid = 'kb-test-001';
@@ -90,14 +88,6 @@ void main() {
     when(() => mockWsClient.ensureConnected(timeout: any(named: 'timeout')))
         .thenAnswer((_) async {});
     when(() => mockWsClient.eventStream).thenAnswer((_) => wsTestController.stream);
-
-    // Stub the dio getter to prevent null access in debug logging.
-    // We use a dynamic approach since dio is not easily mockable.
-    taskPoller = TaskPoller(
-      taskService: mockTaskService,
-      interval: const Duration(milliseconds: 50),
-      timeout: const Duration(seconds: 5),
-    );
 
     qaPoller = QAPoller(
       videoQAService: mockVideoQAService,
@@ -159,51 +149,6 @@ void main() {
       expect(WorkflowState.finalGenerating.label, '生成终稿中');
       expect(WorkflowState.completed.label, '已完成');
       expect(WorkflowState.failed.label, '处理失败');
-    });
-  });
-
-  // ──── TaskPoller 轮询逻辑 ────
-
-  group('TaskPoller polling', () {
-    test('yields processing data and completes on WAITING_USER_APPROVAL', () async {
-      // First call: DRAFT_GENERATING
-      when(() => mockTaskService.getTask(testTaskId)).thenAnswer(
-        (_) async => _apiResponse(
-          _taskResponse(workflowState: 'DRAFT_GENERATING'),
-        ),
-      );
-
-      // Collect first event
-      final stream = taskPoller.pollTask(testTaskId);
-      final events = <VideoSummaryProcessingData>[];
-
-      try {
-        await for (final event in stream) {
-          events.add(event);
-          if (events.isNotEmpty) break; // Only capture first tick
-        }
-      } catch (_) {
-        // Expected timeout if we break early
-      }
-
-      expect(events, isNotEmpty);
-      expect(events.first.currentMessage, contains('生成'));
-    });
-
-    test('yields processing data then throws on FAILED state', () async {
-      when(() => mockTaskService.getTask(testTaskId)).thenAnswer(
-        (_) async => _apiResponse(
-          _taskResponse(workflowState: 'FAILED'),
-        ),
-      );
-
-      final stream = taskPoller.pollTask(testTaskId);
-
-      // First event is processing data (yielded before throw).
-      // TaskPoller yields then throws TaskFailedException,
-      // but stream.first completes on the first yield.
-      final event = await stream.first;
-      expect(event.currentMessage, contains('失败'));
     });
   });
 
@@ -319,7 +264,6 @@ void main() {
         taskService: mockTaskService,
         videoQAService: mockVideoQAService,
         wsClient: mockWsClient,
-        taskPoller: taskPoller,
         kbid: testKbid,
         videoId: testVideoId,
       );
@@ -432,23 +376,47 @@ void main() {
         ),
       );
 
-      // Re-stub getTask for final poll: first COMPLETED (terminal), then with finalSummary
-      var getCallCount = 0;
+      // Stub approveAndFinalize
+      when(() => mockTaskService.approveAndFinalize(
+            testTaskId,
+            editedAggregatedChunkInsights: '段落A\n\n段落B',
+            humanGuidance: '请精简内容',
+          )).thenAnswer(
+        (_) async => ApiResponse<ApproveAndFinalizeResponseData>(
+          status: 'success',
+          data: const ApproveAndFinalizeResponseData(
+            taskId: testTaskId,
+            workflowState: 'FINAL_GENERATING',
+          ),
+          meta: MetaInfo(
+            requestId: 'req-test',
+            timestamp: '2026-05-17T10:00:00Z',
+          ),
+        ),
+      );
+
+      // Schedule WS completed event for Phase-2
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (!wsTestController.isClosed) {
+          wsTestController.add(WSEventEnvelope(
+            eventId: 'evt-phase2',
+            eventType: WSEventType.completed,
+            scope: WSScope.videoSummaryTask,
+            scopeId: testTaskId,
+            sequence: 2,
+            message: 'Phase-2 finalization completed',
+          ));
+        }
+      });
+
+      // Stub getTask for final result fetch
       when(() => mockTaskService.getTask(testTaskId)).thenAnswer(
-        (_) async {
-          getCallCount++;
-          if (getCallCount == 1) {
-            return _apiResponse(
-              _taskResponse(workflowState: 'COMPLETED'),
-            );
-          }
-          return _apiResponse(
-            _taskResponse(
-              workflowState: 'COMPLETED',
-              finalSummary: '精简后的终稿内容',
-            ),
-          );
-        },
+        (_) async => _apiResponse(
+          _taskResponse(
+            workflowState: 'COMPLETED',
+            finalSummary: '精简后的终稿内容',
+          ),
+        ),
       );
 
       final result = await repository.generateFinalSummary(

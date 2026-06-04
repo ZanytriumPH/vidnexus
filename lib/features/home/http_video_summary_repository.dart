@@ -198,11 +198,12 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     final controller = StreamController<VideoSummaryProcessingData>();
     StreamSubscription<WSEventEnvelope>? wsSubscription;
 
-    // 首次事件超时：启动分析后 60 秒内必须收到第一条 WS 事件
+    // 首次事件超时：启动分析后 120 秒内必须收到第一条 WS 事件
+    // 给 Celery Worker 冷启动留足余量（见 docs/ws-events.md 场景 16）
     Timer? firstEventTimeout;
-    firstEventTimeout = Timer(const Duration(seconds: 60), () {
+    firstEventTimeout = Timer(const Duration(seconds: 120), () {
       if (!controller.isClosed) {
-        debugPrint('[HttpRepo] WebSocket 首事件超时（60s 内未收到任何进度消息）');
+        debugPrint('[HttpRepo] WebSocket 首事件超时（120s 内未收到任何进度消息）');
         controller.addError(
           TimeoutException('任务启动超时，未收到后端进度反馈，taskId=$taskId'),
         );
@@ -396,17 +397,13 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       draftSummary: draftParagraphs.join('\n\n'),
     );
 
-    try {
-      await _taskService.approveAndFinalize(
-        taskId,
-        editedAggregatedChunkInsights: draftParagraphs.join('\n\n'),
-        humanGuidance: guidance,
-      );
-      if (kDebugMode) {
-        debugPrint('[HttpRepo] 审批已提交 — taskId=$taskId');
-      }
-    } catch (e) {
-      debugPrint('[HttpRepo] approveAndFinalize 失败: $e');
+    await _taskService.approveAndFinalize(
+      taskId,
+      editedAggregatedChunkInsights: draftParagraphs.join('\n\n'),
+      humanGuidance: guidance,
+    );
+    if (kDebugMode) {
+      debugPrint('[HttpRepo] 审批已提交 — taskId=$taskId');
     }
 
     // 2. 监听 WebSocket 等待终稿完成（后端在 workflow_state 变化时主动推送）
