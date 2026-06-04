@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../services/models/common_dto.dart';
-import '../../services/polling/task_poller.dart'; // TaskFailedException
 import '../../services/task_service.dart';
 import '../../services/video_qa_service.dart';
 import '../../services/websocket/ws_client.dart';
@@ -24,19 +23,15 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     required TaskService taskService,
     VideoQAService? videoQAService,
     required WsClient wsClient,
-    TaskPoller? taskPoller,
     required this.kbid,
     required this.videoId,
   })  : _taskService = taskService,
         _videoQAService = videoQAService,
-        _wsClient = wsClient,
-        _taskPoller = taskPoller ??
-            TaskPoller(taskService: taskService);
+        _wsClient = wsClient;
 
   final TaskService _taskService;
   final VideoQAService? _videoQAService;
   final WsClient _wsClient;
-  final TaskPoller _taskPoller;
 
   /// 当前知识库 ID。
   @override
@@ -414,13 +409,49 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       debugPrint('[HttpRepo] approveAndFinalize 失败: $e');
     }
 
-    // 2. 轮询等待终稿完成
-    try {
-      await for (final _ in _taskPoller.pollTask(taskId)) {
-        // 仅等待终态，不关心中间进度
+    // 2. 监听 WebSocket 等待终稿完成（后端在 workflow_state 变化时主动推送）
+    final wsStream = _wsClient.eventStream.where(
+      (env) => env.scope == WSScope.videoSummaryTask && env.scopeId == taskId,
+    );
+
+    final completer = Completer<void>();
+    StreamSubscription<WSEventEnvelope>? wsSubscription;
+    Timer? timeout;
+
+    wsSubscription = wsStream.listen(
+      (env) {
+        if (env.eventType == WSEventType.completed) {
+          if (kDebugMode) {
+            debugPrint('[HttpRepo] Phase-2 WS completed — taskId=$taskId');
+          }
+          if (!completer.isCompleted) completer.complete();
+        } else if (env.eventType == WSEventType.error) {
+          debugPrint('[HttpRepo] Phase-2 WS error — taskId=$taskId msg=${env.message}');
+          if (!completer.isCompleted) {
+            completer.completeError(TaskFailedException(taskId));
+          }
+        }
+      },
+      onError: (e) {
+        if (!completer.isCompleted) completer.completeError(e);
+      },
+    );
+
+    // 总超时与 Phase-1 一致：900s 内未收到 completed/error 则超时
+    timeout = Timer(const Duration(seconds: 900), () {
+      if (!completer.isCompleted) {
+        debugPrint('[HttpRepo] Phase-2 WS 超时（900s）— taskId=$taskId');
+        completer.completeError(
+          TimeoutException('终稿生成超时（900s），taskId=$taskId'),
+        );
       }
-    } on PollingTimeoutException {
-      // 超时但仍尝试获取最终结果
+    });
+
+    try {
+      await completer.future;
+    } finally {
+      wsSubscription.cancel();
+      timeout.cancel();
     }
 
     // 3. 获取最终任务数据

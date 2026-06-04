@@ -180,3 +180,13 @@ class VideoSummaryTaskInfo {
   final String? fileName;
   final String? userInitialPreference;
 }
+
+/// 任务处理失败异常（workflow_state = FAILED）。
+class TaskFailedException implements Exception {
+  const TaskFailedException(this.taskId);
+
+  final String taskId;
+
+  @override
+  String toString() => 'Task $taskId failed on server';
+}

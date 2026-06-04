@@ -354,46 +354,6 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     }
   }
 
-  /// 轮询等待视频转写和关键帧抽取完成。
-  ///
-  /// 就绪条件与后端 createTask 的校验对齐：
-  ///   extract_completed_at IS NOT NULL
-  ///   AND transcribe_status = 'COMPLETED'
-  ///   AND frame_extraction_status = 'COMPLETED'
-  ///
-  /// 最多等待 20 秒；超时后不阻塞流程，交由后端 422 返回明确错误。
-  Future<void> _waitForVideoReady() async {
-    const maxAttempts = 10; // 10 × 2s = 20s
-    const pollInterval = Duration(seconds: 2);
-
-    for (int i = 0; i < maxAttempts; i++) {
-      try {
-        final videoService = ref.read(videoServiceProvider);
-        final resp = await videoService.getVideo(_repository.videoId);
-        final data = resp.data;
-        if (data != null &&
-            data.extractCompletedAt != null &&
-            data.transcribeStatus == 'COMPLETED' &&
-            data.frameExtractionStatus == 'COMPLETED') {
-          if (kDebugMode) {
-            debugPrint('[FlowCtrl] 视频已就绪 — videoId=${_repository.videoId}');
-          }
-          // 用后端返回的真实视频时长更新本地状态
-          _updateVideoDuration(data.duration);
-          return;
-        }
-      } catch (e) {
-        debugPrint('[FlowCtrl] _waitForVideoReady poll attempt ${i + 1}/$maxAttempts failed: $e');
-      }
-      await Future.delayed(pollInterval);
-    }
-    // 超时后不抛异常，交由后端 createTask 接口返回 422 明确错误
-    debugPrint(
-      '[FlowCtrl] 视频未在 ${maxAttempts * pollInterval.inSeconds}s 内就绪，'
-      '继续流程，由后端校验',
-    );
-  }
-
   /// 将后端返回的视频时长（秒）同步到本地 videoAsset 和默认时间区间。
   void _updateVideoDuration(int? durationSeconds) {
     if (durationSeconds == null || durationSeconds <= 0) return;
@@ -477,9 +437,6 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     try {
       // 确保 kbid 已解析（等待 defaultKbidProvider 完成）
       await _ensureKbidResolved();
-
-      // 等待视频处理完成（转写 + 关键帧抽取），否则后端返回 422
-      await _waitForVideoReady();
 
       await for (final processingData in _repository.startDraftGeneration(
         userInitialPreference: (userInitialPreference != null && userInitialPreference.isNotEmpty)
