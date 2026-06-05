@@ -175,6 +175,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   // 新建会话：重置流程状态和文本状态。
   // 空会话已在 _isCurrentSessionEmpty 中判断，避免重复重置。
+  // 若当前会话已完成视频上传，先将其持久化到历史列表再重置。
   void _createNewSession() {
     final flowState = ref.read(videoSummaryFlowControllerProvider);
     final isAlreadyEmpty = _isCurrentSessionEmpty(flowState);
@@ -183,13 +184,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final flowController = ref.read(
       videoSummaryFlowControllerProvider.notifier,
     );
+    final sessionHistoryController = ref.read(
+      videoSummarySessionHistoryProvider.notifier,
+    );
     final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
     textEditing.runWithoutSync(() {
+      // 上传了视频的会话有保留价值，先存为历史条目再重置。
+      // 这样用户在侧边栏仍可找回。
+      if (flowState.uploadHighlighted) {
+        sessionHistoryController.createNewSession(textEditing.captureSnapshot());
+      }
       textEditing.clearForNewSession();
       flowController.reset();
-      // 不再调用 sessionHistoryController.createNewSession()：
-      // 新建会话只是一个空的起点，不产生历史条目。
-      // 等用户上传视频并开始处理后，该会话才会出现在侧边栏。
     });
   }
 

@@ -299,7 +299,6 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       if (_activeSessionKey != owningSessionKey) return;
 
       final newVideoId = createVideoResp.data?.videoId ?? fileName;
-      final createdDuration = createVideoResp.data?.duration;
 
       // 2. 立即同步 videoId 到 repository 和 provider
       _repository.updateVideoId(newVideoId);
@@ -358,21 +357,17 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         return;
       }
 
-      // 5. 更新本地状态中的视频资产信息
-      final durationLabel = createdDuration != null && createdDuration > 0
-          ? _formatDurationLabel(createdDuration)
-          : '0m 00s';
+      // 5. TUS 上传已完成，但 Celery async_finalize_upload 仍在后台异步处理。
+      //    保持 uploading 状态并轮询视频详情，直到后端处理完毕再标记为"上传完成"。
       state = state.copyWith(
-        isUploading: false,
+        isUploading: true,
         uploadProgress: 1.0,
-        uploadHighlighted: true,
-        videoAsset: VideoAssetInfo(
-          title: newVideoId,
-          durationLabel: durationLabel,
-          sourceLabel: state.videoAsset.sourceLabel,
-          fileName: fileName,
-        ),
       );
+
+      await _waitForCeleryProcessing(newVideoId, owningSessionKey, fileName);
+
+      // Celery 处理期间会话可能已切换
+      if (_activeSessionKey != owningSessionKey) return;
     } catch (e) {
       // 错误只展示给发起上传的会话
       if (_activeSessionKey != owningSessionKey) return;
@@ -439,6 +434,86 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       return '${hours}h ${minutes.toString().padLeft(2, '0')}m ${seconds.toString().padLeft(2, '0')}s';
     }
     return '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
+  }
+
+  /// TUS 上传完成后，轮询后端视频状态直到 Celery async_finalize_upload 处理完毕。
+  ///
+  /// 轮询间隔 2 秒，最长等待 5 分钟。Celery 完成后会设置 frameExtractionStatus
+  /// 为 "completed" 并填充 duration 字段，此时标记 uploadHighlighted 并结束上传态。
+  Future<void> _waitForCeleryProcessing(
+    String videoId,
+    Object owningSessionKey,
+    String fileName,
+  ) async {
+    const maxAttempts = 150; // 5 分钟 @ 2s 间隔
+    const pollInterval = Duration(seconds: 2);
+
+    final videoService = ref.read(videoServiceProvider);
+
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
+      // 每次轮询前检查会话是否已切换
+      if (_activeSessionKey != owningSessionKey) return;
+
+      await Future.delayed(pollInterval);
+
+      if (_activeSessionKey != owningSessionKey) return;
+
+      try {
+        final resp = await videoService.getVideo(videoId);
+        final data = resp.data;
+        if (data == null) continue;
+
+        final isExtractionComplete = data.frameExtractionStatus == 'completed';
+        final durationSeconds = data.duration ?? 0;
+        final hasDuration = durationSeconds > 0;
+
+        if (isExtractionComplete || hasDuration) {
+          final durationLabel = hasDuration
+              ? _formatDurationLabel(durationSeconds)
+              : '0m 00s';
+
+          if (_activeSessionKey != owningSessionKey) return;
+
+          state = state.copyWith(
+            isUploading: false,
+            uploadHighlighted: true,
+            videoAsset: VideoAssetInfo(
+              title: videoId,
+              durationLabel: durationLabel,
+              sourceLabel: state.videoAsset.sourceLabel,
+              fileName: fileName,
+            ),
+          );
+
+          if (kDebugMode) {
+            debugPrint(
+              '[FlowCtrl] Celery 处理完成 — videoId=$videoId'
+              ' duration=${data.duration}s frameExtraction=${data.frameExtractionStatus}'
+              ' (第 ${attempt + 1} 次轮询)',
+            );
+          }
+          return;
+        }
+      } catch (e) {
+        // 单次轮询失败不中断，继续重试
+        debugPrint('[FlowCtrl] Celery 轮询失败 (第 ${attempt + 1} 次): $e');
+      }
+    }
+
+    // 超时：仍然标记为完成，用户可以继续使用但时长可能不准确
+    if (_activeSessionKey != owningSessionKey) return;
+
+    debugPrint('[FlowCtrl] Celery 处理超时 — videoId=$videoId，强制标记为完成');
+    state = state.copyWith(
+      isUploading: false,
+      uploadHighlighted: true,
+      videoAsset: VideoAssetInfo(
+        title: videoId,
+        durationLabel: '0m 00s',
+        sourceLabel: state.videoAsset.sourceLabel,
+        fileName: fileName,
+      ),
+    );
   }
 
   void toggleProcessingExpanded() {
