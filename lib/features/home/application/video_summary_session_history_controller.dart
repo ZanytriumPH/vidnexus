@@ -1,5 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../domain/video_summary_domain_models.dart';
 import '../video_summary_models.dart';
@@ -102,8 +106,8 @@ class VideoSummarySessionHistoryController
     final videoAsset = _repository.getVideoAsset();
     final currentSession = _buildCurrentSessionEntry(videoAsset);
 
-    // 异步加载后端历史会话列表
-    _loadFromBackend();
+    // 先加载本地持久化会话，再异步加载后端任务列表
+    _loadAll();
 
     return VideoSummarySessionHistoryState(
       sessions: [currentSession],
@@ -111,6 +115,22 @@ class VideoSummarySessionHistoryController
       createdSessionCount: 1,
       isLoadingHistory: true,
     );
+  }
+
+  /// 依次加载本地持久化会话和后端任务列表，合并到侧边栏。
+  Future<void> _loadAll() async {
+    // 1. 先同步加载本地会话（无后端任务的视频上传会话）
+    final localSessions = await _loadLocalSessions();
+    if (localSessions.isNotEmpty) {
+      final currentSession = state.sessions.first;
+      state = state.copyWith(
+        sessions: [currentSession, ...localSessions],
+        createdSessionCount: 1 + localSessions.length,
+      );
+    }
+
+    // 2. 再加载后端任务（会去除重复的本地条目）
+    await _loadFromBackend();
   }
 
   VideoSummarySessionHistoryEntry _buildCurrentSessionEntry(
@@ -132,21 +152,50 @@ class VideoSummarySessionHistoryController
   }
 
   /// 从后端 GET /api/v1/tasks 加载历史任务并合并到侧边栏列表。
+  /// 加载完成后清理与后端任务 videoId 重复的本地持久化条目。
   Future<void> _loadFromBackend() async {
     try {
       final tasks = await _repository.listTaskHistory();
 
-      final currentSession = state.sessions.first;
+      final currentSession = state.sessions.firstWhere(
+        (s) => s.id == 'session-current',
+        orElse: () => state.sessions.first,
+      );
       final historyEntries = tasks.map(_mapTaskToEntry).toList();
 
+      // 收集后端任务的 videoId 集合，用于去重本地会话
+      final backendVideoIds = historyEntries
+          .map((e) => e.snapshot.flowSnapshot.videoAsset?.title)
+          .where((id) => id != null && id.isNotEmpty)
+          .cast<String>()
+          .toSet();
+
+      // 保留 session-current + 不与后端重复的本地会话 + 后端任务条目
+      final existingLocal = state.sessions.where((s) {
+        if (s.id == 'session-current') return false; // 由 currentSession 替代
+        final hasTaskId = s.snapshot.flowSnapshot.taskId != null &&
+            s.snapshot.flowSnapshot.taskId!.isNotEmpty;
+        if (hasTaskId) return false; // 已有 taskId 的由后端条目替代
+        final localVideoId = s.snapshot.flowSnapshot.videoAsset?.title;
+        if (localVideoId != null &&
+            localVideoId.isNotEmpty &&
+            backendVideoIds.contains(localVideoId)) {
+          return false; // 与后端条目 videoId 重复，去除
+        }
+        return true;
+      }).toList();
+
+      final merged = [currentSession, ...existingLocal, ...historyEntries];
       state = state.copyWith(
-        sessions: [currentSession, ...historyEntries],
-        createdSessionCount: 1 + historyEntries.length,
+        sessions: merged,
+        createdSessionCount: 1 + existingLocal.length + historyEntries.length,
         isLoadingHistory: false,
         clearError: true,
       );
+
+      // 清理 JSON 文件中已被后端覆盖的冗余条目
+      await _pruneLocalSessions(backendVideoIds);
     } catch (e, stackTrace) {
-      // 记录错误详情以便调试
       debugPrint(
         '[SessionHistory] 加载历史会话失败: $e\n$stackTrace',
       );
@@ -263,6 +312,9 @@ class VideoSummarySessionHistoryController
       activeSessionId: session.id,
       sessions: [session, ...state.sessions],
     );
+
+    // 无后端任务的本地会话需要持久化到 JSON 文件
+    _saveLocalSessions();
   }
 
   void activateSession(String sessionId) {
@@ -288,15 +340,186 @@ class VideoSummarySessionHistoryController
     final sessions = List<VideoSummarySessionHistoryEntry>.from(state.sessions)
       ..[index] = updated;
     state = state.copyWith(sessions: sessions);
+
+    // 若同步的是本地会话（无 taskId），将更新落盘
+    _saveLocalSessions();
   }
 
   // 抽屉里展示的说明文案由当前阶段推导出来，而不是额外保存一份平行状态。
   String _detailForSnapshot(VideoSummarySessionSnapshot snapshot) {
     return switch (snapshot.flowSnapshot.stage) {
-      VideoSummaryStage.ready => '新会话已创建，等待选择视频并生成总结。',
+      VideoSummaryStage.ready => '已上传视频，可继续生成总结。',
       VideoSummaryStage.processing => '处理中断点已保存，下次可直接恢复',
       VideoSummaryStage.draft => '已生成摘要，等待人工审阅',
       VideoSummaryStage.finalChat => '已完成总结，可继续时间旅行追问',
     };
+  }
+
+  /// 上传视频后（Celery 处理完成），将当前会话持久化到本地 JSON 文件。
+  /// 只有尚未创建后端任务的会话需要本地持久化；已有 taskId 的会话由后端
+  /// listTaskHistory 负责恢复。
+  void persistUploadSession(VideoSummarySessionSnapshot snapshot) {
+    final flowSnapshot = snapshot.flowSnapshot;
+    final videoId = flowSnapshot.videoAsset?.title ?? '';
+    if (videoId.isEmpty || videoId == 'vid_default') return;
+
+    final entryId = 'local-$videoId';
+
+    // 若已存在同一 videoId 的本地条目，更新而非新建
+    final existingIndex = state.sessions.indexWhere((s) => s.id == entryId);
+    final entry = VideoSummarySessionHistoryEntry(
+      id: entryId,
+      title: flowSnapshot.videoAsset?.fileName ?? '视频总结会话',
+      durationLabel: flowSnapshot.videoAsset?.durationLabel ?? '0m 00s',
+      detail: _detailForSnapshot(snapshot),
+      snapshot: snapshot,
+    );
+
+    List<VideoSummarySessionHistoryEntry> sessions;
+    int nextCount;
+    if (existingIndex != -1) {
+      sessions = List<VideoSummarySessionHistoryEntry>.from(state.sessions);
+      sessions[existingIndex] = entry;
+      nextCount = state.createdSessionCount;
+    } else {
+      nextCount = state.createdSessionCount + 1;
+      // 插入到 current session 之后（index 0 之后）
+      final current = state.sessions.first;
+      sessions = [current, entry, ...state.sessions.skip(1)];
+    }
+
+    state = state.copyWith(
+      sessions: sessions,
+      createdSessionCount: nextCount,
+    );
+
+    _saveLocalSessions();
+  }
+
+  // ── 本地 JSON 文件持久化 ──────────────────────────────────────────
+
+  static const String _localSessionsFileName = 'video_summary_local_sessions.json';
+
+  Future<File> get _localSessionsFile async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/$_localSessionsFileName');
+  }
+
+  /// 将所有无 taskId 的本地会话写入 JSON 文件。
+  Future<void> _saveLocalSessions() async {
+    try {
+      final localOnly = state.sessions
+          .where((s) =>
+              s.id != 'session-current' &&
+              (s.snapshot.flowSnapshot.taskId == null ||
+                  s.snapshot.flowSnapshot.taskId!.isEmpty))
+          .toList();
+      final jsonList = localOnly.map(_sessionToJson).toList();
+      final file = await _localSessionsFile;
+      await file.writeAsString(jsonEncode(jsonList));
+    } catch (e) {
+      debugPrint('[SessionHistory] 保存本地会话失败: $e');
+    }
+  }
+
+  /// 从 JSON 文件加载本地持久化的会话（仅无 taskId 的上传会话）。
+  Future<List<VideoSummarySessionHistoryEntry>> _loadLocalSessions() async {
+    try {
+      final file = await _localSessionsFile;
+      if (!await file.exists()) return [];
+      final content = await file.readAsString();
+      final jsonList = jsonDecode(content) as List<dynamic>;
+      return jsonList.map((j) => _sessionFromJson(j as Map<String, dynamic>)).toList();
+    } catch (e) {
+      debugPrint('[SessionHistory] 加载本地会话失败: $e');
+      return [];
+    }
+  }
+
+  /// 清理本地 JSON 文件中已被后端任务覆盖的条目。
+  /// 当后端任务加载完成后调用，移除与后端任务 videoId 重复的本地会话。
+  Future<void> _pruneLocalSessions(Set<String> backendVideoIds) async {
+    try {
+      final file = await _localSessionsFile;
+      if (!await file.exists()) return;
+      final content = await file.readAsString();
+      final jsonList = jsonDecode(content) as List<dynamic>;
+      final pruned = jsonList.where((j) {
+        final videoTitle = (j as Map<String, dynamic>)['flowVideoTitle'] as String? ?? '';
+        return !backendVideoIds.contains(videoTitle);
+      }).toList();
+      if (pruned.length != jsonList.length) {
+        await file.writeAsString(jsonEncode(pruned));
+      }
+    } catch (e) {
+      debugPrint('[SessionHistory] 清理本地会话失败: $e');
+    }
+  }
+
+  // ── JSON 序列化 ──────────────────────────────────────────────────
+
+  static Map<String, dynamic> _sessionToJson(VideoSummarySessionHistoryEntry entry) {
+    final fs = entry.snapshot.flowSnapshot;
+    return {
+      'id': entry.id,
+      'title': entry.title,
+      'durationLabel': entry.durationLabel,
+      'detail': entry.detail,
+      'flowTaskId': fs.taskId,
+      'flowVideoTitle': fs.videoAsset?.title ?? '',
+      'flowDurationLabel': fs.videoAsset?.durationLabel ?? '0m 00s',
+      'flowSourceLabel': fs.videoAsset?.sourceLabel ?? '',
+      'flowFileName': fs.videoAsset?.fileName ?? '',
+      'flowStage': fs.stage.name,
+      'flowUploadHighlighted': fs.uploadHighlighted,
+      'flowProcessingExpanded': fs.processingExpanded,
+      'flowIsTimestampScoped': fs.isTimestampScoped,
+      'flowSelectedTimestampStartSeconds': fs.selectedTimestampStartSeconds,
+      'flowSelectedTimestampEndSeconds': fs.selectedTimestampEndSeconds,
+      'flowIsDraftEditMode': fs.isDraftEditMode,
+      'readyPreferenceText': entry.snapshot.readyPreferenceText,
+      'draftGuidanceText': entry.snapshot.draftGuidanceText,
+      'draftBodyText': entry.snapshot.draftBodyText,
+    };
+  }
+
+  static VideoSummarySessionHistoryEntry _sessionFromJson(Map<String, dynamic> json) {
+    final stageName = json['flowStage'] as String? ?? 'ready';
+    final stage = VideoSummaryStage.values.firstWhere(
+      (s) => s.name == stageName,
+      orElse: () => VideoSummaryStage.ready,
+    );
+
+    return VideoSummarySessionHistoryEntry(
+      id: json['id'] as String,
+      title: json['title'] as String? ?? '',
+      durationLabel: json['durationLabel'] as String? ?? '0m 00s',
+      detail: json['detail'] as String? ?? '',
+      snapshot: VideoSummarySessionSnapshot(
+        flowSnapshot: VideoSummaryFlowSnapshot(
+          taskId: json['flowTaskId'] as String?,
+          videoAsset: VideoAssetInfo(
+            title: json['flowVideoTitle'] as String? ?? '',
+            durationLabel: json['flowDurationLabel'] as String? ?? '0m 00s',
+            sourceLabel: json['flowSourceLabel'] as String? ?? '',
+            fileName: json['flowFileName'] as String? ?? '',
+          ),
+          stage: stage,
+          uploadHighlighted: json['flowUploadHighlighted'] as bool? ?? false,
+          processingExpanded: json['flowProcessingExpanded'] as bool? ?? true,
+          isTimestampScoped: json['flowIsTimestampScoped'] as bool? ?? false,
+          selectedTimestampStartSeconds: json['flowSelectedTimestampStartSeconds'] as int? ?? 0,
+          selectedTimestampEndSeconds: json['flowSelectedTimestampEndSeconds'] as int? ?? 10,
+          isDraftEditMode: json['flowIsDraftEditMode'] as bool? ?? false,
+          processingSnapshot: null,
+          draftResult: null,
+          finalSummaryData: null,
+          chatMessages: const [],
+        ),
+        readyPreferenceText: json['readyPreferenceText'] as String? ?? '',
+        draftGuidanceText: json['draftGuidanceText'] as String? ?? '',
+        draftBodyText: json['draftBodyText'] as String? ?? '',
+      ),
+    );
   }
 }

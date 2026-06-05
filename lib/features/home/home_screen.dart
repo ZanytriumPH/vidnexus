@@ -84,10 +84,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         sessions: sessionHistory.sessions
             .where(
               (session) =>
-                  // 当前会话为空时，过滤掉占位条目 "session-current"，
-                  // 侧边栏不显示任何"当前"会话，就当什么都没有。
-                  !(_isCurrentSessionEmpty(flowState) &&
-                      session.id == 'session-current'),
+                  // "session-current" 是控制器 build() 创建的占位条目，
+                  // 仅用于内部状态管理，永远不在侧边栏中显示。
+                  session.id != 'session-current',
             )
             .map(
               (session) => VideoSummaryDrawerSessionItem(
@@ -192,7 +191,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // 上传了视频的会话有保留价值，先存为历史条目再重置。
       // 这样用户在侧边栏仍可找回。
       if (flowState.uploadHighlighted) {
-        sessionHistoryController.createNewSession(textEditing.captureSnapshot());
+        final snapshot = textEditing.captureSnapshot();
+        if (flowState.taskId == null) {
+          // 仅有视频上传、尚未创建后端任务的会话：更新已持久化的本地条目。
+          // persistUploadSession 内部已处理"更新已有条目 vs 新建"的去重逻辑。
+          sessionHistoryController.persistUploadSession(snapshot);
+        } else {
+          // 已有后端任务的会话直接存入侧边栏历史列表，
+          // 重启后由 listTaskHistory 从后端恢复。
+          sessionHistoryController.createNewSession(snapshot);
+        }
       }
       textEditing.clearForNewSession();
       flowController.reset();
@@ -207,6 +215,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _openSearchFromDrawer() async {
     final sessionHistory = ref.read(videoSummarySessionHistoryProvider);
     final sessions = sessionHistory.sessions
+        .where((session) => session.id != 'session-current')
         .map(
           (session) => VideoSummaryDrawerSessionItem(
             id: session.id,

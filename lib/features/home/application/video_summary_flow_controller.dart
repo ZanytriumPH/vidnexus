@@ -14,7 +14,9 @@ import '../domain/video_summary_time_utils.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
 import '../video_summary_repository.dart';
+import 'video_summary_session_history_controller.dart';
 import 'video_summary_settings_controller.dart';
+import 'video_summary_text_editing_controller.dart';
 
 final videoSummaryFlowControllerProvider =
     NotifierProvider<VideoSummaryFlowController, VideoSummaryFlowState>(
@@ -368,6 +370,12 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
       // Celery 处理期间会话可能已切换
       if (_activeSessionKey != owningSessionKey) return;
+
+      // 6. 视频上传完成且 Celery 处理完毕，将当前会话持久化到本地存储。
+      //    只有尚未创建后端任务的会话需要本地持久化（后端任务由 listTaskHistory 恢复）。
+      final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
+      ref.read(videoSummarySessionHistoryProvider.notifier)
+          .persistUploadSession(textEditing.captureSnapshot());
     } catch (e) {
       // 错误只展示给发起上传的会话
       if (_activeSessionKey != owningSessionKey) return;
