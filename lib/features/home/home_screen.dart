@@ -82,13 +82,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         drawerEnableOpenDragGesture: true,
       drawer: VideoSummaryHistoryDrawer(
         sessions: sessionHistory.sessions
+            .where(
+              (session) =>
+                  // 当前会话为空时，过滤掉占位条目 "session-current"，
+                  // 侧边栏不显示任何"当前"会话，就当什么都没有。
+                  !(_isCurrentSessionEmpty(flowState) &&
+                      session.id == 'session-current'),
+            )
             .map(
               (session) => VideoSummaryDrawerSessionItem(
                 id: session.id,
                 title: session.title,
                 durationLabel: session.durationLabel,
                 detail: session.detail,
-                isActive: session.id == sessionHistory.activeSessionId,
+                isActive: !_isCurrentSessionEmpty(flowState) &&
+                    session.id == sessionHistory.activeSessionId,
               ),
             )
             .toList(),
@@ -157,26 +165,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  // 新建会话需要同时重置流程状态、文本状态和 session 历史，因此在这里做一次协调调用。
-  // 如果当前已经是空会话（未上传视频、未创建任务、处于 ready 阶段），跳过以避免虚假历史条目。
-  void _createNewSession() {
-    final flowState = ref.read(videoSummaryFlowControllerProvider);
-    final isAlreadyEmpty = flowState.taskId == null &&
+  /// 当前会话是否为空（无任务、无上传、处于 ready 阶段）。
+  /// 用于侧边栏过滤：空会话不在历史列表中显示。
+  bool _isCurrentSessionEmpty(VideoSummaryFlowState flowState) {
+    return flowState.taskId == null &&
         flowState.stage == VideoSummaryStage.ready &&
         !flowState.uploadHighlighted;
+  }
+
+  // 新建会话：重置流程状态和文本状态。
+  // 空会话已在 _isCurrentSessionEmpty 中判断，避免重复重置。
+  void _createNewSession() {
+    final flowState = ref.read(videoSummaryFlowControllerProvider);
+    final isAlreadyEmpty = _isCurrentSessionEmpty(flowState);
     if (isAlreadyEmpty) return;
 
     final flowController = ref.read(
       videoSummaryFlowControllerProvider.notifier,
     );
-    final sessionHistoryController = ref.read(
-      videoSummarySessionHistoryProvider.notifier,
-    );
     final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
     textEditing.runWithoutSync(() {
       textEditing.clearForNewSession();
       flowController.reset();
-      sessionHistoryController.createNewSession(textEditing.captureSnapshot());
+      // 不再调用 sessionHistoryController.createNewSession()：
+      // 新建会话只是一个空的起点，不产生历史条目。
+      // 等用户上传视频并开始处理后，该会话才会出现在侧边栏。
     });
   }
 
