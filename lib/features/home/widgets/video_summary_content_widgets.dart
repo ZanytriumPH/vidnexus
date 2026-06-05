@@ -42,6 +42,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
     required this.uploadProgress,
     this.onAddToKbPressed,
     this.onVideoPlayback,
+    this.onRefreshPressed,
     super.key,
   });
 
@@ -77,6 +78,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
   final double uploadProgress;
   final VoidCallback? onAddToKbPressed;
   final VoidCallback? onVideoPlayback;
+  final VoidCallback? onRefreshPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +100,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
           processingSnapshot: processingSnapshot!,
           processingExpanded: processingExpanded,
           onProcessingCardPressed: onProcessingCardPressed,
+          onRefreshPressed: onRefreshPressed,
         ),
       VideoSummaryStage.draft when draftResult != null => DraftStageWorkspace(
         highlighted: highlighted,

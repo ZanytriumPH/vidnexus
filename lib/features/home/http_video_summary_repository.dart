@@ -142,11 +142,11 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     final controller = StreamController<VideoSummaryProcessingData>();
     StreamSubscription<WSEventEnvelope>? wsSubscription;
 
-    // 恢复场景的首事件超时缩短为 60s（任务已在运行中）
+    // 恢复场景的首事件超时缩短为 15s（并行轮询提供兜底）
     Timer? firstEventTimeout;
-    firstEventTimeout = Timer(const Duration(seconds: 60), () {
+    firstEventTimeout = Timer(const Duration(seconds: 15), () {
       if (!controller.isClosed) {
-        debugPrint('[HttpRepo] resumeTaskProgress — 首事件超时（60s）taskId=$taskId');
+        debugPrint('[HttpRepo] resumeTaskProgress — 首事件超时（15s）taskId=$taskId');
         controller.addError(
           TimeoutException('恢复进度监听超时，taskId=$taskId'),
         );
@@ -155,7 +155,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     });
 
     Timer? totalTimeout;
-    const totalTimeoutDuration = Duration(seconds: 900);
+    const totalTimeoutDuration = Duration(seconds: 120);
 
     wsSubscription = wsStream.listen(
       (env) {
@@ -724,11 +724,11 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       },
     );
 
-    timeout = Timer(const Duration(seconds: 900), () {
+    timeout = Timer(const Duration(seconds: 120), () {
       if (!completer.isCompleted) {
-        debugPrint('[HttpRepo] resumeFinalGeneration — WS 超时（900s）taskId=$taskId');
+        debugPrint('[HttpRepo] resumeFinalGeneration — WS 超时（120s）taskId=$taskId');
         completer.completeError(
-          TimeoutException('终稿生成超时（900s），taskId=$taskId'),
+          TimeoutException('终稿生成超时（120s），taskId=$taskId'),
         );
       }
     });

@@ -13,6 +13,7 @@ class ProcessingStageWorkspace extends StatelessWidget {
     required this.processingSnapshot,
     required this.processingExpanded,
     required this.onProcessingCardPressed,
+    this.onRefreshPressed,
     super.key,
   });
 
@@ -21,6 +22,7 @@ class ProcessingStageWorkspace extends StatelessWidget {
   final ProcessingSnapshot processingSnapshot;
   final bool processingExpanded;
   final VoidCallback onProcessingCardPressed;
+  final VoidCallback? onRefreshPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -62,10 +64,12 @@ class ProcessingStageWorkspace extends StatelessWidget {
                       key: const ValueKey('expanded'),
                       snapshot: processingSnapshot,
                       onTap: onProcessingCardPressed,
+                      onRefresh: onRefreshPressed,
                     )
                   : ProcessingCollapsedHintCard(
                       key: const ValueKey('collapsed'),
                       onTap: onProcessingCardPressed,
+                      onRefresh: onRefreshPressed,
                     ),
             ),
           ),

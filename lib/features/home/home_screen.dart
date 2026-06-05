@@ -394,6 +394,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       isUploading: flowState.isUploading,
       uploadProgress: flowState.uploadProgress,
       onVideoPlayback: _openVideoPlayback,
+      onRefreshPressed: ref
+          .read(videoSummaryFlowControllerProvider.notifier)
+          .refreshProcessingStatus,
       onAddToKbPressed: () {
         final repo = ref.read(videoSummaryRepositoryProvider);
         final videoId = repo.videoId;

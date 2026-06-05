@@ -218,7 +218,12 @@ class VideoSummarySessionHistoryController
     return switch (state) {
       WorkflowState.draftGenerating => VideoSummaryStage.processing,
       WorkflowState.waitingUserApproval => VideoSummaryStage.draft,
-      WorkflowState.finalGenerating => VideoSummaryStage.processing,
+      // finalGenerating 时初稿已生成、终稿正在生成，映射为 draft 而非 processing。
+      // 原因：若映射为 processing，切回时会走 _recoverProcessingFromBackend →
+      // _resumeDraftGeneration → resumeTaskProgress，其竞态窗口守护只检查
+      // draftSummary 是否存在（Phase 1 完成后必然存在），导致误判为已完成而跳过
+      // Phase 2 WS 订阅，前端再也收不到终稿完成的 WS completed 事件。
+      WorkflowState.finalGenerating => VideoSummaryStage.draft,
       WorkflowState.completed => VideoSummaryStage.finalChat,
       WorkflowState.failed => VideoSummaryStage.ready,
     };

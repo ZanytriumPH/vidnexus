@@ -190,6 +190,9 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   /// 处理中阶段的轮询定时器，用于会话恢复后等待后台任务完成。
   Timer? _processingPollTimer;
 
+  /// draft 阶段的轮询定时器，用于等待终稿生成完成（Phase 2）。
+  Timer? _draftPollTimer;
+
   @override
   VideoSummaryFlowState build() {
     final videoAsset = _repository.getVideoAsset();
@@ -218,7 +221,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   void reset() {
     // 切换会话标识，使所有正在执行的旧异步生成流程的守卫失效
     _activeSessionKey = Object();
-    _cancelProcessingPoll();
+    _cancelAllPolling();
 
     _repository.updateTaskId(null);
     _repository.updateVideoId(defaultVideoId);
@@ -247,6 +250,19 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   /// 清除错误提示（SnackBar 弹出后由 UI 调用）。
   void clearError() {
     state = state.copyWith(clearError: true);
+  }
+
+  /// 用户手动刷新处理进度状态。
+  /// 根据当前阶段查询后端任务状态，重新同步前端展示。
+  void refreshProcessingStatus() {
+    final taskId = state.taskId;
+    if (taskId == null || taskId.isEmpty) return;
+
+    if (state.stage == VideoSummaryStage.processing) {
+      _recoverProcessingFromBackend(taskId);
+    } else if (state.stage == VideoSummaryStage.draft) {
+      _recoverDraftFromBackend(taskId);
+    }
   }
 
   Future<void> pickAndUploadVideo() async {
@@ -710,7 +726,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   void restoreSnapshot(VideoSummaryFlowSnapshot snapshot) {
     // 切换会话标识，使所有正在执行的旧异步生成流程的守卫失效
     _activeSessionKey = Object();
-    _cancelProcessingPoll();
+    _cancelAllPolling();
 
     final videoAsset = snapshot.videoAsset ?? state.videoAsset;
     state = state.copyWith(
@@ -879,6 +895,18 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     _processingPollTimer = null;
   }
 
+  /// 取消 draft 阶段的状态轮询定时器。
+  void _cancelDraftStatusPoll() {
+    _draftPollTimer?.cancel();
+    _draftPollTimer = null;
+  }
+
+  /// 取消所有轮询定时器（processing + draft）。
+  void _cancelAllPolling() {
+    _cancelProcessingPoll();
+    _cancelDraftStatusPoll();
+  }
+
   /// 恢复 processing 阶段的会话时，查询后端确认任务的实际进度。
   ///
   /// 场景：用户在 SSE 生成期间切走，任务在后台完成/失败，切回来时快照
@@ -922,9 +950,16 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           break;
 
         case WorkflowState.draftGenerating:
-        case WorkflowState.finalGenerating:
-          // 任务仍在后端运行，重新订阅 WS 实时进度
+          // Phase 1 仍在运行，重新订阅 WS 实时进度
           _resumeDraftGeneration(taskId, owningSessionKey);
+          break;
+
+        case WorkflowState.finalGenerating:
+          // Phase 1 已完成、Phase 2 正在进行。
+          // 先取草稿跳转到 draft，再建立 Phase 2 的 WS 监听。
+          await _transitionToDraftFromBackend(taskId, owningSessionKey);
+          if (_activeSessionKey != owningSessionKey) return;
+          _recoverDraftFromBackend(taskId);
           break;
       }
     } catch (e) {
@@ -980,16 +1015,24 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
   /// 重新订阅 WS 等待终稿生成完成（Phase 2）。
   /// 不调用 approveAndFinalize，仅等待已有任务的 WS completed 事件。
+  /// 同时启动并行轮询，作为 WS 静默失效的兜底。
   Future<void> _resumeFinalGeneration(String taskId, Object owningSessionKey) async {
     if (kDebugMode) {
       debugPrint('[FlowCtrl] 开始恢复终稿生成 WS 监听 — taskId=$taskId');
     }
 
+    // 立即启动并行轮询，作为 WS 静默失效的兜底
+    _startDraftStatusPoll(taskId, owningSessionKey);
+
     try {
       // resumeFinalGeneration 内部已处理"已完成"的短路情况
       final summary = await _repository.resumeFinalGeneration(taskId);
 
+      _cancelDraftStatusPoll();
       if (_activeSessionKey != owningSessionKey) return;
+
+      // 如果轮询已经过渡了阶段，跳过重复操作
+      if (state.stage != VideoSummaryStage.draft) return;
 
       final summaryData = mapFinalResultDataToSummary(summary);
       final seededRange = _buildRangeFromSummary(summaryData);
@@ -1005,11 +1048,12 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         debugPrint('[FlowCtrl] 恢复的终稿生成已完成 — taskId=$taskId');
       }
     } catch (e) {
-      if (_activeSessionKey != owningSessionKey) return;
-      debugPrint('[FlowCtrl] 恢复终稿生成失败 — taskId=$taskId: $e');
-      state = state.copyWith(
-        errorMessage: '终稿生成恢复失败，请重试',
-      );
+      if (_activeSessionKey != owningSessionKey) {
+        _cancelDraftStatusPoll();
+        return;
+      }
+      debugPrint('[FlowCtrl] 恢复终稿生成失败，轮询兜底中 — taskId=$taskId: $e');
+      // 轮询已在运行，无需额外操作
     }
   }
 
@@ -1087,6 +1131,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   }
 
   /// 重新订阅 WS 实时进度流（用于切回 processing 阶段会话时恢复监听）。
+  /// 同时启动并行轮询，作为 WS 静默失效的兜底。
   Future<void> _resumeDraftGeneration(String taskId, Object owningSessionKey) async {
     if (kDebugMode) {
       debugPrint('[FlowCtrl] 开始恢复 WS 监听 — taskId=$taskId');
@@ -1097,12 +1142,16 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       state = state.copyWith(taskId: taskId);
     }
 
+    // 立即启动并行轮询，作为 WS 静默失效的兜底（10s 间隔）
+    _startProcessingPoll(taskId, owningSessionKey, intervalSeconds: 10);
+
     try {
       await for (final processingData in _repository.resumeTaskProgress(taskId)) {
         if (_activeSessionKey != owningSessionKey) {
           if (kDebugMode) {
             debugPrint('[FlowCtrl] 恢复 WS 流中止 — 会话已切换');
           }
+          _cancelProcessingPoll();
           return;
         }
         state = state.copyWith(
@@ -1110,8 +1159,12 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         );
       }
 
-      // WS 流正常结束（收到 completed），获取草稿并跳转
+      // WS 流正常结束（收到 completed），停止轮询
+      _cancelProcessingPoll();
       if (_activeSessionKey != owningSessionKey) return;
+
+      // 如果轮询已经过渡了阶段，跳过重复操作
+      if (state.stage != VideoSummaryStage.processing) return;
 
       _repository.updateTaskId(taskId);
       final draft = mapDraftDataToResult(await _repository.fetchDraftResult());
@@ -1129,16 +1182,19 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         debugPrint('[FlowCtrl] 恢复的 WS 任务已完成，已跳转到草稿页 — taskId=$taskId');
       }
     } catch (e) {
-      if (_activeSessionKey != owningSessionKey) return;
-      debugPrint('[FlowCtrl] 恢复 WS 监听失败 — taskId=$taskId: $e');
-      // WS 恢复失败时回退到轮询
-      _startProcessingPoll(taskId, owningSessionKey);
+      if (_activeSessionKey != owningSessionKey) {
+        _cancelProcessingPoll();
+        return;
+      }
+      debugPrint('[FlowCtrl] 恢复 WS 监听失败，轮询兜底中 — taskId=$taskId: $e');
+      // 轮询已在运行，无需额外操作
     }
   }
 
-  /// 启动轮询，每 5 秒检查一次后端任务状态，直到完成或失败。
+  /// 启动轮询，定期检查后端任务状态，直到完成或失败。
   /// 作为 WS 实时监听的兜底方案。
-  void _startProcessingPoll(String taskId, Object owningSessionKey) {
+  /// [intervalSeconds] 控制轮询间隔，默认 5 秒；并行运行时建议设为 10 秒。
+  void _startProcessingPoll(String taskId, Object owningSessionKey, {int intervalSeconds = 5}) {
     _cancelProcessingPoll();
 
     void poll() async {
@@ -1175,21 +1231,79 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           case WorkflowState.finalGenerating:
             // 仍在运行，继续轮询
             if (_activeSessionKey == owningSessionKey) {
-              _processingPollTimer = Timer(const Duration(seconds: 5), poll);
+              _processingPollTimer = Timer(Duration(seconds: intervalSeconds), poll);
             }
             break;
         }
       } catch (e) {
         debugPrint('[FlowCtrl] 轮询任务状态失败 — taskId=$taskId: $e');
-        // 出错后仍然继续轮询（5 秒后重试）
+        // 出错后仍然继续轮询
         if (_activeSessionKey == owningSessionKey) {
-          _processingPollTimer = Timer(const Duration(seconds: 5), poll);
+          _processingPollTimer = Timer(Duration(seconds: intervalSeconds), poll);
         }
       }
     }
 
     debugPrint('[FlowCtrl] 开始轮询后台任务进度 — taskId=$taskId');
-    _processingPollTimer = Timer(const Duration(seconds: 5), poll);
+    _processingPollTimer = Timer(Duration(seconds: intervalSeconds), poll);
+  }
+
+  /// 轮询 draft 阶段的后端任务状态，用于等待终稿生成完成（Phase 2）。
+  /// 作为 `_resumeFinalGeneration` WS 监听的兜底。
+  void _startDraftStatusPoll(String taskId, Object owningSessionKey) {
+    _cancelDraftStatusPoll();
+
+    void poll() async {
+      if (_activeSessionKey != owningSessionKey) {
+        _cancelDraftStatusPoll();
+        return;
+      }
+
+      try {
+        final taskInfo = await _repository.getTaskStatus(taskId);
+        if (taskInfo == null || _activeSessionKey != owningSessionKey) {
+          _cancelDraftStatusPoll();
+          return;
+        }
+
+        switch (taskInfo.workflowState) {
+          case WorkflowState.completed:
+            _cancelDraftStatusPoll();
+            await _transitionToFinalChatFromBackend(taskId, owningSessionKey);
+            break;
+
+          case WorkflowState.failed:
+            _cancelDraftStatusPoll();
+            if (_activeSessionKey != owningSessionKey) return;
+            state = state.copyWith(
+              errorMessage: '终稿生成失败，请重试',
+            );
+            break;
+
+          case WorkflowState.draftGenerating:
+            // 异常回退：draft 阶段不应该出现 Phase 1 状态，但做防御处理
+            _cancelDraftStatusPoll();
+            _startProcessingPoll(taskId, owningSessionKey);
+            break;
+
+          case WorkflowState.waitingUserApproval:
+          case WorkflowState.finalGenerating:
+            // 仍在等待或生成中，继续轮询
+            if (_activeSessionKey == owningSessionKey) {
+              _draftPollTimer = Timer(const Duration(seconds: 10), poll);
+            }
+            break;
+        }
+      } catch (e) {
+        debugPrint('[FlowCtrl] 终稿状态轮询失败 — taskId=$taskId: $e');
+        if (_activeSessionKey == owningSessionKey) {
+          _draftPollTimer = Timer(const Duration(seconds: 10), poll);
+        }
+      }
+    }
+
+    debugPrint('[FlowCtrl] 开始终稿状态轮询 — taskId=$taskId');
+    _draftPollTimer = Timer(const Duration(seconds: 10), poll);
   }
 
   TimestampRangeSelection _buildDefaultTimestampRange(String durationLabel) {

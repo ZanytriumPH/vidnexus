@@ -11,11 +11,13 @@ class StreamlitProgressCard extends StatelessWidget {
   const StreamlitProgressCard({
     required this.snapshot,
     this.onTap,
+    this.onRefresh,
     super.key,
   });
 
   final ProcessingSnapshot snapshot;
   final VoidCallback? onTap;
+  final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -31,8 +33,8 @@ class StreamlitProgressCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── 头部：标题 + 收起按钮 ──
-            _Header(onTap: onTap),
+            // ── 头部：标题 + 刷新按钮 + 收起按钮 ──
+            _Header(onTap: onTap, onRefresh: onRefresh),
 
             const SizedBox(height: 6),
 
@@ -69,11 +71,12 @@ class StreamlitProgressCard extends StatelessWidget {
   }
 }
 
-/// 头部：标题 "详细处理信息" + 收起标签。
+/// 头部：标题 "详细处理信息" + 刷新按钮 + 收起标签。
 class _Header extends StatelessWidget {
-  const _Header({this.onTap});
+  const _Header({this.onTap, this.onRefresh});
 
   final VoidCallback? onTap;
+  final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +90,24 @@ class _Header extends StatelessWidget {
               ),
         ),
         const Spacer(),
+        if (onRefresh != null) ...[
+          GestureDetector(
+            onTap: onRefresh,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F4F7),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.refresh_rounded,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
         GestureDetector(
           onTap: onTap,
           child: Container(
