@@ -104,7 +104,13 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
                   if (isWaiting && index == messages.length) {
                     return const _KnowledgeTypingIndicator();
                   }
-                  return _KnowledgeChatBubble(message: messages[index]);
+                  final message = messages[index];
+                  // 空系统消息不渲染，此时 "AI正在思考..." 的 typing indicator 正在展示
+                  if (message.sender == KnowledgeChatSender.system &&
+                      message.text.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return _KnowledgeChatBubble(message: message);
                 },
               ),
             ),

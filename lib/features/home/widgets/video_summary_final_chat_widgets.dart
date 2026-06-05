@@ -17,16 +17,21 @@ class ChatThread extends StatelessWidget {
     required this.summary,
     required this.messages,
     this.onAddToKbPressed,
+    this.isWaiting = false,
     super.key,
   });
 
   final FinalSummaryData summary;
   final List<ChatMessage> messages;
   final VoidCallback? onAddToKbPressed;
+  final bool isWaiting;
 
   @override
   Widget build(BuildContext context) {
     final messageStyles = context.appMessageStyles;
+    // 空系统消息不渲染（此时 typing indicator 正在展示）
+    final visibleMessages = messages.where((m) =>
+        m.sender == SummaryChatSender.user || m.text.isNotEmpty);
 
     return Column(
       children: [
@@ -37,12 +42,14 @@ class ChatThread extends StatelessWidget {
             onAddToKbPressed: onAddToKbPressed,
           ),
         ),
-        ...messages.map(
+        ...visibleMessages.map(
           (message) => Padding(
             padding: EdgeInsets.only(bottom: messageStyles.messageSpacing),
             child: _SummaryChatBubble(message: message),
           ),
         ),
+        if (isWaiting)
+          const _SummaryTypingIndicator(),
       ],
     );
   }
@@ -97,13 +104,6 @@ class _FinalSummaryBubble extends StatelessWidget {
                 _AddToKbButton(onPressed: onAddToKbPressed),
                 const SizedBox(width: 6),
               ],
-              const ActionIconButton(icon: Icons.copy_all_outlined),
-              const SizedBox(width: 6),
-              const ActionIconButton(icon: Icons.note_alt_outlined),
-              const SizedBox(width: 6),
-              const ActionIconButton(icon: Icons.image_outlined),
-              const SizedBox(width: 6),
-              const ActionIconButton(icon: Icons.photo_outlined),
             ],
           ),
           SizedBox(height: messageStyles.messageSpacing),
@@ -184,45 +184,6 @@ class _SummaryChatBubbleBody extends StatelessWidget {
   }
 }
 
-class MessageActionRow extends StatelessWidget {
-  const MessageActionRow({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: const [
-        ActionIconButton(icon: Icons.copy_all_outlined),
-        SizedBox(width: 6),
-        ActionIconButton(icon: Icons.note_alt_outlined),
-        SizedBox(width: 6),
-        ActionIconButton(icon: Icons.image_outlined),
-        SizedBox(width: 6),
-        ActionIconButton(icon: Icons.photo_outlined),
-      ],
-    );
-  }
-}
-
-class ActionIconButton extends StatelessWidget {
-  const ActionIconButton({required this.icon, super.key});
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 22,
-      height: 22,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFD7DFE7)),
-      ),
-      child: Icon(icon, size: 13, color: AppColors.textSecondary),
-    );
-  }
-}
-
 class _AddToKbButton extends StatelessWidget {
   const _AddToKbButton({required this.onPressed});
 
@@ -232,19 +193,32 @@ class _AddToKbButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(18),
       child: Container(
-        width: 22,
-        height: 22,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: const Color(0xFFE7F0FF),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(color: const Color(0xFFBFD1FF)),
         ),
-        child: const Icon(
-          Icons.library_books_outlined,
-          size: 13,
-          color: Color(0xFF275FD8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(
+              Icons.library_books_rounded,
+              size: 15,
+              color: Color(0xFF275FD8),
+            ),
+            SizedBox(width: 5),
+            Text(
+              '加入知识库',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF275FD8),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -592,7 +566,7 @@ Future<void> showAddToKnowledgeBaseSheet({
   );
 }
 
-class _AddToKnowledgeBaseSheet extends ConsumerWidget {
+class _AddToKnowledgeBaseSheet extends ConsumerStatefulWidget {
   const _AddToKnowledgeBaseSheet({
     required this.ref,
     required this.videoId,
@@ -602,10 +576,85 @@ class _AddToKnowledgeBaseSheet extends ConsumerWidget {
   final String videoId;
 
   @override
-  Widget build(BuildContext context, WidgetRef widgetRef) {
+  ConsumerState<_AddToKnowledgeBaseSheet> createState() =>
+      _AddToKnowledgeBaseSheetState();
+}
+
+class _AddToKnowledgeBaseSheetState
+    extends ConsumerState<_AddToKnowledgeBaseSheet> {
+  bool _isCreating = false;
+
+  Future<void> _createAndBind(BuildContext context) async {
+    final nameController = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('新建知识库'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(hintText: '知识库名称'),
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) => Navigator.pop(ctx, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, nameController.text.trim()),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+
+    if (name == null || name.isEmpty || !mounted) return;
+
+    setState(() => _isCreating = true);
+
+    try {
+      final controller = ref.read(libraryListControllerProvider.notifier);
+      final newLibrary = await controller.createLibrary(name: name);
+      if (newLibrary == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('创建知识库失败，请重试')),
+        );
+        return;
+      }
+
+      final kbService = ref.read(knowledgeBaseServiceProvider);
+      await kbService.bindVideo(kbid: newLibrary.id, videoId: widget.videoId);
+
+      if (!mounted) return;
+      final navigator = Navigator.of(context);
+      final messenger = ScaffoldMessenger.of(context);
+      navigator.pop(); // 关闭选择 sheet
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('已创建「$name」并加入'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('操作失败：$e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = _KbSheetStrings.of(context);
-    final librariesState = widgetRef.watch(libraryListControllerProvider);
-    final kbService = widgetRef.watch(knowledgeBaseServiceProvider);
+    final librariesState = ref.watch(libraryListControllerProvider);
+    final kbService = ref.watch(knowledgeBaseServiceProvider);
 
     return SafeArea(
       top: false,
@@ -624,6 +673,12 @@ class _AddToKnowledgeBaseSheet extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
+            // 新建知识库 — 固定置顶
+            _NewKbTile(
+              isLoading: _isCreating,
+              onTap: _isCreating ? null : () => _createAndBind(context),
+            ),
+            const SizedBox(height: 8),
             if (librariesState.isLoading)
               const Center(
                 child: Padding(
@@ -653,7 +708,7 @@ class _AddToKnowledgeBaseSheet extends ConsumerWidget {
                     try {
                       await kbService.bindVideo(
                         kbid: library.id,
-                        videoId: videoId,
+                        videoId: widget.videoId,
                       );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -677,6 +732,78 @@ class _AddToKnowledgeBaseSheet extends ConsumerWidget {
                 ),
               ),
             const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 新建知识库条目，固定在列表顶部。
+class _NewKbTile extends StatelessWidget {
+  const _NewKbTile({required this.isLoading, this.onTap});
+
+  final bool isLoading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F4FF),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFD0DAF0),
+            strokeAlign: BorderSide.strokeAlignInside,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE0E8F8),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: Padding(
+                        padding: EdgeInsets.all(7),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF5B7EC2),
+                        ),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.add_rounded,
+                      size: 18,
+                      color: Color(0xFF5B7EC2),
+                    ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              '新建知识库',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF3B5FA0),
+              ),
+            ),
+            const Spacer(),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: Color(0xFF8FA8D0),
+            ),
           ],
         ),
       ),
@@ -751,6 +878,92 @@ class _KnowledgeBaseTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// AI 正在思考的动画指示器（与知识库聊天的 typing indicator 样式一致）。
+class _SummaryTypingIndicator extends StatefulWidget {
+  const _SummaryTypingIndicator();
+
+  @override
+  State<_SummaryTypingIndicator> createState() =>
+      _SummaryTypingIndicatorState();
+}
+
+class _SummaryTypingIndicatorState extends State<_SummaryTypingIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat(reverse: true);
+    _animation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _animation,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 280),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F5F9),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              _SummaryTypingDot(),
+              SizedBox(width: 6),
+              _SummaryTypingDot(),
+              SizedBox(width: 6),
+              _SummaryTypingDot(),
+              SizedBox(width: 10),
+              Text(
+                'AI 正在思考…',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF8E8E93),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryTypingDot extends StatelessWidget {
+  const _SummaryTypingDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: const BoxDecoration(
+        color: Color(0xFF8E8E93),
+        shape: BoxShape.circle,
       ),
     );
   }
