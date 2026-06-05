@@ -152,7 +152,7 @@ class VideoSummarySessionHistoryController
       );
       state = state.copyWith(
         isLoadingHistory: false,
-        errorMessage: '历史会话加载失败，请下拉重试',
+        errorMessage: '历史会话加载失败，请点击重试',
       );
     }
   }

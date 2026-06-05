@@ -7,6 +7,7 @@ import '../../app/routing/app_route_arguments.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../services/api/api_client.dart';
 import '../../services/video_service.dart';
+import '../auth/auth_controller.dart';
 import 'application/video_summary_flow_controller.dart';
 import 'application/video_summary_session_history_controller.dart';
 import 'application/video_summary_settings_controller.dart';
@@ -41,6 +42,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final useBoundedStageLayout =
         flowState.stage == VideoSummaryStage.ready ||
         flowState.stage == VideoSummaryStage.finalChat;
+
+    // 监听认证状态变化：当用户登出时，立即使会话历史与流程控制器失效，
+    // 确保下一个账号登录后不会看到上一个账号的残留缓存数据。
+    ref.listen(authControllerProvider, (prev, next) {
+      if (prev?.isLoggedIn == true && !next.isLoggedIn) {
+        ref.invalidate(videoSummarySessionHistoryProvider);
+        ref.invalidate(videoSummaryFlowControllerProvider);
+      }
+    });
 
     ref.listen(videoSummaryFlowControllerProvider, (prev, next) {
       final msg = next.errorMessage;
