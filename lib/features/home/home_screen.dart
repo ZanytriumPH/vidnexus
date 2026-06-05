@@ -188,19 +188,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
     final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
     textEditing.runWithoutSync(() {
-      // 上传了视频的会话有保留价值，先存为历史条目再重置。
-      // 这样用户在侧边栏仍可找回。
-      if (flowState.uploadHighlighted) {
-        final snapshot = textEditing.captureSnapshot();
-        if (flowState.taskId == null) {
-          // 仅有视频上传、尚未创建后端任务的会话：更新已持久化的本地条目。
-          // persistUploadSession 内部已处理"更新已有条目 vs 新建"的去重逻辑。
-          sessionHistoryController.persistUploadSession(snapshot);
-        } else {
-          // 已有后端任务的会话直接存入侧边栏历史列表，
-          // 重启后由 listTaskHistory 从后端恢复。
-          sessionHistoryController.createNewSession(snapshot);
-        }
+      // 仅需持久化"仅有视频上传、尚未创建后端任务"的会话。
+      // 已有后端任务的会话由 listTaskHistory 提供侧边栏历史记录，
+      // 无需额外创建冗余的本地条目。
+      if (flowState.uploadHighlighted && flowState.taskId == null) {
+        sessionHistoryController.persistUploadSession(
+          textEditing.captureSnapshot(),
+        );
       }
       textEditing.clearForNewSession();
       flowController.reset();

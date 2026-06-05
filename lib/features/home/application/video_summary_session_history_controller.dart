@@ -297,26 +297,6 @@ class VideoSummarySessionHistoryController
     return null;
   }
 
-  void createNewSession(VideoSummarySessionSnapshot snapshot) {
-    final nextCount = state.createdSessionCount + 1;
-    final session = VideoSummarySessionHistoryEntry(
-      id: 'session-$nextCount',
-      title: '视频总结会话 ${nextCount.toString().padLeft(2, '0')}',
-      durationLabel: _repository.getVideoAsset().durationLabel,
-      detail: _detailForSnapshot(snapshot),
-      snapshot: snapshot,
-    );
-
-    state = state.copyWith(
-      createdSessionCount: nextCount,
-      activeSessionId: session.id,
-      sessions: [session, ...state.sessions],
-    );
-
-    // 无后端任务的本地会话需要持久化到 JSON 文件
-    _saveLocalSessions();
-  }
-
   void activateSession(String sessionId) {
     if (state.activeSessionId == sessionId) {
       return;
