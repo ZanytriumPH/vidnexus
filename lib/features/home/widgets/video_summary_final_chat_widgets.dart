@@ -659,83 +659,87 @@ class _AddToKnowledgeBaseSheetState
 
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            // 新建知识库 — 固定置顶
-            _NewKbTile(
-              isLoading: _isCreating,
-              onTap: _isCreating ? null : () => _createAndBind(context),
-            ),
-            const SizedBox(height: 8),
-            if (librariesState.isLoading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: CircularProgressIndicator(strokeWidth: 2),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.5,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
                 ),
-              )
-            else if (librariesState.libraries.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: Text(
-                    l10n.emptyHint,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textHint,
+              ),
+              const SizedBox(height: 16),
+              // 新建知识库 — 固定置顶
+              _NewKbTile(
+                isLoading: _isCreating,
+                onTap: _isCreating ? null : () => _createAndBind(context),
+              ),
+              const SizedBox(height: 8),
+              // 知识库列表 — 可滚动
+              if (librariesState.isLoading)
+                const Expanded(
+                  child: Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else if (librariesState.libraries.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      l10n.emptyHint,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textHint,
+                      ),
                     ),
                   ),
+                )
+              else
+                Expanded(
+                  child: ListView(
+                    children: librariesState.libraries
+                        .where((l) => l.title != '默认知识库')
+                        .map(
+                      (library) => _KnowledgeBaseTile(
+                        title: library.title,
+                        meta: library.meta,
+                        onTap: () async {
+                          Navigator.of(context).pop();
+                          try {
+                            await kbService.bindVideo(
+                              kbid: library.id,
+                              videoId: widget.videoId,
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.success(library.title)),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.failure(e.toString())),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ).toList(),
+                  ),
                 ),
-              )
-            else
-              ...librariesState.libraries
-                  .where((l) => l.title != '默认知识库')
-                  .map(
-                (library) => _KnowledgeBaseTile(
-                  title: library.title,
-                  meta: library.meta,
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    try {
-                      await kbService.bindVideo(
-                        kbid: library.id,
-                        videoId: widget.videoId,
-                      );
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(l10n.success(library.title)),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(l10n.failure(e.toString())),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                ),
-              ),
-            const SizedBox(height: 8),
-          ],
+            ],
+          ),
         ),
       ),
     );
