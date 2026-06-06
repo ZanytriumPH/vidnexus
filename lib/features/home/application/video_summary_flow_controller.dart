@@ -250,6 +250,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       isDraftEditMode: false,
       isGenerating: false,
       isSendingChat: false,
+      isUploading: false,
+      uploadProgress: 0.0,
       isTimestampScoped: settings.defaultTimestampScoped,
       selectedTimestampStartSeconds: defaultRange.startSeconds,
       selectedTimestampEndSeconds: defaultRange.endSeconds,
@@ -571,36 +573,22 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
     final videoService = ref.read(videoServiceProvider);
     final wsClient = ref.read(wsClientProvider);
-    final completer = Completer<void>();
-    StreamSubscription<WSEventEnvelope>? wsSubscription;
 
-    // 标记是否已由 WS 通道处理完毕，防止双通道重复触发
-    bool resolved = false;
+    // WS 通道标记：由 listener 在收到 completed 事件时置 true
+    bool wsSignalled = false;
 
     // ── 通道 1：WebSocket 实时监听 video_resource 作用域的 completed 事件 ──
-    void onResolved(String channel, {int? attempt}) {
-      if (resolved) return;
-      resolved = true;
-      wsSubscription?.cancel();
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
-      if (kDebugMode) {
-        final extra = attempt != null ? ' (第 $attempt 次轮询)' : '';
-        debugPrint('[FlowCtrl] Celery 处理完成 — videoId=$videoId channel=$channel$extra');
-      }
-    }
-
-    // 订阅 WS 事件：scope=video_resource + scopeId=videoId + eventType=completed
-    wsSubscription = wsClient.eventStream
+    final wsSubscription = wsClient.eventStream
         .where((env) =>
             env.scope == WSScope.videoResource &&
             env.scopeId == videoId &&
             env.eventType == WSEventType.completed)
         .listen(
-          (env) {
-            if (_activeSessionKey != owningSessionKey) return;
-            onResolved('WebSocket');
+          (_) {
+            wsSignalled = true;
+            if (kDebugMode) {
+              debugPrint('[FlowCtrl] WS 通道收到 video_resource completed — videoId=$videoId');
+            }
           },
           onError: (e) {
             debugPrint('[FlowCtrl] WS video_resource 监听错误: $e');
@@ -608,13 +596,23 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         );
 
     // ── 通道 2：HTTP 轮询兜底 ──
-    // 使用 Future.microtask 确保 WS 订阅先建立，再开始轮询
-    Future.microtask(() async {
+    try {
       for (int attempt = 0; attempt < maxAttempts; attempt++) {
-        if (resolved) return;
-
+        // 先等待间隔，再检查（让后端有时间处理）
         await Future.delayed(pollInterval);
-        if (resolved) return;
+
+        // 检查 WS 是否已收到完成信号
+        if (wsSignalled) {
+          await _applyCeleryReadyState(
+            videoId: videoId,
+            owningSessionKey: owningSessionKey,
+            fileName: fileName,
+            durationSeconds: 0,
+            channel: 'WebSocket',
+            attempt: null,
+          );
+          return;
+        }
 
         try {
           final resp = await videoService.getVideo(videoId);
@@ -634,54 +632,24 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           final durationSeconds = data.duration ?? 0;
           final hasDuration = durationSeconds > 0;
 
-          // 优先使用精确条件，时长作为兜底（兼容旧数据）
+          // 优先使用精确条件，时长作为兜底（兼容旧数据或部分完成场景）
           final isReady = (isTranscribeComplete &&
                   isExtractionComplete &&
                   hasExtractCompletedAt) ||
               hasDuration;
 
           if (isReady) {
-            final durationLabel = hasDuration
-                ? _formatDurationLabel(durationSeconds)
-                : '0m 00s';
-
-            if (_activeSessionKey == owningSessionKey) {
-              state = state.copyWith(
-                isUploading: false,
-                uploadHighlighted: true,
-                videoAsset: VideoAssetInfo(
-                  title: videoId,
-                  durationLabel: durationLabel,
-                  sourceLabel: state.videoAsset.sourceLabel,
-                  fileName: fileName,
-                ),
-              );
-            } else {
-              _updateBackgroundTempSession(
-                newVideoId: videoId,
-                isUploading: false,
-                uploadProgress: 0.0,
-                videoAsset: VideoAssetInfo(
-                  title: videoId,
-                  durationLabel: durationLabel,
-                  sourceLabel: _repository.kbid,
-                  fileName: fileName,
-                ),
-                uploadHighlighted: true,
-              );
-            }
-
-            if (kDebugMode) {
-              debugPrint(
-                '[FlowCtrl] Celery 处理完成 — videoId=$videoId'
-                ' duration=${data.duration}s'
-                ' transcribe=${data.transcribeStatus}'
-                ' frameExtraction=${data.frameExtractionStatus}'
-                ' extractCompletedAt=${data.extractCompletedAt}'
-                ' (第 ${attempt + 1} 次轮询)',
-              );
-            }
-            onResolved('HTTP polling', attempt: attempt + 1);
+            await _applyCeleryReadyState(
+              videoId: videoId,
+              owningSessionKey: owningSessionKey,
+              fileName: fileName,
+              durationSeconds: durationSeconds,
+              channel: 'HTTP polling',
+              attempt: attempt + 1,
+              transcribeStatus: data.transcribeStatus,
+              frameExtractionStatus: data.frameExtractionStatus,
+              extractCompletedAt: data.extractCompletedAt,
+            );
             return;
           }
         } catch (e) {
@@ -692,40 +660,74 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       }
 
       // 超时：仍然标记为完成，用户可以继续使用但时长可能不准确
-      if (!resolved) {
-        if (_activeSessionKey == owningSessionKey) {
-          state = state.copyWith(
-            isUploading: false,
-            uploadHighlighted: true,
-            videoAsset: VideoAssetInfo(
-              title: videoId,
-              durationLabel: '0m 00s',
-              sourceLabel: state.videoAsset.sourceLabel,
-              fileName: fileName,
-            ),
-          );
-        } else {
-          _updateBackgroundTempSession(
-            newVideoId: videoId,
-            isUploading: false,
-            uploadProgress: 0.0,
-            videoAsset: VideoAssetInfo(
-              title: videoId,
-              durationLabel: '0m 00s',
-              sourceLabel: _repository.kbid,
-              fileName: fileName,
-            ),
-            uploadHighlighted: true,
-          );
-        }
-        debugPrint(
-            '[FlowCtrl] Celery 处理超时 — videoId=$videoId，强制标记为完成');
-        onResolved('timeout fallback');
-      }
-    });
+      debugPrint(
+          '[FlowCtrl] Celery 处理超时 — videoId=$videoId，强制标记为完成');
+      await _applyCeleryReadyState(
+        videoId: videoId,
+        owningSessionKey: owningSessionKey,
+        fileName: fileName,
+        durationSeconds: 0,
+        channel: 'timeout fallback',
+        attempt: null,
+      );
+    } finally {
+      wsSubscription.cancel();
+    }
+  }
 
-    await completer.future;
-    wsSubscription?.cancel();
+  /// 将 Celery 就绪状态应用到当前 state 或后台临时会话。
+  Future<void> _applyCeleryReadyState({
+    required String videoId,
+    required Object owningSessionKey,
+    required String fileName,
+    required int durationSeconds,
+    required String channel,
+    int? attempt,
+    String? transcribeStatus,
+    String? frameExtractionStatus,
+    String? extractCompletedAt,
+  }) async {
+    final hasDuration = durationSeconds > 0;
+    final durationLabel =
+        hasDuration ? _formatDurationLabel(durationSeconds) : '0m 00s';
+
+    if (_activeSessionKey == owningSessionKey) {
+      state = state.copyWith(
+        isUploading: false,
+        uploadHighlighted: true,
+        videoAsset: VideoAssetInfo(
+          title: videoId,
+          durationLabel: durationLabel,
+          sourceLabel: state.videoAsset.sourceLabel,
+          fileName: fileName,
+        ),
+      );
+    } else {
+      _updateBackgroundTempSession(
+        newVideoId: videoId,
+        isUploading: false,
+        uploadProgress: 0.0,
+        videoAsset: VideoAssetInfo(
+          title: videoId,
+          durationLabel: durationLabel,
+          sourceLabel: _repository.kbid,
+          fileName: fileName,
+        ),
+        uploadHighlighted: true,
+      );
+    }
+
+    if (kDebugMode) {
+      final extra = attempt != null ? ' (第 $attempt 次轮询)' : '';
+      debugPrint(
+        '[FlowCtrl] Celery 处理完成 — videoId=$videoId'
+        ' channel=$channel$extra'
+        ' duration=${durationSeconds}s'
+        ' transcribe=$transcribeStatus'
+        ' frameExtraction=$frameExtractionStatus'
+        ' extractCompletedAt=$extractCompletedAt',
+      );
+    }
   }
 
   void toggleProcessingExpanded() {
