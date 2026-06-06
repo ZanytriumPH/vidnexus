@@ -70,7 +70,7 @@ DraftResult mapDraftDataToResult(VideoSummaryDraftData data) {
 /// 最终稿需要额外组合标题、时间片段标签和 chip 数据，这些都属于展示层。
 FinalSummaryData mapFinalResultDataToSummary(VideoSummaryFinalResultData data) {
   return FinalSummaryData(
-    summaryTitle: '最终稿',
+    summaryTitle: '视频总结',
     summaryBody: data.body,
     timestampChips: data.references
         .map(

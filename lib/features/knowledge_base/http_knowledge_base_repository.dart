@@ -21,17 +21,45 @@ class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
   }) async {
     final resp = await _kbService.listKBs(params: params);
 
-    final libraries = resp.data.map((dto) {
-      return KnowledgeBaseLibrary(
+    final libraries = <KnowledgeBaseLibrary>[];
+    for (final dto in resp.data) {
+      // 异步拉取该知识库的来源数量
+      int sourceCount = 0;
+      try {
+        final sourcesResp = await _kbService.listVideos(
+          dto.kbid,
+          params: const PageParams(page: 1, pageSize: 1),
+        );
+        sourceCount = sourcesResp.pagination?.total ?? 0;
+      } catch (_) {
+        // 拉取失败不阻塞列表展示
+      }
+
+      // 异步拉取该知识库的最新一次提问（chatTitle）
+      String? latestQuestion;
+      try {
+        final chatsResp = await _chatService.listChats(
+          dto.kbid,
+          params: const PageParams(page: 1, pageSize: 1, sort: '-created_at'),
+        );
+        if (chatsResp.data.isNotEmpty) {
+          latestQuestion = chatsResp.data.first.chatTitle;
+        }
+      } catch (_) {
+        // 拉取失败不阻塞列表展示
+      }
+
+      libraries.add(KnowledgeBaseLibrary(
         id: dto.kbid,
         title: dto.name,
-        meta: _buildMeta(dto.category, dto.createdAt),
+        meta: _buildMeta(null, dto.createdAt),
         description: dto.description ?? '',
-        sourceCount: 0, // 由后续 listSources 异步填充
+        sourceCount: sourceCount,
         sources: const [],
-        conversations: const [], // Phase 5 接入
-      );
-    }).toList();
+        conversations: const [],
+        latestQuestion: latestQuestion,
+      ));
+    }
 
     return ApiListResponse(
       status: resp.status,
@@ -146,9 +174,24 @@ class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
     final parts = <String>[];
     if (category != null && category.isNotEmpty) parts.add(category);
     if (createdAt != null && createdAt.isNotEmpty) {
-      parts.add('创建于 $createdAt');
+      parts.add('创建于 ${_formatDateTime(createdAt)}');
     }
     return parts.isEmpty ? '暂无信息' : parts.join(' · ');
+  }
+
+  /// 将 ISO 时间戳转换为 "年/月/日 时:分" 格式（例：2026/05/18 10:00）。
+  String _formatDateTime(String isoString) {
+    try {
+      final dt = DateTime.parse(isoString).toLocal();
+      final y = dt.year.toString();
+      final m = dt.month.toString().padLeft(2, '0');
+      final d = dt.day.toString().padLeft(2, '0');
+      final h = dt.hour.toString().padLeft(2, '0');
+      final min = dt.minute.toString().padLeft(2, '0');
+      return '$y/$m/$d $h:$min';
+    } catch (_) {
+      return isoString;
+    }
   }
 
   /// 将 ISO 时间戳格式化为简短日期标签（如 "5月17日"）。

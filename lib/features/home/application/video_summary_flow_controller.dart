@@ -8,13 +8,17 @@ import 'package:file_picker/file_picker.dart';
 import '../../../services/service_providers.dart';
 import '../../../services/upload_service.dart';
 import '../../../services/models/common_dto.dart';
+import '../../../services/websocket/ws_models.dart';
+import '../../../services/websocket/ws_provider.dart';
 import 'video_summary_result_mapper.dart';
 import '../domain/video_summary_domain_models.dart';
 import '../domain/video_summary_time_utils.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
 import '../video_summary_repository.dart';
+import 'video_summary_session_history_controller.dart';
 import 'video_summary_settings_controller.dart';
+import 'video_summary_text_editing_controller.dart';
 
 final videoSummaryFlowControllerProvider =
     NotifierProvider<VideoSummaryFlowController, VideoSummaryFlowState>(
@@ -160,6 +164,8 @@ class VideoSummaryFlowSnapshot {
     required this.draftResult,
     required this.finalSummaryData,
     required this.chatMessages,
+    this.isUploading = false,
+    this.uploadProgress = 0.0,
   });
 
   final String? taskId;
@@ -175,6 +181,8 @@ class VideoSummaryFlowSnapshot {
   final DraftResult? draftResult;
   final FinalSummaryData? finalSummaryData;
   final List<ChatMessage> chatMessages;
+  final bool isUploading;
+  final double uploadProgress;
 }
 
 /// 视频总结主状态机，负责把 ready -> processing -> draft -> finalChat 串起来。
@@ -226,15 +234,24 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     _repository.updateTaskId(null);
     _repository.updateVideoId(defaultVideoId);
     ref.read(currentVideoIdProvider.notifier).state = defaultVideoId;
+    ref.read(videoSummarySessionHistoryProvider.notifier).activateSession('session-current');
     final settings = ref.read(videoSummarySettingsProvider);
     final defaultRange = _buildDefaultTimestampRange(state.videoAsset.durationLabel);
     state = state.copyWith(
       taskId: null,
+      videoAsset: VideoAssetInfo(
+        title: defaultVideoId,
+        durationLabel: '0m 00s',
+        sourceLabel: state.videoAsset.sourceLabel,
+        fileName: '',
+      ),
       uploadHighlighted: false,
       processingExpanded: settings.defaultProcessingExpanded,
       isDraftEditMode: false,
       isGenerating: false,
       isSendingChat: false,
+      isUploading: false,
+      uploadProgress: 0.0,
       isTimestampScoped: settings.defaultTimestampScoped,
       selectedTimestampStartSeconds: defaultRange.startSeconds,
       selectedTimestampEndSeconds: defaultRange.endSeconds,
@@ -271,6 +288,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     }
 
     final owningSessionKey = _activeSessionKey;
+    String? newVideoId;
 
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -298,17 +316,32 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       );
       if (_activeSessionKey != owningSessionKey) return;
 
-      final newVideoId = createVideoResp.data?.videoId ?? fileName;
-      final createdDuration = createVideoResp.data?.duration;
+      newVideoId = createVideoResp.data?.videoId ?? fileName;
 
-      // 2. 立即同步 videoId 到 repository 和 provider
+      // 2. 立即同步 videoId 到 repository、provider 以及 state.videoAsset，
+      //    确保 captureSnapshot 从这一刻起就携带正确的视频标识，
+      //    避免 syncActiveSession 用旧视频 ID 覆盖其他历史条目。
       _repository.updateVideoId(newVideoId);
       ref.read(currentVideoIdProvider.notifier).state = newVideoId;
 
       state = state.copyWith(
         isUploading: true,
         uploadProgress: 0.0,
+        videoAsset: VideoAssetInfo(
+          title: newVideoId,
+          durationLabel: '0m 00s',
+          sourceLabel: state.videoAsset.sourceLabel,
+          fileName: fileName,
+        ),
       );
+
+      ref.read(videoSummarySessionHistoryProvider.notifier)
+          .addTempUploadSession(VideoSummarySessionSnapshot(
+            flowSnapshot: captureSnapshot(),
+            readyPreferenceText: '',
+            draftGuidanceText: '',
+            draftBodyText: '',
+          ));
 
       final uploadService = ref.read(uploadServiceProvider);
 
@@ -341,10 +374,26 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
             bytes: Uint8List.fromList(bytes),
           );
           offset += lengthToRead;
-          // 分片上传期间会话切换：停止更新进度，但继续完成上传（后端已接收的数据不浪费）
+          final progress = offset / fileSize;
+
+          // 分片上传期间会话切换：更新当前活跃会话状态或后台会话状态
           if (_activeSessionKey == owningSessionKey) {
             state = state.copyWith(
-              uploadProgress: offset / fileSize,
+              uploadProgress: progress,
+            );
+            ref.read(videoSummarySessionHistoryProvider.notifier).syncActiveSession(
+              VideoSummarySessionSnapshot(
+                flowSnapshot: captureSnapshot(),
+                readyPreferenceText: '',
+                draftGuidanceText: '',
+                draftBodyText: '',
+              ),
+            );
+          } else {
+            _updateBackgroundTempSession(
+              newVideoId: newVideoId,
+              isUploading: true,
+              uploadProgress: progress,
             );
           }
         }
@@ -352,35 +401,96 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         await raf.close();
       }
 
-      // 上传已完成，但会话已切换：不更新当前会话的 state
-      if (_activeSessionKey != owningSessionKey) {
-        debugPrint('[FlowCtrl] 上传完成但会话已切换，跳过状态更新');
-        return;
+      // 5. TUS 上传已完成，但 Celery async_finalize_upload 仍在后台异步处理。
+      //    保持 uploading 状态并轮询视频详情，直到后端处理完毕再标记为"上传完成"。
+      if (_activeSessionKey == owningSessionKey) {
+        state = state.copyWith(
+          isUploading: true,
+          uploadProgress: 1.0,
+        );
+      } else {
+        _updateBackgroundTempSession(
+          newVideoId: newVideoId,
+          isUploading: true,
+          uploadProgress: 1.0,
+        );
       }
 
-      // 5. 更新本地状态中的视频资产信息
-      final durationLabel = createdDuration != null && createdDuration > 0
-          ? _formatDurationLabel(createdDuration)
-          : '0m 00s';
-      state = state.copyWith(
-        isUploading: false,
-        uploadProgress: 1.0,
-        uploadHighlighted: true,
-        videoAsset: VideoAssetInfo(
-          title: newVideoId,
-          durationLabel: durationLabel,
-          sourceLabel: state.videoAsset.sourceLabel,
-          fileName: fileName,
+      await _waitForCeleryProcessing(newVideoId, owningSessionKey, fileName);
+
+      // 6. 视频上传完成且 Celery 处理完毕，将当前会话以临时状态在侧边栏显示（仅保留在内存中，不进行本地落盘，高亮当前会话）
+      if (_activeSessionKey == owningSessionKey) {
+        ref.read(videoSummarySessionHistoryProvider.notifier)
+            .addTempUploadSession(VideoSummarySessionSnapshot(
+              flowSnapshot: captureSnapshot(),
+              readyPreferenceText: '',
+              draftGuidanceText: '',
+              draftBodyText: '',
+            ));
+      } else {
+        _updateBackgroundTempSession(
+          newVideoId: newVideoId,
+          isUploading: false,
+          uploadProgress: 0.0,
+          stage: VideoSummaryStage.ready,
+        );
+      }
+    } catch (e) {
+      // 错误展示给发起上传的会话（活跃或后台）
+      if (_activeSessionKey == owningSessionKey) {
+        state = state.copyWith(
+          isUploading: false,
+          uploadProgress: 0.0,
+        );
+      } else if (newVideoId != null) {
+        _updateBackgroundTempSession(
+          newVideoId: newVideoId,
+          isUploading: false,
+          uploadProgress: 0.0,
+        );
+      }
+      debugPrint('Upload failed: $e');
+    }
+  }
+
+  void _updateBackgroundTempSession({
+    required String newVideoId,
+    required bool isUploading,
+    required double uploadProgress,
+    VideoAssetInfo? videoAsset,
+    bool? uploadHighlighted,
+    VideoSummaryStage? stage,
+  }) {
+    final historyNotifier = ref.read(videoSummarySessionHistoryProvider.notifier);
+    final existingEntry = historyNotifier.getSessionById('temp-$newVideoId');
+    if (existingEntry != null) {
+      final oldSnapshot = existingEntry.snapshot;
+      final updatedFlowSnapshot = VideoSummaryFlowSnapshot(
+        taskId: oldSnapshot.flowSnapshot.taskId,
+        videoAsset: videoAsset ?? oldSnapshot.flowSnapshot.videoAsset,
+        stage: stage ?? oldSnapshot.flowSnapshot.stage,
+        uploadHighlighted: uploadHighlighted ?? oldSnapshot.flowSnapshot.uploadHighlighted,
+        processingExpanded: oldSnapshot.flowSnapshot.processingExpanded,
+        isTimestampScoped: oldSnapshot.flowSnapshot.isTimestampScoped,
+        selectedTimestampStartSeconds: oldSnapshot.flowSnapshot.selectedTimestampStartSeconds,
+        selectedTimestampEndSeconds: oldSnapshot.flowSnapshot.selectedTimestampEndSeconds,
+        isDraftEditMode: oldSnapshot.flowSnapshot.isDraftEditMode,
+        processingSnapshot: oldSnapshot.flowSnapshot.processingSnapshot,
+        draftResult: oldSnapshot.flowSnapshot.draftResult,
+        finalSummaryData: oldSnapshot.flowSnapshot.finalSummaryData,
+        chatMessages: oldSnapshot.flowSnapshot.chatMessages,
+        isUploading: isUploading,
+        uploadProgress: uploadProgress,
+      );
+      historyNotifier.updateSessionSnapshot(
+        'temp-$newVideoId',
+        VideoSummarySessionSnapshot(
+          flowSnapshot: updatedFlowSnapshot,
+          readyPreferenceText: oldSnapshot.readyPreferenceText,
+          draftGuidanceText: oldSnapshot.draftGuidanceText,
+          draftBodyText: oldSnapshot.draftBodyText,
         ),
       );
-    } catch (e) {
-      // 错误只展示给发起上传的会话
-      if (_activeSessionKey != owningSessionKey) return;
-      state = state.copyWith(
-        isUploading: false,
-        uploadProgress: 0.0,
-      );
-      debugPrint('Upload failed: $e');
     }
   }
 
@@ -423,6 +533,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         videoAsset: updatedAsset,
         selectedTimestampStartSeconds: defaultRange.startSeconds,
         selectedTimestampEndSeconds: defaultRange.endSeconds,
+        uploadHighlighted: true,
       );
       if (kDebugMode) {
         debugPrint('[FlowCtrl] 视频时长已更新 — $durationSeconds 秒 ($newLabel)');
@@ -439,6 +550,182 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       return '${hours}h ${minutes.toString().padLeft(2, '0')}m ${seconds.toString().padLeft(2, '0')}s';
     }
     return '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
+  }
+
+  /// TUS 上传完成后，通过 WebSocket + HTTP 轮询双通道监听后端 Celery
+  /// async_finalize_upload → async_process_video 处理完毕事件。
+  ///
+  /// - WebSocket：监听 scope=video_resource 的 completed 事件（实时通知）
+  /// - HTTP 轮询：每 2 秒检查 videoResource 详情，作为兜底
+  /// - 最长等待 5 分钟，任一通道收到就绪信号即标记上传完成
+  ///
+  /// 后端就绪条件（对齐 VideoExtractStatus 枚举）：
+  ///   transcribe_status == "COMPLETED"
+  ///   && frame_extraction_status == "COMPLETED"
+  ///   && extract_completed_at 非空
+  Future<void> _waitForCeleryProcessing(
+    String videoId,
+    Object owningSessionKey,
+    String fileName,
+  ) async {
+    const maxAttempts = 150; // 5 分钟 @ 2s 间隔
+    const pollInterval = Duration(seconds: 2);
+
+    final videoService = ref.read(videoServiceProvider);
+    final wsClient = ref.read(wsClientProvider);
+
+    // WS 通道标记：由 listener 在收到 completed 事件时置 true
+    bool wsSignalled = false;
+
+    // ── 通道 1：WebSocket 实时监听 video_resource 作用域的 completed 事件 ──
+    final wsSubscription = wsClient.eventStream
+        .where((env) =>
+            env.scope == WSScope.videoResource &&
+            env.scopeId == videoId &&
+            env.eventType == WSEventType.completed)
+        .listen(
+          (_) {
+            wsSignalled = true;
+            if (kDebugMode) {
+              debugPrint('[FlowCtrl] WS 通道收到 video_resource completed — videoId=$videoId');
+            }
+          },
+          onError: (e) {
+            debugPrint('[FlowCtrl] WS video_resource 监听错误: $e');
+          },
+        );
+
+    // ── 通道 2：HTTP 轮询兜底 ──
+    try {
+      for (int attempt = 0; attempt < maxAttempts; attempt++) {
+        // 先等待间隔，再检查（让后端有时间处理）
+        await Future.delayed(pollInterval);
+
+        // 检查 WS 是否已收到完成信号
+        if (wsSignalled) {
+          await _applyCeleryReadyState(
+            videoId: videoId,
+            owningSessionKey: owningSessionKey,
+            fileName: fileName,
+            durationSeconds: 0,
+            channel: 'WebSocket',
+            attempt: null,
+          );
+          return;
+        }
+
+        try {
+          final resp = await videoService.getVideo(videoId);
+          final data = resp.data;
+          if (data == null) continue;
+
+          // 后端 VideoExtractStatus 枚举值为大写：COMPLETED
+          // 就绪条件：transcribeStatus + frameExtractionStatus 均为 COMPLETED
+          //         且 extractCompletedAt 已填充
+          final durationSeconds = data.duration ?? 0;
+
+          // READY 判定：严格对齐 async_mark_video_resource_ready 的
+          // mark_extract_completed_if_ready 三条件：
+          //   transcribe_status == COMPLETED
+          //   && frame_extraction_status == COMPLETED
+          //   && extract_completed_at 非空
+          // 不再使用 duration > 0 兜底，避免转录完成但抽帧未完成时过早退出。
+          final isReady =
+              data.transcribeStatus == 'COMPLETED' &&
+              data.frameExtractionStatus == 'COMPLETED' &&
+              data.extractCompletedAt != null &&
+              data.extractCompletedAt!.isNotEmpty;
+
+          if (isReady) {
+            await _applyCeleryReadyState(
+              videoId: videoId,
+              owningSessionKey: owningSessionKey,
+              fileName: fileName,
+              durationSeconds: durationSeconds,
+              channel: 'HTTP polling',
+              attempt: attempt + 1,
+              transcribeStatus: data.transcribeStatus,
+              frameExtractionStatus: data.frameExtractionStatus,
+              extractCompletedAt: data.extractCompletedAt,
+            );
+            return;
+          }
+        } catch (e) {
+          // 单次轮询失败不中断，继续重试
+          debugPrint(
+              '[FlowCtrl] Celery 轮询失败 (第 ${attempt + 1} 次): $e');
+        }
+      }
+
+      // 超时：仍然标记为完成，用户可以继续使用但时长可能不准确
+      debugPrint(
+          '[FlowCtrl] Celery 处理超时 — videoId=$videoId，强制标记为完成');
+      await _applyCeleryReadyState(
+        videoId: videoId,
+        owningSessionKey: owningSessionKey,
+        fileName: fileName,
+        durationSeconds: 0,
+        channel: 'timeout fallback',
+        attempt: null,
+      );
+    } finally {
+      wsSubscription.cancel();
+    }
+  }
+
+  /// 将 Celery 就绪状态应用到当前 state 或后台临时会话。
+  Future<void> _applyCeleryReadyState({
+    required String videoId,
+    required Object owningSessionKey,
+    required String fileName,
+    required int durationSeconds,
+    required String channel,
+    int? attempt,
+    String? transcribeStatus,
+    String? frameExtractionStatus,
+    String? extractCompletedAt,
+  }) async {
+    final hasDuration = durationSeconds > 0;
+    final durationLabel =
+        hasDuration ? _formatDurationLabel(durationSeconds) : '0m 00s';
+
+    if (_activeSessionKey == owningSessionKey) {
+      state = state.copyWith(
+        isUploading: false,
+        uploadHighlighted: true,
+        videoAsset: VideoAssetInfo(
+          title: videoId,
+          durationLabel: durationLabel,
+          sourceLabel: state.videoAsset.sourceLabel,
+          fileName: fileName,
+        ),
+      );
+    } else {
+      _updateBackgroundTempSession(
+        newVideoId: videoId,
+        isUploading: false,
+        uploadProgress: 0.0,
+        videoAsset: VideoAssetInfo(
+          title: videoId,
+          durationLabel: durationLabel,
+          sourceLabel: _repository.kbid,
+          fileName: fileName,
+        ),
+        uploadHighlighted: true,
+      );
+    }
+
+    if (kDebugMode) {
+      final extra = attempt != null ? ' (第 $attempt 次轮询)' : '';
+      debugPrint(
+        '[FlowCtrl] Celery 处理完成 — videoId=$videoId'
+        ' channel=$channel$extra'
+        ' duration=${durationSeconds}s'
+        ' transcribe=$transcribeStatus'
+        ' frameExtraction=$frameExtractionStatus'
+        ' extractCompletedAt=$extractCompletedAt',
+      );
+    }
   }
 
   void toggleProcessingExpanded() {
@@ -720,6 +1007,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       draftResult: state.draftResult,
       finalSummaryData: state.finalSummaryData,
       chatMessages: List<ChatMessage>.from(state.chatMessages),
+      isUploading: state.isUploading,
+      uploadProgress: state.uploadProgress,
     );
   }
 
@@ -745,6 +1034,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       draftResult: snapshot.draftResult,
       finalSummaryData: snapshot.finalSummaryData,
       chatMessages: List<ChatMessage>.from(snapshot.chatMessages),
+      isUploading: snapshot.isUploading,
+      uploadProgress: snapshot.uploadProgress,
     );
 
     // 同步 repository 和 provider 的 videoId（从快照的 videoAsset.title 中获取）
@@ -757,6 +1048,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     // 同步 repository 的 taskId，否则后续追问会报 "No active task"
     if (snapshot.taskId != null && snapshot.taskId!.isNotEmpty) {
       _repository.updateTaskId(snapshot.taskId);
+    } else {
+      _repository.updateTaskId(null);
     }
 
     // 旧快照的 durationLabel 可能是占位值，异步从后端刷新真实时长
@@ -1072,7 +1365,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
       final finalBody = taskInfo.finalSummary ?? taskInfo.draftSummary ?? '';
       final summaryData = FinalSummaryData(
-        summaryTitle: taskInfo.title ?? '',
+        summaryTitle: '视频总结',
         summaryBody: finalBody,
         timestampChips: const [],
         messages: const [],

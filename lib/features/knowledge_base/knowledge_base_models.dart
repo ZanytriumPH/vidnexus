@@ -51,6 +51,7 @@ class KnowledgeBaseLibrary {
     required this.sourceCount,
     required this.sources,
     required this.conversations,
+    this.latestQuestion,
   });
 
   final String id;
@@ -60,4 +61,5 @@ class KnowledgeBaseLibrary {
   final int sourceCount;
   final List<KnowledgeSourceItem> sources;
   final List<KnowledgeConversationPreview> conversations;
+  final String? latestQuestion;
 }

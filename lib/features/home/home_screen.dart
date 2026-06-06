@@ -7,6 +7,7 @@ import '../../app/routing/app_route_arguments.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../services/api/api_client.dart';
 import '../../services/video_service.dart';
+import '../auth/auth_controller.dart';
 import 'application/video_summary_flow_controller.dart';
 import 'application/video_summary_session_history_controller.dart';
 import 'application/video_summary_settings_controller.dart';
@@ -42,6 +43,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         flowState.stage == VideoSummaryStage.ready ||
         flowState.stage == VideoSummaryStage.finalChat;
 
+    // 监听认证状态变化：当用户登出或新用户登入时，立即使会话历史
+    // 与流程控制器失效，确保账号之间的缓存数据完全隔离。
+    ref.listen(authControllerProvider, (prev, next) {
+      final prevLoggedIn = prev?.isLoggedIn == true;
+      final nextLoggedIn = next.isLoggedIn;
+      final userChanged = prev?.currentUser?.userId != next.currentUser?.userId;
+
+      if ((prevLoggedIn && !nextLoggedIn) ||  // 注销
+          (!prevLoggedIn && nextLoggedIn) ||  // 登录
+          (prevLoggedIn && nextLoggedIn && userChanged)) { // 切换账号
+        ref.invalidate(videoSummarySessionHistoryProvider);
+        ref.invalidate(videoSummaryFlowControllerProvider);
+      }
+    });
+
     ref.listen(videoSummaryFlowControllerProvider, (prev, next) {
       final msg = next.errorMessage;
       if (msg != null && msg != prev?.errorMessage) {
@@ -72,13 +88,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         drawerEnableOpenDragGesture: true,
       drawer: VideoSummaryHistoryDrawer(
         sessions: sessionHistory.sessions
+            .where(
+              (session) =>
+                  // "session-current" 是控制器 build() 创建的占位条目，
+                  // 仅用于内部状态管理，永远不在侧边栏中显示。
+                  session.id != 'session-current',
+            )
             .map(
               (session) => VideoSummaryDrawerSessionItem(
                 id: session.id,
                 title: session.title,
                 durationLabel: session.durationLabel,
                 detail: session.detail,
-                isActive: session.id == sessionHistory.activeSessionId,
+                isActive: !_isCurrentSessionEmpty(flowState) &&
+                    session.id == sessionHistory.activeSessionId,
               ),
             )
             .toList(),
@@ -147,13 +170,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  // 新建会话需要同时重置流程状态、文本状态和 session 历史，因此在这里做一次协调调用。
-  // 如果当前已经是空会话（未上传视频、未创建任务、处于 ready 阶段），跳过以避免虚假历史条目。
+   /// 当前会话是否为空（无任务、无上传、处于 ready 阶段）。
+  /// 用于侧边栏过滤：空会话不在历史列表中显示。
+  bool _isCurrentSessionEmpty(VideoSummaryFlowState flowState) {
+    return flowState.taskId == null &&
+        flowState.stage == VideoSummaryStage.ready &&
+        (flowState.videoAsset.title == 'vid_default' ||
+            flowState.videoAsset.title.isEmpty);
+  }
+
+  // 新建会话：重置流程状态和文本状态。
+  // 空会话已在 _isCurrentSessionEmpty 中判断，避免重复重置。
+  // 若当前会话已完成视频上传但尚未创建后端任务，先将其保存为内存临时会话再重置。
   void _createNewSession() {
     final flowState = ref.read(videoSummaryFlowControllerProvider);
-    final isAlreadyEmpty = flowState.taskId == null &&
-        flowState.stage == VideoSummaryStage.ready &&
-        !flowState.uploadHighlighted;
+    final isAlreadyEmpty = _isCurrentSessionEmpty(flowState);
     if (isAlreadyEmpty) return;
 
     final flowController = ref.read(
@@ -164,9 +195,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
     final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
     textEditing.runWithoutSync(() {
+      // 仅上传了视频、尚未创建后端任务的会话需要以临时会话保存到内存中，
+      // 确保用户切换或新建会话后仍可从侧边栏恢复。已有后端任务的会话由
+      // listTaskHistory 提供侧边栏历史记录，无需额外创建。
+      if (flowState.videoAsset.title != 'vid_default' &&
+          flowState.videoAsset.title.isNotEmpty &&
+          flowState.taskId == null) {
+        sessionHistoryController.addTempUploadSession(
+          textEditing.captureSnapshot(),
+        );
+      }
       textEditing.clearForNewSession();
       flowController.reset();
-      sessionHistoryController.createNewSession(textEditing.captureSnapshot());
     });
   }
 
@@ -178,6 +218,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _openSearchFromDrawer() async {
     final sessionHistory = ref.read(videoSummarySessionHistoryProvider);
     final sessions = sessionHistory.sessions
+        .where((session) => session.id != 'session-current')
         .map(
           (session) => VideoSummaryDrawerSessionItem(
             id: session.id,
@@ -227,14 +268,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
     final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
     textEditing.runWithoutSync(() {
-      // 恢复顺序很重要：先回填文本，再恢复流程快照，最后切 active session。
+      // 恢复顺序很重要：先切 active session，再恢复文本和流程快照。
+      ref
+          .read(videoSummarySessionHistoryProvider.notifier)
+          .activateSession(session.id);
       textEditing.applySessionSnapshot(session.snapshot);
       ref
           .read(videoSummaryFlowControllerProvider.notifier)
           .restoreSnapshot(session.snapshot.flowSnapshot);
-      ref
-          .read(videoSummarySessionHistoryProvider.notifier)
-          .activateSession(session.id);
     });
   }
 

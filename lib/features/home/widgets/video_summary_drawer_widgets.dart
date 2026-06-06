@@ -27,7 +27,7 @@ class VideoSummaryHistoryDrawer extends StatelessWidget {
   final VoidCallback? onRetryHistory;
 
   Widget _buildSessionList(BuildContext context) {
-    if (isLoadingHistory && sessions.length <= 1) {
+    if (isLoadingHistory && sessions.isEmpty) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.only(top: 32),
@@ -52,7 +52,7 @@ class VideoSummaryHistoryDrawer extends StatelessWidget {
       );
     }
 
-    if (errorMessage != null && sessions.length <= 1) {
+    if (errorMessage != null && sessions.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.only(top: 32),
@@ -183,70 +183,8 @@ class VideoSummaryHistoryDrawer extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               // 用户区（已登录显示头像+用户名，未登录显示"去登录"）
-              const AppDrawerUserTile(),
-              const SizedBox(height: 10),
-              // 设置区
-              InkWell(
-                onTap: onSettingsPressed,
-                borderRadius: BorderRadius.circular(18),
-                child: Container(
-                  height: 52,
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceMuted,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(
-                          Icons.settings_outlined,
-                          size: 16,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '设置',
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.textPrimary,
-                                  ),
-                            ),
-                            Text(
-                              '调整会话默认行为',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    fontSize: 10,
-                                    color: AppColors.textSecondary,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(
-                        Icons.chevron_right_rounded,
-                        size: 18,
-                        color: AppColors.textSecondary,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              // 点击直接打开会话设置，替代独立的设置条
+              AppDrawerUserTile(onTap: onSettingsPressed),
             ],
           ),
         ),

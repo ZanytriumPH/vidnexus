@@ -244,6 +244,9 @@ class _KnowledgeLibraryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasLatestQuestion = item.latestQuestion != null &&
+        item.latestQuestion!.isNotEmpty;
+
     return InkWell(
       onTap: () {
         AppNavigator.openKnowledgeBaseSession(
@@ -258,43 +261,53 @@ class _KnowledgeLibraryCard extends StatelessWidget {
         backgroundColor: Colors.white,
         borderColor: AppColors.borderStrong,
         child: SizedBox(
-          height: 121,
+          height: 140,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 item.title,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: AppColors.textPrimary,
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                item.meta,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w500,
-                  height: 1.35,
-                ),
-                maxLines: 3,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: Text(
-                  item.description,
+              const SizedBox(height: 5),
+              Text(
+                '${item.sourceCount} 份资料',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              if (hasLatestQuestion) ...[
+                const SizedBox(height: 3),
+                Text(
+                  '最近提问 "${item.latestQuestion}"',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 12,
-                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
                     fontWeight: FontWeight.w500,
                     height: 1.35,
                   ),
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                 ),
+              ],
+              const Spacer(),
+              Text(
+                item.meta,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 13,
+                  color: AppColors.textHint,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

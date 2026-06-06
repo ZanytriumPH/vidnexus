@@ -265,7 +265,9 @@ class _ReadyUploadCallout extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                '正在上传: ${(uploadProgress * 100).toStringAsFixed(0)}%',
+                uploadProgress >= 1.0
+                    ? '正在处理视频，请稍候...'
+                    : '正在上传: ${(uploadProgress * 100).toStringAsFixed(0)}%',
                 textAlign: TextAlign.left,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: 13,
