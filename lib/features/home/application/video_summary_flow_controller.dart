@@ -622,21 +622,19 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           // 后端 VideoExtractStatus 枚举值为大写：COMPLETED
           // 就绪条件：transcribeStatus + frameExtractionStatus 均为 COMPLETED
           //         且 extractCompletedAt 已填充
-          final isTranscribeComplete =
-              data.transcribeStatus == 'COMPLETED';
-          final isExtractionComplete =
-              data.frameExtractionStatus == 'COMPLETED';
-          final hasExtractCompletedAt =
+          final durationSeconds = data.duration ?? 0;
+
+          // READY 判定：严格对齐 async_mark_video_resource_ready 的
+          // mark_extract_completed_if_ready 三条件：
+          //   transcribe_status == COMPLETED
+          //   && frame_extraction_status == COMPLETED
+          //   && extract_completed_at 非空
+          // 不再使用 duration > 0 兜底，避免转录完成但抽帧未完成时过早退出。
+          final isReady =
+              data.transcribeStatus == 'COMPLETED' &&
+              data.frameExtractionStatus == 'COMPLETED' &&
               data.extractCompletedAt != null &&
               data.extractCompletedAt!.isNotEmpty;
-          final durationSeconds = data.duration ?? 0;
-          final hasDuration = durationSeconds > 0;
-
-          // 优先使用精确条件，时长作为兜底（兼容旧数据或部分完成场景）
-          final isReady = (isTranscribeComplete &&
-                  isExtractionComplete &&
-                  hasExtractCompletedAt) ||
-              hasDuration;
 
           if (isReady) {
             await _applyCeleryReadyState(

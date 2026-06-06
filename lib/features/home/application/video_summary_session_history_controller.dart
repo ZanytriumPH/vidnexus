@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../services/service_providers.dart';
 import '../domain/video_summary_domain_models.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
@@ -137,9 +138,29 @@ class VideoSummarySessionHistoryController
   }
 
   /// 从后端 GET /api/v1/tasks 加载历史任务并合并到侧边栏列表。
+  /// 同时批量拉取每个任务对应视频的 fileName + duration，
+  /// 确保所有历史会话的标题格式统一为 "视频名称 / 时间"。
   Future<void> _loadFromBackend() async {
     try {
       final tasks = await _repository.listTaskHistory();
+
+      // 批量拉取视频详情，用于获取 fileName 和 duration
+      final videoService = ref.read(videoServiceProvider);
+      final videoDetails = <String, _VideoMeta>{};
+      for (final task in tasks) {
+        if (videoDetails.containsKey(task.videoId)) continue;
+        try {
+          final resp = await videoService.getVideo(task.videoId);
+          final data = resp.data;
+          videoDetails[task.videoId] = _VideoMeta(
+            fileName: data?.fileName ?? '',
+            durationSeconds: data?.duration ?? 0,
+          );
+        } catch (_) {
+          videoDetails[task.videoId] =
+              const _VideoMeta(fileName: '', durationSeconds: 0);
+        }
+      }
 
       final currentSession = state.sessions.firstWhere(
         (s) => s.id == 'session-current',
@@ -147,8 +168,11 @@ class VideoSummarySessionHistoryController
       );
 
       // 保留当前内存中已有的临时上传会话，避免异步加载后端列表时将其覆盖
-      final tempSessions = state.sessions.where((s) => s.id.startsWith('temp-')).toList();
-      final historyEntries = tasks.map(_mapTaskToEntry).toList();
+      final tempSessions =
+          state.sessions.where((s) => s.id.startsWith('temp-')).toList();
+      final historyEntries = tasks
+          .map((t) => _mapTaskToEntry(t, videoDetails[t.videoId]))
+          .toList();
 
       final merged = [currentSession, ...tempSessions, ...historyEntries];
       state = state.copyWith(
@@ -176,23 +200,33 @@ class VideoSummarySessionHistoryController
   }
 
   /// 将后端 [VideoSummaryTaskInfo] 映射为侧边栏展示条目。
-  VideoSummarySessionHistoryEntry _mapTaskToEntry(VideoSummaryTaskInfo task) {
+  /// 标题统一使用"视频名称 / 时间"格式（与仅上传视频的临时会话一致）。
+  VideoSummarySessionHistoryEntry _mapTaskToEntry(
+    VideoSummaryTaskInfo task,
+    _VideoMeta? meta,
+  ) {
     final stage = _stageFromWorkflowState(task.workflowState);
     final paragraphs = _splitParagraphs(task.draftSummary);
+    final fileName = (meta != null && meta.fileName.isNotEmpty)
+        ? meta.fileName
+        : task.videoId;
+    final durationLabel = (meta != null && meta.durationSeconds > 0)
+        ? _formatDurationLabel(meta.durationSeconds)
+        : '--:--';
 
     return VideoSummarySessionHistoryEntry(
       id: task.taskId,
-      title: task.title ?? '未命名会话',
-      durationLabel: '--:--',
+      title: fileName,
+      durationLabel: durationLabel,
       detail: task.workflowState.label,
       snapshot: VideoSummarySessionSnapshot(
         flowSnapshot: VideoSummaryFlowSnapshot(
           taskId: task.taskId,
           videoAsset: VideoAssetInfo(
             title: task.videoId,
-            durationLabel: '0m 00s',
+            durationLabel: durationLabel,
             sourceLabel: task.kbid,
-            fileName: '',
+            fileName: fileName,
           ),
           stage: stage,
           uploadHighlighted: stage != VideoSummaryStage.ready,
@@ -407,4 +441,23 @@ class VideoSummarySessionHistoryController
       VideoSummaryStage.finalChat => '已完成总结，可继续时间旅行追问',
     };
   }
+
+  /// 将秒数格式化为 "Xm Ys" 或 "Xh Ym Zs"。
+  static String _formatDurationLabel(int totalSeconds) {
+    final hours = totalSeconds ~/ 3600;
+    final minutes = (totalSeconds % 3600) ~/ 60;
+    final seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return '${hours}h ${minutes.toString().padLeft(2, '0')}m ${seconds.toString().padLeft(2, '0')}s';
+    }
+    return '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
+  }
+}
+
+/// 轻量视频元数据，用于批量拉取后传递给 _mapTaskToEntry。
+class _VideoMeta {
+  const _VideoMeta({required this.fileName, required this.durationSeconds});
+
+  final String fileName;
+  final int durationSeconds;
 }
