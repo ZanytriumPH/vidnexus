@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../services/global_qa_service.dart';
+import '../../../services/models/global_chat_dto.dart';
 import '../../../services/sse/sse_models.dart';
 import '../knowledge_base_models.dart';
 
@@ -139,9 +140,19 @@ class KnowledgeBaseChatController extends ChangeNotifier {
             final currentMessages = List<KnowledgeChatMessage>.from(_state.messages);
             if (currentMessages.isNotEmpty) {
               final lastMsg = currentMessages.last;
+
+              // 解析 cited_sources（来自 SSE done 事件的原始 Map 列表）
+              List<CitedSource>? citedSources;
+              if (done.citedSources != null && done.citedSources!.isNotEmpty) {
+                citedSources = done.citedSources!
+                    .map((m) => CitedSource.fromJson(m))
+                    .toList();
+              }
+
               currentMessages[currentMessages.length - 1] = KnowledgeChatMessage(
                 sender: lastMsg.sender,
                 text: done.answerContent!,
+                citedSources: citedSources,
               );
               _emit(_state.copyWith(
                 messages: currentMessages,
@@ -191,6 +202,8 @@ class KnowledgeBaseChatController extends ChangeNotifier {
           messages.add(KnowledgeChatMessage(
             sender: KnowledgeChatSender.system,
             text: dto.answerContent!,
+            citedSources:
+                dto.citedSources.isNotEmpty ? dto.citedSources : null,
           ));
         }
       }

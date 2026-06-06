@@ -27,11 +27,15 @@ import 'widgets/video_player_page.dart';
 
 /// 首页现在主要承担页面壳和装配职责，复杂状态迁移已下沉到 application 层。
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key, this.videoId});
+  const HomeScreen({super.key, this.videoId, this.taskId});
 
   /// 可选：从知识库来源页跳转时携带的视频 ID，
   /// 首页会自动查找对应任务并恢复该视频的最终稿会话。
   final String? videoId;
+
+  /// 可选：从知识库 cited_resources 点击时携带的任务 ID，
+  /// 首页会直接按 taskId 获取任务详情并恢复，无需 listTasks 全量匹配。
+  final String? taskId;
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -43,28 +47,64 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.videoId != null) {
+    if (widget.taskId != null) {
+      Future.microtask(() => _restoreVideoSession(widget.taskId!, isTaskId: true));
+    } else if (widget.videoId != null) {
       Future.microtask(() => _restoreVideoSession(widget.videoId!));
     }
   }
 
-  Future<void> _restoreVideoSession(String videoId) async {
+  Future<void> _restoreVideoSession(String id, {bool isTaskId = false}) async {
     final taskService = ref.read(taskServiceProvider);
     try {
-      final resp = await taskService.listTasks();
-      final match = resp.data.where((t) => t.videoId == videoId).toList();
-      if (match.isEmpty) return;
+      late final String taskId;
+      late final String videoId;
+      late final String workflowState;
+      late final String kbid;
+      late final String? draftSummary;
+      late final String? finalSummary;
+      late final String? title;
+      late final String? userInitialPreference;
 
-      final task = match.first;
-      final stage = switch (task.workflowState) {
+      if (isTaskId) {
+        // 优先路径：通过 taskId 直接获取任务详情（来自 cited_resources 点击）
+        final resp = await taskService.getTask(id);
+        final dto = resp.data;
+        if (dto == null) return;
+        taskId = dto.taskId;
+        videoId = dto.videoId;
+        workflowState = dto.workflowState;
+        kbid = dto.kbid;
+        draftSummary = dto.draftSummary;
+        finalSummary = dto.finalSummary;
+        title = dto.title;
+        userInitialPreference = dto.userInitialPreference;
+      } else {
+        // 兼容旧路径：listTasks + 按 videoId 匹配
+        final resp = await taskService.listTasks();
+        final match = resp.data.where((t) => t.videoId == id).toList();
+        if (match.isEmpty) return;
+
+        final task = match.first;
+        taskId = task.taskId;
+        videoId = task.videoId;
+        workflowState = task.workflowState;
+        kbid = task.kbid;
+        draftSummary = task.draftSummary;
+        finalSummary = task.finalSummary;
+        title = task.title;
+        userInitialPreference = task.userInitialPreference;
+      }
+
+      final stage = switch (workflowState) {
         'COMPLETED' => VideoSummaryStage.finalChat,
         'WAITING_USER_APPROVAL' => VideoSummaryStage.draft,
         'DRAFT_GENERATING' || 'FINAL_GENERATING' => VideoSummaryStage.processing,
         _ => VideoSummaryStage.ready,
       };
 
-      final draftParagraphs = task.draftSummary != null
-          ? task.draftSummary!
+      final draftParagraphs = draftSummary != null
+          ? draftSummary!
               .split(RegExp(r'\n\s*\n'))
               .map((p) => p.trim())
               .where((p) => p.isNotEmpty)
@@ -72,12 +112,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           : <String>[];
 
       final snapshot = VideoSummaryFlowSnapshot(
-        taskId: task.taskId,
+        taskId: taskId,
         videoAsset: VideoAssetInfo(
           title: videoId,
           durationLabel: '0m 00s',
-          sourceLabel: task.kbid,
-          fileName: task.title ?? videoId,
+          sourceLabel: kbid,
+          fileName: title ?? videoId,
         ),
         stage: stage,
         uploadHighlighted: true,
@@ -95,7 +135,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         finalSummaryData: stage == VideoSummaryStage.finalChat
             ? FinalSummaryData(
                 summaryTitle: '视频总结',
-                summaryBody: task.finalSummary ?? '',
+                summaryBody: finalSummary ?? '',
                 timestampChips: const [],
                 messages: const [],
               )
@@ -113,9 +153,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       historyCtrl.addTempUploadSession(
         VideoSummarySessionSnapshot(
           flowSnapshot: snapshot,
-          readyPreferenceText: task.userInitialPreference ?? '',
+          readyPreferenceText: userInitialPreference ?? '',
           draftGuidanceText: '',
-          draftBodyText: task.draftSummary ?? '',
+          draftBodyText: draftSummary ?? '',
         ),
       );
     } catch (_) {

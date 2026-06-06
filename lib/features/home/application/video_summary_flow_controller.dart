@@ -959,6 +959,19 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           }
           return;
         }
+
+        // 将后端 cited_sources（原始 Map 列表）映射为 UI 模型
+        List<ChatMessageCitation>? citations;
+        if (reply.citedSources != null && reply.citedSources!.isNotEmpty) {
+          citations = reply.citedSources!
+              .map((m) => ChatMessageCitation(
+                    quote: (m['quote'] as String?) ?? '',
+                    videoId: m['video_id'] as String?,
+                    timeRange: m['time_range'] as String?,
+                  ))
+              .toList();
+        }
+
         final currentMessages = List<ChatMessage>.from(state.chatMessages);
         if (currentMessages.isNotEmpty) {
           final lastMsg = currentMessages.last;
@@ -966,6 +979,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
             sender: lastMsg.sender,
             text: reply.text,
             timestampLabel: lastMsg.timestampLabel,
+            citations: citations,
           );
           state = state.copyWith(chatMessages: currentMessages);
         }
@@ -1160,10 +1174,23 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
         // 系统回答
         if (qa.answerContent != null && qa.answerContent!.isNotEmpty) {
+          // 将后端 cited_sources（原始 Map 列表）映射为 UI 模型
+          List<ChatMessageCitation>? citations;
+          if (qa.citedSources.isNotEmpty) {
+            citations = qa.citedSources
+                .map((m) => ChatMessageCitation(
+                      quote: (m['quote'] as String?) ?? '',
+                      videoId: m['video_id'] as String?,
+                      timeRange: m['time_range'] as String?,
+                    ))
+                .toList();
+          }
+
           messages.add(ChatMessage(
             sender: SummaryChatSender.system,
             text: qa.answerContent!,
             timestampLabel: timestampLabel,
+            citations: citations,
           ));
         }
       }

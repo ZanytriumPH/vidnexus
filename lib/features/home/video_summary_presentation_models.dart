@@ -71,16 +71,30 @@ class TimestampChipData {
   final String note;
 }
 
+class ChatMessageCitation {
+  const ChatMessageCitation({
+    required this.quote,
+    this.videoId,
+    this.timeRange,
+  });
+
+  final String quote;
+  final String? videoId;
+  final String? timeRange;
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.sender,
     required this.text,
     this.timestampLabel,
+    this.citations,
   });
 
   final SummaryChatSender sender;
   final String text;
   final String? timestampLabel;
+  final List<ChatMessageCitation>? citations;
 }
 
 class FinalSummaryData {

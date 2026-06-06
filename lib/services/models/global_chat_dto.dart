@@ -8,6 +8,7 @@ class CitedSource {
   const CitedSource({
     this.videoId,
     this.taskId,
+    this.videoName,
     this.timeRange,
     this.quote,
     this.score,
@@ -15,6 +16,7 @@ class CitedSource {
 
   final String? videoId;
   final String? taskId;
+  final String? videoName;
   final String? timeRange;
   final String? quote;
   final double? score;
@@ -23,6 +25,7 @@ class CitedSource {
     return CitedSource(
       videoId: json['video_id'] as String?,
       taskId: json['task_id'] as String?,
+      videoName: json['video_name'] as String?,
       timeRange: json['time_range'] as String?,
       quote: json['quote'] as String?,
       score: (json['score'] as num?)?.toDouble(),
@@ -32,6 +35,7 @@ class CitedSource {
   Map<String, dynamic> toJson() => {
         if (videoId != null) 'video_id': videoId,
         if (taskId != null) 'task_id': taskId,
+        if (videoName != null) 'video_name': videoName,
         if (timeRange != null) 'time_range': timeRange,
         if (quote != null) 'quote': quote,
         if (score != null) 'score': score,

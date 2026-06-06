@@ -79,6 +79,7 @@ class VideoQARecordResponseData {
     required this.questionContent,
     this.answerContent,
     this.attachments = const [],
+    this.citedSources = const [],
     this.questionTime,
   });
 
@@ -89,6 +90,7 @@ class VideoQARecordResponseData {
   final String questionContent;
   final String? answerContent;
   final List<AttachmentInfo> attachments;
+  final List<Map<String, dynamic>> citedSources;
   final String? questionTime;
 
   factory VideoQARecordResponseData.fromJson(Map<String, dynamic> json) {
@@ -103,6 +105,10 @@ class VideoQARecordResponseData {
               ?.map(
                 (e) => AttachmentInfo.fromJson(e as Map<String, dynamic>),
               )
+              .toList() ??
+          [],
+      citedSources: (json['cited_sources'] as List<dynamic>?)
+              ?.map((e) => e as Map<String, dynamic>)
               .toList() ??
           [],
       questionTime: json['question_time'] as String?,
