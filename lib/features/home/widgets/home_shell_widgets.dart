@@ -25,10 +25,13 @@ class HomeHeaderRow extends StatelessWidget {
     return AppSectionHeaderBar(
       current: currentSection,
       onSelected: onSectionSelected,
-      leading: RoundGhostButton(
-        size: 44,
-        onPressed: onMenuPressed,
-        child: const Icon(Icons.menu_rounded, size: 20),
+      leading: Transform.translate(
+        offset: const Offset(-8, 0),
+        child: RoundGhostButton(
+          size: 44,
+          onPressed: onMenuPressed,
+          child: const Icon(Icons.menu_rounded, size: 20),
+        ),
       ),
       trailing: AppHeaderAddButton(onPressed: onNewSessionPressed),
     );
