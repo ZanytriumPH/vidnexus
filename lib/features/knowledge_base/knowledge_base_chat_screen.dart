@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/routing/app_router.dart';
 import '../../app/theme/app_theme.dart';
 import '../../app/widgets/app_markdown_body.dart';
+import '../../app/widgets/app_typing_indicator.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_header_add_button.dart';
 import '../../services/service_providers.dart';
@@ -102,7 +103,7 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
                 ),
                 itemBuilder: (context, index) {
                   if (isWaiting && index == messages.length) {
-                    return const _KnowledgeTypingIndicator();
+                    return const AppTypingIndicator();
                   }
                   final message = messages[index];
                   // 空系统消息不渲染，此时 "AI正在思考..." 的 typing indicator 正在展示
@@ -187,92 +188,6 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
         ),
       );
     }
-  }
-}
-
-/// AI 正在思考的动画指示器。
-class _KnowledgeTypingIndicator extends StatefulWidget {
-  const _KnowledgeTypingIndicator();
-
-  @override
-  State<_KnowledgeTypingIndicator> createState() =>
-      _KnowledgeTypingIndicatorState();
-}
-
-class _KnowledgeTypingIndicatorState extends State<_KnowledgeTypingIndicator>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 1200),
-      vsync: this,
-    )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _animation,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 280),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF3F5F9),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              _TypingDot(),
-              SizedBox(width: 6),
-              _TypingDot(),
-              SizedBox(width: 6),
-              _TypingDot(),
-              SizedBox(width: 10),
-              Text(
-                'AI 正在思考…',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF8E8E93),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TypingDot extends StatelessWidget {
-  const _TypingDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: const BoxDecoration(
-        color: Color(0xFF8E8E93),
-        shape: BoxShape.circle,
-      ),
-    );
   }
 }
 

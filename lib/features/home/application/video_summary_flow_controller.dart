@@ -44,6 +44,7 @@ class VideoSummaryFlowState {
     required this.chatMessages,
     required this.isUploading,
     required this.uploadProgress,
+    required this.finalDraftProgressLogs,
     this.errorMessage,
   });
 
@@ -64,6 +65,7 @@ class VideoSummaryFlowState {
   final List<ChatMessage> chatMessages;
   final bool isUploading;
   final double uploadProgress;
+  final List<String> finalDraftProgressLogs;
   final String? errorMessage;
 
   factory VideoSummaryFlowState.initial({required VideoAssetInfo videoAsset, String? taskId}) {
@@ -86,6 +88,7 @@ class VideoSummaryFlowState {
       chatMessages: const [],
       isUploading: false,
       uploadProgress: 0.0,
+      finalDraftProgressLogs: const [],
       errorMessage: null,
     );
   }
@@ -111,6 +114,7 @@ class VideoSummaryFlowState {
     List<ChatMessage>? chatMessages,
     bool? isUploading,
     double? uploadProgress,
+    List<String>? finalDraftProgressLogs,
     Object? errorMessage = _unset,
     bool clearError = false,
   }) {
@@ -140,6 +144,7 @@ class VideoSummaryFlowState {
       chatMessages: chatMessages ?? this.chatMessages,
       isUploading: isUploading ?? this.isUploading,
       uploadProgress: uploadProgress ?? this.uploadProgress,
+      finalDraftProgressLogs: finalDraftProgressLogs ?? this.finalDraftProgressLogs,
       errorMessage: clearError
           ? null
           : (errorMessage == _unset ? this.errorMessage : errorMessage as String?),
@@ -199,6 +204,9 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
   /// draft 阶段的轮询定时器，用于等待终稿生成完成（Phase 2）。
   Timer? _draftPollTimer;
+
+  /// 最终稿生成期间的 WS 进度日志订阅。
+  StreamSubscription<WSEventEnvelope>? _finalDraftProgressSub;
 
   @override
   VideoSummaryFlowState build() {
@@ -870,13 +878,25 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     );
 
     final owningSessionKey = _activeSessionKey;
-    state = state.copyWith(isGenerating: true);
+
+    // ★ 立即进入 finalChat 阶段，HeroCard 标题变为”最终稿生成中...”
+    state = state.copyWith(
+      stage: VideoSummaryStage.finalChat,
+      isGenerating: true,
+      finalDraftProgressLogs: [],
+      draftResult: effectiveDraft,
+      finalSummaryData: null,
+      chatMessages: const [],
+    );
 
     try {
+      _listenFinalDraftProgress();
+
       final summary = await _repository.generateFinalSummary(
         guidance: guidance,
         draftParagraphs: effectiveDraft.paragraphs,
       );
+
       // 异步等待期间可能发生会话切换
       if (_activeSessionKey != owningSessionKey) return;
 
@@ -884,15 +904,15 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       // 进入 finalChat 时，会用总结中的首个时间片段给时间旅行功能提供默认范围。
       final seededRange = _buildRangeFromSummary(summaryData);
       state = state.copyWith(
+        isGenerating: false,
         finalSummaryData: summaryData,
         chatMessages: List<ChatMessage>.from(summaryData.messages),
-        draftResult: effectiveDraft,
-        stage: VideoSummaryStage.finalChat,
         selectedTimestampStartSeconds: seededRange.startSeconds,
         selectedTimestampEndSeconds: seededRange.endSeconds,
       );
     } finally {
       if (_activeSessionKey == owningSessionKey) {
+        _cancelFinalDraftProgress();
         state = state.copyWith(isGenerating: false);
       }
     }
@@ -1057,11 +1077,19 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       _refreshVideoDurationFromBackend();
     }
 
-    // 历史会话的 chatMessages 未持久化到快照，从后端 QA 记录异步回填
+    // 历史会话的 chatMessages 未持久化到快照，从后端 QA 记录异步回填。
+    // 同时处理 finalChat 子状态恢复：若 finalSummaryData 为空，说明切走时正
+    // 在生成终稿，需查询后端确认任务是否仍在 finalGenerating 并恢复监听。
     if (snapshot.stage == VideoSummaryStage.finalChat &&
         snapshot.taskId != null &&
         snapshot.taskId!.isNotEmpty) {
-      _refreshChatMessagesFromBackend(snapshot.taskId!);
+      if (snapshot.finalSummaryData != null) {
+        // 正常 finalChat：回填 Q&A 聊天记录
+        _refreshChatMessagesFromBackend(snapshot.taskId!);
+      } else {
+        // 切走时正在生成终稿 → 查询后端状态并恢复
+        _recoverFinalChatFromBackend(snapshot.taskId!);
+      }
     }
 
     // 恢复 processing 阶段的会话时，查询后端确认任务的实际进度。
@@ -1181,6 +1209,45 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     }
   }
 
+  /// 订阅 WS progress/statusUpdate 事件，用于最终稿生成期间的进度展示。
+  void _listenFinalDraftProgress() {
+    _cancelFinalDraftProgress();
+
+    final taskId = state.taskId;
+    if (taskId == null) return;
+
+    final wsClient = ref.read(wsClientProvider);
+    final wsStream = wsClient.eventStream.where(
+      (env) =>
+          env.scope == WSScope.videoSummaryTask &&
+          env.scopeId == taskId &&
+          (env.eventType == WSEventType.progress ||
+              env.eventType == WSEventType.statusUpdate),
+    );
+
+    Timer? debounce;
+    _finalDraftProgressSub = wsStream.listen((env) {
+      debounce?.cancel();
+      debounce = Timer(const Duration(milliseconds: 500), () {
+        final message = env.message;
+        if (message != null && message.isNotEmpty) {
+          state = state.copyWith(
+            finalDraftProgressLogs: [
+              message,
+              ...state.finalDraftProgressLogs.take(19),
+            ],
+          );
+        }
+      });
+    });
+  }
+
+  /// 取消最终稿生成期间的 WS 进度日志订阅。
+  void _cancelFinalDraftProgress() {
+    _finalDraftProgressSub?.cancel();
+    _finalDraftProgressSub = null;
+  }
+
   /// 取消处理中阶段的轮询定时器。
   void _cancelProcessingPoll() {
     _processingPollTimer?.cancel();
@@ -1193,10 +1260,11 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     _draftPollTimer = null;
   }
 
-  /// 取消所有轮询定时器（processing + draft）。
+  /// 取消所有轮询定时器（processing + draft）和 WS 进度订阅。
   void _cancelAllPolling() {
     _cancelProcessingPoll();
     _cancelDraftStatusPoll();
+    _cancelFinalDraftProgress();
   }
 
   /// 恢复 processing 阶段的会话时，查询后端确认任务的实际进度。
@@ -1305,6 +1373,59 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     }
   }
 
+  /// 恢复 finalChat 阶段会话时，查询后端确认终稿生成的实际进度。
+  ///
+  /// 场景：用户在终稿生成中（finalChat + isGenerating=true）切走，
+  /// 快照中 finalSummaryData 为空。切回来时需判断任务是已完成还是仍在生成中。
+  Future<void> _recoverFinalChatFromBackend(String taskId) async {
+    final owningSessionKey = _activeSessionKey;
+    try {
+      final taskInfo = await _repository.getTaskStatus(taskId);
+      if (taskInfo == null || _activeSessionKey != owningSessionKey) return;
+
+      if (kDebugMode) {
+        debugPrint(
+          '[FlowCtrl] 恢复 finalChat 阶段会话 — taskId=$taskId'
+          ' workflowState=${taskInfo.workflowState.name}',
+        );
+      }
+
+      switch (taskInfo.workflowState) {
+        case WorkflowState.completed:
+          // 终稿已生成完毕，直接获取并填充数据
+          await _transitionToFinalChatFromBackend(taskId, owningSessionKey);
+          break;
+
+        case WorkflowState.finalGenerating:
+          // 终稿生成仍在运行，恢复生成中状态并重新订阅 WS
+          if (_activeSessionKey != owningSessionKey) return;
+          _resumeFinalGeneration(taskId, owningSessionKey);
+          break;
+
+        case WorkflowState.failed:
+          if (_activeSessionKey != owningSessionKey) return;
+          state = state.copyWith(
+            errorMessage: '终稿生成失败，请重试',
+          );
+          break;
+
+        case WorkflowState.waitingUserApproval:
+        case WorkflowState.draftGenerating:
+          // 理论上级不该出现此状态（finalChat 阶段应已完成 Phase 1），
+          // 做防御处理：回退到 draft 恢复流程
+          if (_activeSessionKey != owningSessionKey) return;
+          state = state.copyWith(
+            stage: VideoSummaryStage.draft,
+            isGenerating: false,
+          );
+          _recoverDraftFromBackend(taskId);
+          break;
+      }
+    } catch (e) {
+      debugPrint('[FlowCtrl] 恢复 finalChat 阶段会话异常 — taskId=$taskId: $e');
+    }
+  }
+
   /// 重新订阅 WS 等待终稿生成完成（Phase 2）。
   /// 不调用 approveAndFinalize，仅等待已有任务的 WS completed 事件。
   /// 同时启动并行轮询，作为 WS 静默失效的兜底。
@@ -1312,6 +1433,18 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     if (kDebugMode) {
       debugPrint('[FlowCtrl] 开始恢复终稿生成 WS 监听 — taskId=$taskId');
     }
+
+    // ★ 立即进入 finalChat 阶段 + 生成中状态
+    state = state.copyWith(
+      stage: VideoSummaryStage.finalChat,
+      isGenerating: true,
+      finalDraftProgressLogs: [],
+      finalSummaryData: null,
+      chatMessages: const [],
+    );
+
+    // 开始 WS 进度日志监听
+    _listenFinalDraftProgress();
 
     // 立即启动并行轮询，作为 WS 静默失效的兜底
     _startDraftStatusPoll(taskId, owningSessionKey);
@@ -1323,15 +1456,12 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       _cancelDraftStatusPoll();
       if (_activeSessionKey != owningSessionKey) return;
 
-      // 如果轮询已经过渡了阶段，跳过重复操作
-      if (state.stage != VideoSummaryStage.draft) return;
-
       final summaryData = mapFinalResultDataToSummary(summary);
       final seededRange = _buildRangeFromSummary(summaryData);
       state = state.copyWith(
+        isGenerating: false,
         finalSummaryData: summaryData,
         chatMessages: List<ChatMessage>.from(summaryData.messages),
-        stage: VideoSummaryStage.finalChat,
         selectedTimestampStartSeconds: seededRange.startSeconds,
         selectedTimestampEndSeconds: seededRange.endSeconds,
       );
@@ -1346,6 +1476,10 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       }
       debugPrint('[FlowCtrl] 恢复终稿生成失败，轮询兜底中 — taskId=$taskId: $e');
       // 轮询已在运行，无需额外操作
+    } finally {
+      if (_activeSessionKey == owningSessionKey) {
+        _cancelFinalDraftProgress();
+      }
     }
   }
 
@@ -1376,6 +1510,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         finalSummaryData: summaryData,
         chatMessages: List<ChatMessage>.from(summaryData.messages),
         stage: VideoSummaryStage.finalChat,
+        isGenerating: false,
         selectedTimestampStartSeconds: seededRange.startSeconds,
         selectedTimestampEndSeconds: seededRange.endSeconds,
       );
