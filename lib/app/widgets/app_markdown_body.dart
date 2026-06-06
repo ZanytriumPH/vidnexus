@@ -40,10 +40,11 @@ class _SafeMarkdownBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     try {
-      return MarkdownBody(
+      return SelectionArea(
+        child: MarkdownBody(
         data: data,
         shrinkWrap: true,
-        selectable: true,
+        selectable: false,
         styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
         p: bodyStyle,
         h1: bodyStyle.copyWith(
@@ -99,7 +100,7 @@ class _SafeMarkdownBody extends StatelessWidget {
           decorationColor: const Color(0xFF275FD8),
         ),
       ),
-        onTapLink: (text, href, title) {},
+      ),
       );
     } catch (e) {
       debugPrint('[AppMarkdownBody] Markdown render error, falling back to plain text: $e');
