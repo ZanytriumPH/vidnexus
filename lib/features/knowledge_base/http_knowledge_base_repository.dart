@@ -21,17 +21,45 @@ class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
   }) async {
     final resp = await _kbService.listKBs(params: params);
 
-    final libraries = resp.data.map((dto) {
-      return KnowledgeBaseLibrary(
+    final libraries = <KnowledgeBaseLibrary>[];
+    for (final dto in resp.data) {
+      // 异步拉取该知识库的来源数量
+      int sourceCount = 0;
+      try {
+        final sourcesResp = await _kbService.listVideos(
+          dto.kbid,
+          params: const PageParams(page: 1, pageSize: 1),
+        );
+        sourceCount = sourcesResp.pagination?.total ?? 0;
+      } catch (_) {
+        // 拉取失败不阻塞列表展示
+      }
+
+      // 异步拉取该知识库的最新一次提问（chatTitle）
+      String? latestQuestion;
+      try {
+        final chatsResp = await _chatService.listChats(
+          dto.kbid,
+          params: const PageParams(page: 1, pageSize: 1, sort: '-created_at'),
+        );
+        if (chatsResp.data.isNotEmpty) {
+          latestQuestion = chatsResp.data.first.chatTitle;
+        }
+      } catch (_) {
+        // 拉取失败不阻塞列表展示
+      }
+
+      libraries.add(KnowledgeBaseLibrary(
         id: dto.kbid,
         title: dto.name,
-        meta: _buildMeta(dto.category, dto.createdAt),
+        meta: _buildMeta(null, dto.createdAt),
         description: dto.description ?? '',
-        sourceCount: 0, // 由后续 listSources 异步填充
+        sourceCount: sourceCount,
         sources: const [],
-        conversations: const [], // Phase 5 接入
-      );
-    }).toList();
+        conversations: const [],
+        latestQuestion: latestQuestion,
+      ));
+    }
 
     return ApiListResponse(
       status: resp.status,
