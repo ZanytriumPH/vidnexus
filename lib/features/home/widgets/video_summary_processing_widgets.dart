@@ -14,6 +14,8 @@ class HeroCard extends StatelessWidget {
     required this.processingExpanded,
     this.isUploading = false,
     this.uploadProgress = 0.0,
+    this.isFinalGenerating = false,
+    this.finalDraftProgressMessage,
     this.onTap,
     this.onVideoPlayback,
     super.key,
@@ -26,6 +28,8 @@ class HeroCard extends StatelessWidget {
   final bool processingExpanded;
   final bool isUploading;
   final double uploadProgress;
+  final bool isFinalGenerating;
+  final String? finalDraftProgressMessage;
   final VoidCallback? onTap;
   final VoidCallback? onVideoPlayback;
 
@@ -46,25 +50,32 @@ class HeroCard extends StatelessWidget {
     final bool isDraft = stage == VideoSummaryStage.draft;
     final bool isFinal = stage == VideoSummaryStage.finalChat;
     final bool disableTapOverlay = isDraft || isFinal;
-    final String pillLabel = switch (stage) {
-      VideoSummaryStage.ready => '本地上传',
-      VideoSummaryStage.processing => processingSnapshot?.statusLabel ?? '处理中',
-      VideoSummaryStage.draft => '处理已完成',
-      VideoSummaryStage.finalChat => '终稿已生成',
-    };
-    final String title = switch (stage) {
-      VideoSummaryStage.ready => '本地上传',
-      VideoSummaryStage.processing => '正在生成结构化初稿',
-      VideoSummaryStage.draft => '初稿已生成，处理详情已自动折叠',
-      VideoSummaryStage.finalChat => '当前会话已切换为可追问对话窗口',
-    };
-    final String? subtitle = switch (stage) {
-      VideoSummaryStage.ready => '从设备选择文件',
-      VideoSummaryStage.processing =>
-        processingSnapshot?.etaLabel ?? '正在准备处理内容。',
-      VideoSummaryStage.draft => '你现在可以按需编辑初稿与补充终稿的总结指导。',
-      VideoSummaryStage.finalChat => null,
-    };
+    final String pillLabel = isFinalGenerating
+        ? '生成中'
+        : switch (stage) {
+            VideoSummaryStage.ready => '本地上传',
+            VideoSummaryStage.processing =>
+              processingSnapshot?.statusLabel ?? '处理中',
+            VideoSummaryStage.draft => '处理已完成',
+            VideoSummaryStage.finalChat => '终稿已生成',
+          };
+    final String title = isFinalGenerating
+        ? '最终稿生成中...'
+        : switch (stage) {
+            VideoSummaryStage.ready => '本地上传',
+            VideoSummaryStage.processing => '正在生成结构化初稿',
+            VideoSummaryStage.draft => '初稿已生成，处理详情已自动折叠',
+            VideoSummaryStage.finalChat => '当前会话已切换为可追问对话窗口',
+          };
+    final String? subtitle = isFinalGenerating
+        ? (finalDraftProgressMessage ?? '正在提交审批...')
+        : switch (stage) {
+            VideoSummaryStage.ready => '从设备选择文件',
+            VideoSummaryStage.processing =>
+              processingSnapshot?.etaLabel ?? '正在准备处理内容。',
+            VideoSummaryStage.draft => '你现在可以按需编辑初稿与补充终稿的总结指导。',
+            VideoSummaryStage.finalChat => null,
+          };
 
     return AppCard(
       radius: 18,

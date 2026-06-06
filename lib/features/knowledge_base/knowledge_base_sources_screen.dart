@@ -111,6 +111,7 @@ class _KnowledgeBaseSourcesScreenState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
         title: const Text('移除来源'),
         content: Text('确定要从知识库中移除"${source.title}"吗？'),
         actions: [

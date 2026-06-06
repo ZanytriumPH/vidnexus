@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/widgets/app_typing_indicator.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
 import 'video_summary_final_chat_widgets.dart';
@@ -24,12 +25,14 @@ class FinalChatStageWorkspace extends StatefulWidget {
     required this.onTimestampRangeChanged,
     this.onAddToKbPressed,
     this.onVideoPlayback,
+    this.isGenerating = false,
+    this.finalDraftProgressMessage,
     super.key,
   });
 
   final bool highlighted;
   final VideoAssetInfo videoAsset;
-  final FinalSummaryData finalSummaryData;
+  final FinalSummaryData? finalSummaryData;
   final List<ChatMessage> chatMessages;
   final TextEditingController chatController;
   final bool isSendingChat;
@@ -44,6 +47,8 @@ class FinalChatStageWorkspace extends StatefulWidget {
   final ValueChanged<TimestampRangeSelection> onTimestampRangeChanged;
   final VoidCallback? onAddToKbPressed;
   final VoidCallback? onVideoPlayback;
+  final bool isGenerating;
+  final String? finalDraftProgressMessage;
 
   @override
   State<FinalChatStageWorkspace> createState() =>
@@ -102,6 +107,30 @@ class _FinalChatStageWorkspaceState extends State<FinalChatStageWorkspace>
 
   @override
   Widget build(BuildContext context) {
+    // ★ 生成中：只显示 HeroCard + AI 思考动画，无正文卡片、无追问输入框
+    if (widget.isGenerating) {
+      return SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            HeroCard(
+              stage: VideoSummaryStage.finalChat,
+              highlighted: widget.highlighted,
+              videoAsset: widget.videoAsset,
+              processingSnapshot: null,
+              processingExpanded: false,
+              isFinalGenerating: true,
+              finalDraftProgressMessage: widget.finalDraftProgressMessage,
+              onTap: widget.onUploadCardPressed,
+              onVideoPlayback: widget.onVideoPlayback,
+            ),
+            const SizedBox(height: 12),
+            const AppTypingIndicator(),
+          ],
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -122,7 +151,7 @@ class _FinalChatStageWorkspaceState extends State<FinalChatStageWorkspace>
                 ),
                 const SizedBox(height: 12),
                 ChatThread(
-                  summary: widget.finalSummaryData,
+                  summary: widget.finalSummaryData!,
                   messages: widget.chatMessages,
                   onAddToKbPressed: widget.onAddToKbPressed,
                   isWaiting: widget.isSendingChat,

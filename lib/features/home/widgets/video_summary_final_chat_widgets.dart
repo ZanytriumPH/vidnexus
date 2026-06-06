@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_buttons.dart';
+import '../../../app/widgets/app_typing_indicator.dart';
 import '../../../app/widgets/composer_attachment_button.dart';
 import '../../../services/service_providers.dart';
 import '../../knowledge_base/application/knowledge_base_controller.dart';
@@ -49,7 +50,7 @@ class ChatThread extends StatelessWidget {
           ),
         ),
         if (isWaiting)
-          const _SummaryTypingIndicator(),
+          const AppTypingIndicator(),
       ],
     );
   }
@@ -774,81 +775,87 @@ class _AddToKnowledgeBaseSheetState
 
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            // 新建知识库 — 固定置顶
-            _NewKbTile(
-              isLoading: _isCreating,
-              onTap: _isCreating ? null : () => _createAndBind(context),
-            ),
-            const SizedBox(height: 8),
-            if (librariesState.isLoading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: CircularProgressIndicator(strokeWidth: 2),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.5,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
                 ),
-              )
-            else if (librariesState.libraries.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: Text(
-                    l10n.emptyHint,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textHint,
+              ),
+              const SizedBox(height: 16),
+              // 新建知识库 — 固定置顶
+              _NewKbTile(
+                isLoading: _isCreating,
+                onTap: _isCreating ? null : () => _createAndBind(context),
+              ),
+              const SizedBox(height: 8),
+              // 知识库列表 — 可滚动
+              if (librariesState.isLoading)
+                const Expanded(
+                  child: Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else if (librariesState.libraries.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      l10n.emptyHint,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textHint,
+                      ),
                     ),
                   ),
+                )
+              else
+                Expanded(
+                  child: ListView(
+                    children: librariesState.libraries
+                        .where((l) => l.title != '默认知识库')
+                        .map(
+                      (library) => _KnowledgeBaseTile(
+                        title: library.title,
+                        meta: library.meta,
+                        onTap: () async {
+                          Navigator.of(context).pop();
+                          try {
+                            await kbService.bindVideo(
+                              kbid: library.id,
+                              videoId: widget.videoId,
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.success(library.title)),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.failure(e.toString())),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ).toList(),
+                  ),
                 ),
-              )
-            else
-              ...librariesState.libraries.map(
-                (library) => _KnowledgeBaseTile(
-                  title: library.title,
-                  meta: library.meta,
-                  onTap: () async {
-                    Navigator.of(context).pop();
-                    try {
-                      await kbService.bindVideo(
-                        kbid: library.id,
-                        videoId: widget.videoId,
-                      );
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(l10n.success(library.title)),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(l10n.failure(e.toString())),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                ),
-              ),
-            const SizedBox(height: 8),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -994,92 +1001,6 @@ class _KnowledgeBaseTile extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// AI 正在思考的动画指示器（与知识库聊天的 typing indicator 样式一致）。
-class _SummaryTypingIndicator extends StatefulWidget {
-  const _SummaryTypingIndicator();
-
-  @override
-  State<_SummaryTypingIndicator> createState() =>
-      _SummaryTypingIndicatorState();
-}
-
-class _SummaryTypingIndicatorState extends State<_SummaryTypingIndicator>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 1200),
-      vsync: this,
-    )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _animation,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 280),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF3F5F9),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              _SummaryTypingDot(),
-              SizedBox(width: 6),
-              _SummaryTypingDot(),
-              SizedBox(width: 6),
-              _SummaryTypingDot(),
-              SizedBox(width: 10),
-              Text(
-                'AI 正在思考…',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF8E8E93),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SummaryTypingDot extends StatelessWidget {
-  const _SummaryTypingDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: const BoxDecoration(
-        color: Color(0xFF8E8E93),
-        shape: BoxShape.circle,
       ),
     );
   }

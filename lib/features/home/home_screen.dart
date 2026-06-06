@@ -564,6 +564,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           .setTimestampRange,
       isUploading: flowState.isUploading,
       uploadProgress: flowState.uploadProgress,
+      finalDraftProgressMessage: flowState.finalDraftProgressLogs.isNotEmpty
+          ? flowState.finalDraftProgressLogs.first
+          : null,
       onVideoPlayback: _openVideoPlayback,
       onRefreshPressed: ref
           .read(videoSummaryFlowControllerProvider.notifier)
