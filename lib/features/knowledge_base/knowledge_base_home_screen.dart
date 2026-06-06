@@ -261,7 +261,7 @@ class _KnowledgeLibraryCard extends StatelessWidget {
         backgroundColor: Colors.white,
         borderColor: AppColors.borderStrong,
         child: SizedBox(
-          height: 140,
+          height: 130,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -302,7 +302,7 @@ class _KnowledgeLibraryCard extends StatelessWidget {
               Text(
                 item.meta,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 13,
+                  fontSize: 12,
                   color: AppColors.textHint,
                   fontWeight: FontWeight.w500,
                 ),

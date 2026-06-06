@@ -13,6 +13,7 @@ final knowledgeBaseRepositoryProvider = Provider<KnowledgeBaseRepository>((ref) 
   return HttpKnowledgeBaseRepository(
     kbService: ref.watch(knowledgeBaseServiceProvider),
     chatService: ref.watch(globalChatServiceProvider),
+    qaService: ref.watch(globalQAServiceProvider),
   );
 });
 
@@ -171,6 +172,27 @@ class SelectedLibraryController extends Notifier<SelectedLibraryState> {
 
   void clearSelection() {
     state = state.copyWith(clearSelection: true);
+  }
+
+  /// 即时向当前知识库的对话列表中插入一条新会话。
+  /// 用于用户发起提问后不等 AI 回复完成就在列表中显示该会话。
+  void addConversation(KnowledgeConversationPreview conversation) {
+    final library = state.selectedLibrary;
+    if (library == null) return;
+    // 避免重复插入（同一 chatId 已存在则不添加）
+    final exists = library.conversations.any((c) => c.id == conversation.id);
+    if (exists) return;
+    final updated = KnowledgeBaseLibrary(
+      id: library.id,
+      title: library.title,
+      meta: library.meta,
+      description: library.description,
+      sourceCount: library.sourceCount,
+      sources: library.sources,
+      conversations: [conversation, ...library.conversations],
+      latestQuestion: library.latestQuestion,
+    );
+    state = state.copyWith(selectedLibrary: updated);
   }
 
   void clearError() {
