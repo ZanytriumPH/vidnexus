@@ -26,22 +26,30 @@ class LibraryListState {
     this.isLoading = false,
     this.libraries = const [],
     this.errorMessage,
+    this.isSelectionMode = false,
+    this.selectedIds = const {},
   });
 
   final bool isLoading;
   final List<KnowledgeBaseLibrary> libraries;
   final String? errorMessage;
+  final bool isSelectionMode;
+  final Set<String> selectedIds;
 
   LibraryListState copyWith({
     bool? isLoading,
     List<KnowledgeBaseLibrary>? libraries,
     String? errorMessage,
+    bool? isSelectionMode,
+    Set<String>? selectedIds,
     bool clearError = false,
   }) {
     return LibraryListState(
       isLoading: isLoading ?? this.isLoading,
       libraries: libraries ?? this.libraries,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      isSelectionMode: isSelectionMode ?? this.isSelectionMode,
+      selectedIds: selectedIds ?? this.selectedIds,
     );
   }
 }
@@ -107,6 +115,41 @@ class LibraryListController extends Notifier<LibraryListState> {
 
   void clearError() {
     state = state.copyWith(clearError: true);
+  }
+
+  /// 进入/退出删除选择模式。
+  void toggleSelectionMode() {
+    if (state.isSelectionMode) {
+      state = state.copyWith(isSelectionMode: false, selectedIds: {});
+    } else {
+      state = state.copyWith(isSelectionMode: true, selectedIds: {});
+    }
+  }
+
+  /// 切换某个知识库的选中状态。
+  void toggleSelect(String id) {
+    final ids = Set<String>.from(state.selectedIds);
+    if (ids.contains(id)) {
+      ids.remove(id);
+    } else {
+      ids.add(id);
+    }
+    state = state.copyWith(selectedIds: ids);
+  }
+
+  /// 批量删除选中的知识库。
+  Future<void> deleteSelected() async {
+    final ids = Set<String>.from(state.selectedIds);
+    for (final id in ids) {
+      try {
+        await _repo.deleteLibrary(id);
+      } catch (_) {}
+    }
+    state = state.copyWith(
+      libraries: state.libraries.where((l) => !ids.contains(l.id)).toList(),
+      isSelectionMode: false,
+      selectedIds: {},
+    );
   }
 }
 

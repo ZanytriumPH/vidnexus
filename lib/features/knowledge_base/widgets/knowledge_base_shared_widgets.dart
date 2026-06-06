@@ -14,6 +14,7 @@ class KnowledgeBaseTopBar extends StatelessWidget {
     required this.title,
     this.onLeadingPressed,
     this.leadingIcon = Icons.arrow_back_rounded,
+    this.leading,
     this.showTitle = true,
     this.trailing,
     this.onSettingsPressed,
@@ -25,6 +26,7 @@ class KnowledgeBaseTopBar extends StatelessWidget {
   final String title;
   final VoidCallback? onLeadingPressed;
   final IconData leadingIcon;
+  final Widget? leading;
   final Widget? trailing;
   final bool showTitle;
   final VoidCallback? onSettingsPressed;
@@ -37,23 +39,24 @@ class KnowledgeBaseTopBar extends StatelessWidget {
         AppSectionHeaderBar(
           current: currentSection,
           onSelected: onSectionSelected,
-          leading: onLeadingPressed == null
-              ? null
-              : InkWell(
-                  onTap: onLeadingPressed,
-                  borderRadius: BorderRadius.circular(20),
-                  child: SizedBox(
-                    width: 34,
-                    height: 34,
-                    child: Center(
-                      child: Icon(
-                        leadingIcon,
-                        size: 24,
-                        color: AppColors.textPrimary,
+          leading: leading ??
+              (onLeadingPressed == null
+                  ? null
+                  : InkWell(
+                      onTap: onLeadingPressed,
+                      borderRadius: BorderRadius.circular(20),
+                      child: SizedBox(
+                        width: 34,
+                        height: 34,
+                        child: Center(
+                          child: Icon(
+                            leadingIcon,
+                            size: 24,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ),
+                    )),
           trailing: trailing,
         ),
         if (showTitle) ...[
