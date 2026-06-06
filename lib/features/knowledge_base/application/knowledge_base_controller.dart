@@ -195,6 +195,28 @@ class SelectedLibraryController extends Notifier<SelectedLibraryState> {
     state = state.copyWith(selectedLibrary: updated);
   }
 
+  /// 从当前知识库中删除一个来源。
+  Future<void> deleteSource(String sourceId) async {
+    final library = state.selectedLibrary;
+    if (library == null) return;
+    try {
+      await _repo.deleteSource(kbid: library.id, sourceId: sourceId);
+      final updated = KnowledgeBaseLibrary(
+        id: library.id,
+        title: library.title,
+        meta: library.meta,
+        description: library.description,
+        sourceCount: library.sourceCount - 1,
+        sources: library.sources.where((s) => s.id != sourceId).toList(),
+        conversations: library.conversations,
+        latestQuestion: library.latestQuestion,
+      );
+      state = state.copyWith(selectedLibrary: updated);
+    } catch (e) {
+      state = state.copyWith(errorMessage: '删除来源失败，请重试');
+    }
+  }
+
   void clearError() {
     state = state.copyWith(clearError: true);
   }

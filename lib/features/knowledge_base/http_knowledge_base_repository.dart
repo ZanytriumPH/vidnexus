@@ -181,6 +181,11 @@ class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
   }
 
   @override
+  Future<void> deleteSource({required String kbid, required String sourceId}) async {
+    await _kbService.unbindVideo(kbid: kbid, videoId: sourceId);
+  }
+
+  @override
   Future<List<KnowledgeSourceItem>> listSources(String kbid) async {
     final resp = await _kbService.listVideos(kbid);
     return resp.data.map((video) {
