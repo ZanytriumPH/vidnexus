@@ -21,9 +21,10 @@ class AppRouter {
     try {
       switch (settings.name) {
         case AppRoutes.home:
+          final args = settings.arguments as HomeRouteArguments?;
           return _buildRoute(
             settings: settings,
-            builder: (_) => const HomeScreen(),
+            builder: (_) => HomeScreen(videoId: args?.videoId),
           );
         case AppRoutes.videoSummarySearch:
           final args = _requireArguments<VideoSummarySearchRouteArguments>(
@@ -138,6 +139,16 @@ class AppNavigator {
 
   static void goToHomeRoot(BuildContext context) {
     Navigator.pushNamedAndRemoveUntil(context, AppRoutes.home, (route) => false);
+  }
+
+  /// 跳转到首页并自动恢复指定视频的总结会话。
+  static void goToHomeWithVideo(BuildContext context, {required String videoId}) {
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      AppRoutes.home,
+      (route) => false,
+      arguments: HomeRouteArguments(videoId: videoId),
+    );
   }
 
   static void goToKnowledgeBaseHome(BuildContext context) {

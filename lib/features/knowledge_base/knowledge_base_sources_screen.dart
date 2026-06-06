@@ -104,12 +104,18 @@ class _KnowledgeSourceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      radius: 20,
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-      backgroundColor: Colors.white,
-      borderColor: AppColors.borderStrong,
-      child: Row(
+    return InkWell(
+      onTap: () => AppNavigator.goToHomeWithVideo(
+        context,
+        videoId: source.id,
+      ),
+      borderRadius: BorderRadius.circular(20),
+      child: AppCard(
+        radius: 20,
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        backgroundColor: Colors.white,
+        borderColor: AppColors.borderStrong,
+        child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
@@ -142,6 +148,8 @@ class _KnowledgeSourceCard extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -166,7 +174,6 @@ class _KnowledgeSourceCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
+      ),      ),    );
   }
 }

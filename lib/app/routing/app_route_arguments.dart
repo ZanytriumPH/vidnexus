@@ -28,3 +28,11 @@ class KnowledgeBaseSourcesRouteArguments {
 
   final String kbid;
 }
+
+class HomeRouteArguments {
+  const HomeRouteArguments({this.videoId});
+
+  /// 可选：从知识库来源页跳转时携带的视频 ID，
+  /// 首页会自动查找对应任务并恢复该视频的最终稿会话。
+  final String? videoId;
+}
