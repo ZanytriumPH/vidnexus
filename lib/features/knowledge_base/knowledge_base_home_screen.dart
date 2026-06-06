@@ -122,6 +122,7 @@ class _KnowledgeBaseHomeScreenState
                   final confirmed = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
+                      backgroundColor: Colors.white,
                       title: const Text('删除知识库'),
                       content: Text(
                           '确定要删除选中的 $count 个知识库吗？\n此操作不可撤销。'),
@@ -163,6 +164,7 @@ class _KnowledgeBaseHomeScreenState
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
         title: const Text('新建知识库'),
         content: TextField(
           controller: nameController,
@@ -227,6 +229,7 @@ class _KnowledgeBaseHeaderState extends State<_KnowledgeBaseHeader> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
         ),
+        color: Colors.white,
         onSelected: (value) {
           if (value == 'create') {
             widget.onCreatePressed();

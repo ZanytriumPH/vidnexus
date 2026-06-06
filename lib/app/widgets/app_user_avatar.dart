@@ -75,6 +75,7 @@ Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
       title: const Text('退出登录'),
       content: const Text('确定要退出当前账号吗？'),
       actions: [
