@@ -37,6 +37,11 @@ class _KnowledgeBaseHomeScreenState
     final isSelectionMode = state.isSelectionMode;
     final selectedIds = state.selectedIds;
 
+    // 过滤掉系统自动创建的默认知识库（视频总结功能依赖，不允许用户删除）
+    final displayLibraries = state.libraries
+        .where((l) => l.title != '默认知识库')
+        .toList();
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -70,12 +75,12 @@ class _KnowledgeBaseHomeScreenState
                       ),
                     ),
                     const SizedBox(height: 12),
-                    if (state.isLoading && state.libraries.isEmpty)
+                    if (state.isLoading && displayLibraries.isEmpty)
                       const Padding(
                         padding: EdgeInsets.only(top: 40),
                         child: Center(child: CircularProgressIndicator()),
                       )
-                    else if (state.libraries.isEmpty)
+                    else if (displayLibraries.isEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 40),
                         child: Center(
@@ -90,7 +95,7 @@ class _KnowledgeBaseHomeScreenState
                       )
                     else
                       _KnowledgeLibraryGrid(
-                        libraries: state.libraries,
+                        libraries: displayLibraries,
                         isSelectionMode: isSelectionMode,
                         selectedIds: selectedIds,
                         onTap: controller.toggleSelect,
