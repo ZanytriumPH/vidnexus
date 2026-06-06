@@ -27,7 +27,7 @@ class VideoSummaryHistoryDrawer extends StatelessWidget {
   final VoidCallback? onRetryHistory;
 
   Widget _buildSessionList(BuildContext context) {
-    if (isLoadingHistory && sessions.length <= 1) {
+    if (isLoadingHistory && sessions.isEmpty) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.only(top: 32),
@@ -52,7 +52,7 @@ class VideoSummaryHistoryDrawer extends StatelessWidget {
       );
     }
 
-    if (errorMessage != null && sessions.length <= 1) {
+    if (errorMessage != null && sessions.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.only(top: 32),

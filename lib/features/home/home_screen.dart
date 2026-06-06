@@ -43,10 +43,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         flowState.stage == VideoSummaryStage.ready ||
         flowState.stage == VideoSummaryStage.finalChat;
 
-    // 监听认证状态变化：当用户登出时，立即使会话历史与流程控制器失效，
-    // 确保下一个账号登录后不会看到上一个账号的残留缓存数据。
+    // 监听认证状态变化：当用户登出或新用户登入时，立即使会话历史
+    // 与流程控制器失效，确保账号之间的缓存数据完全隔离。
     ref.listen(authControllerProvider, (prev, next) {
-      if (prev?.isLoggedIn == true && !next.isLoggedIn) {
+      final prevLoggedIn = prev?.isLoggedIn == true;
+      final nextLoggedIn = next.isLoggedIn;
+      final userChanged = prev?.currentUser?.userId != next.currentUser?.userId;
+
+      if ((prevLoggedIn && !nextLoggedIn) ||  // 注销
+          (!prevLoggedIn && nextLoggedIn) ||  // 登录
+          (prevLoggedIn && nextLoggedIn && userChanged)) { // 切换账号
         ref.invalidate(videoSummarySessionHistoryProvider);
         ref.invalidate(videoSummaryFlowControllerProvider);
       }
@@ -164,17 +170,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  /// 当前会话是否为空（无任务、无上传、处于 ready 阶段）。
+   /// 当前会话是否为空（无任务、无上传、处于 ready 阶段）。
   /// 用于侧边栏过滤：空会话不在历史列表中显示。
   bool _isCurrentSessionEmpty(VideoSummaryFlowState flowState) {
     return flowState.taskId == null &&
         flowState.stage == VideoSummaryStage.ready &&
-        !flowState.uploadHighlighted;
+        (flowState.videoAsset.title == 'vid_default' ||
+            flowState.videoAsset.title.isEmpty);
   }
 
   // 新建会话：重置流程状态和文本状态。
   // 空会话已在 _isCurrentSessionEmpty 中判断，避免重复重置。
-  // 若当前会话已完成视频上传，先将其持久化到历史列表再重置。
+  // 若当前会话已完成视频上传但尚未创建后端任务，先将其保存为内存临时会话再重置。
   void _createNewSession() {
     final flowState = ref.read(videoSummaryFlowControllerProvider);
     final isAlreadyEmpty = _isCurrentSessionEmpty(flowState);
@@ -188,11 +195,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
     final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
     textEditing.runWithoutSync(() {
-      // 仅需持久化"仅有视频上传、尚未创建后端任务"的会话。
-      // 已有后端任务的会话由 listTaskHistory 提供侧边栏历史记录，
-      // 无需额外创建冗余的本地条目。
-      if (flowState.uploadHighlighted && flowState.taskId == null) {
-        sessionHistoryController.persistUploadSession(
+      // 仅上传了视频、尚未创建后端任务的会话需要以临时会话保存到内存中，
+      // 确保用户切换或新建会话后仍可从侧边栏恢复。已有后端任务的会话由
+      // listTaskHistory 提供侧边栏历史记录，无需额外创建。
+      if (flowState.videoAsset.title != 'vid_default' &&
+          flowState.videoAsset.title.isNotEmpty &&
+          flowState.taskId == null) {
+        sessionHistoryController.addTempUploadSession(
           textEditing.captureSnapshot(),
         );
       }
@@ -259,14 +268,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
     final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
     textEditing.runWithoutSync(() {
-      // 恢复顺序很重要：先回填文本，再恢复流程快照，最后切 active session。
+      // 恢复顺序很重要：先切 active session，再恢复文本和流程快照。
+      ref
+          .read(videoSummarySessionHistoryProvider.notifier)
+          .activateSession(session.id);
       textEditing.applySessionSnapshot(session.snapshot);
       ref
           .read(videoSummaryFlowControllerProvider.notifier)
           .restoreSnapshot(session.snapshot.flowSnapshot);
-      ref
-          .read(videoSummarySessionHistoryProvider.notifier)
-          .activateSession(session.id);
     });
   }
 
