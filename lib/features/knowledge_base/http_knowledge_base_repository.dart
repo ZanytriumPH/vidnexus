@@ -1,4 +1,5 @@
 import '../../services/global_chat_service.dart';
+import '../../services/global_qa_service.dart';
 import '../../services/knowledge_base_service.dart';
 import '../../services/models/common_dto.dart';
 import 'knowledge_base_models.dart';
@@ -9,11 +10,14 @@ class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
   HttpKnowledgeBaseRepository({
     required KnowledgeBaseService kbService,
     required GlobalChatService chatService,
+    required GlobalQAService qaService,
   })  : _kbService = kbService,
-       _chatService = chatService;
+       _chatService = chatService,
+       _qaService = qaService;
 
   final KnowledgeBaseService _kbService;
   final GlobalChatService _chatService;
+  final GlobalQAService _qaService;
 
   @override
   Future<ApiListResponse<KnowledgeBaseLibrary>> listLibraries({
@@ -78,15 +82,34 @@ class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
     final sources = await listSources(kbid);
     final chatsResp = await _chatService.listChats(kbid);
 
-    final conversations = chatsResp.data.map((dto) {
-      return KnowledgeConversationPreview(
-        id: dto.chatId,
-        title: dto.chatTitle,
-        preview: dto.chatTitle,
-        dateLabel: _buildDateLabel(dto.createdAt),
+    final conversations = <KnowledgeConversationPreview>[];
+    for (final chatDto in chatsResp.data) {
+      // 拉取该会话的最新系统回答作为 preview
+      String preview = chatDto.chatTitle;
+      try {
+        final qasResp = await _qaService.listQAs(
+          kbid,
+          chatDto.chatId,
+          params: const PageParams(page: 1, pageSize: 1, sort: '-created_at'),
+        );
+        if (qasResp.data.isNotEmpty && qasResp.data.first.answerContent != null) {
+          final answer = qasResp.data.first.answerContent!;
+          if (answer.isNotEmpty) {
+            preview = answer;
+          }
+        }
+      } catch (_) {
+        // 拉取失败使用 chatTitle 作为降级
+      }
+
+      conversations.add(KnowledgeConversationPreview(
+        id: chatDto.chatId,
+        title: chatDto.chatTitle,
+        preview: preview,
+        dateLabel: _buildDateLabel(chatDto.createdAt),
         messages: const [],
-      );
-    }).toList();
+      ));
+    }
 
     return KnowledgeBaseLibrary(
       id: dto.kbid,
@@ -158,13 +181,18 @@ class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
   }
 
   @override
+  Future<void> deleteSource({required String kbid, required String sourceId}) async {
+    await _kbService.unbindVideo(kbid: kbid, videoId: sourceId);
+  }
+
+  @override
   Future<List<KnowledgeSourceItem>> listSources(String kbid) async {
     final resp = await _kbService.listVideos(kbid);
     return resp.data.map((video) {
       return KnowledgeSourceItem(
         id: video.videoId,
         title: video.fileName,
-        subtitle: '上传于 ${video.createdAt}',
+        subtitle: '上传于 ${_formatDateTime(video.createdAt)}',
         kindLabel: '视频',
       );
     }).toList();

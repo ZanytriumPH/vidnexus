@@ -6,13 +6,16 @@ import '../../app/routing/app_router.dart';
 import '../../app/routing/app_route_arguments.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../services/api/api_client.dart';
+import '../../services/service_providers.dart';
 import '../../services/video_service.dart';
 import '../auth/auth_controller.dart';
 import 'application/video_summary_flow_controller.dart';
 import 'application/video_summary_session_history_controller.dart';
 import 'application/video_summary_settings_controller.dart';
 import 'application/video_summary_text_editing_controller.dart';
+import 'domain/video_summary_domain_models.dart';
 import 'video_summary_models.dart';
+import 'video_summary_presentation_models.dart';
 import 'video_summary_repository.dart';
 import 'widgets/home_shell_widgets.dart';
 import 'widgets/session_settings_sheet.dart';
@@ -24,7 +27,11 @@ import 'widgets/video_player_page.dart';
 
 /// 首页现在主要承担页面壳和装配职责，复杂状态迁移已下沉到 application 层。
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.videoId});
+
+  /// 可选：从知识库来源页跳转时携带的视频 ID，
+  /// 首页会自动查找对应任务并恢复该视频的最终稿会话。
+  final String? videoId;
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -32,6 +39,89 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.videoId != null) {
+      Future.microtask(() => _restoreVideoSession(widget.videoId!));
+    }
+  }
+
+  Future<void> _restoreVideoSession(String videoId) async {
+    final taskService = ref.read(taskServiceProvider);
+    try {
+      final resp = await taskService.listTasks();
+      final match = resp.data.where((t) => t.videoId == videoId).toList();
+      if (match.isEmpty) return;
+
+      final task = match.first;
+      final stage = switch (task.workflowState) {
+        'COMPLETED' => VideoSummaryStage.finalChat,
+        'WAITING_USER_APPROVAL' => VideoSummaryStage.draft,
+        'DRAFT_GENERATING' || 'FINAL_GENERATING' => VideoSummaryStage.processing,
+        _ => VideoSummaryStage.ready,
+      };
+
+      final draftParagraphs = task.draftSummary != null
+          ? task.draftSummary!
+              .split(RegExp(r'\n\s*\n'))
+              .map((p) => p.trim())
+              .where((p) => p.isNotEmpty)
+              .toList()
+          : <String>[];
+
+      final snapshot = VideoSummaryFlowSnapshot(
+        taskId: task.taskId,
+        videoAsset: VideoAssetInfo(
+          title: videoId,
+          durationLabel: '0m 00s',
+          sourceLabel: task.kbid,
+          fileName: task.title ?? videoId,
+        ),
+        stage: stage,
+        uploadHighlighted: true,
+        processingExpanded: stage == VideoSummaryStage.processing,
+        isTimestampScoped: false,
+        selectedTimestampStartSeconds: 0,
+        selectedTimestampEndSeconds:
+            VideoSummaryFlowController.minimumTimestampRangeSeconds,
+        isDraftEditMode: false,
+        processingSnapshot: null,
+        draftResult: (stage == VideoSummaryStage.draft ||
+                stage == VideoSummaryStage.finalChat)
+            ? DraftResult(paragraphs: draftParagraphs, suggestionHint: '')
+            : null,
+        finalSummaryData: stage == VideoSummaryStage.finalChat
+            ? FinalSummaryData(
+                summaryTitle: '视频总结',
+                summaryBody: task.finalSummary ?? '',
+                timestampChips: const [],
+                messages: const [],
+              )
+            : null,
+        chatMessages: const [],
+        isUploading: false,
+        uploadProgress: 0.0,
+      );
+
+      if (!mounted) return;
+      final flowCtrl = ref.read(videoSummaryFlowControllerProvider.notifier);
+      flowCtrl.restoreSnapshot(snapshot);
+
+      final historyCtrl = ref.read(videoSummarySessionHistoryProvider.notifier);
+      historyCtrl.addTempUploadSession(
+        VideoSummarySessionSnapshot(
+          flowSnapshot: snapshot,
+          readyPreferenceText: task.userInitialPreference ?? '',
+          draftGuidanceText: '',
+          draftBodyText: task.draftSummary ?? '',
+        ),
+      );
+    } catch (_) {
+      // 查找失败则停留在首页默认状态
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -34,6 +34,8 @@ class _KnowledgeBaseHomeScreenState
   Widget build(BuildContext context) {
     final state = ref.watch(libraryListControllerProvider);
     final controller = ref.read(libraryListControllerProvider.notifier);
+    final isSelectionMode = state.isSelectionMode;
+    final selectedIds = state.selectedIds;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -41,64 +43,101 @@ class _KnowledgeBaseHomeScreenState
         child: Column(
           children: [
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: () => controller.refresh(),
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _KnowledgeBaseHeader(
-                        currentSection: AppNavSection.knowledgeBase,
-                        onSectionSelected: (section) =>
-                            _handleSectionSelection(context, section),
-                        onCreatePressed: () => _showCreateDialog(context, controller),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _KnowledgeBaseHeader(
+                      currentSection: AppNavSection.knowledgeBase,
+                      onSectionSelected: (section) =>
+                          _handleSectionSelection(context, section),
+                      onCreatePressed: () =>
+                          _showCreateDialog(context, controller),
+                      isSelectionMode: isSelectionMode,
+                      onToggleSelectionMode: controller.toggleSelectionMode,
+                    ),
+                    const SizedBox(height: 14),
+                    const _KnowledgeSearchBar(),
+                    const SizedBox(height: 18),
+                    Text(
+                      '我的知识库',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
                       ),
-                      const SizedBox(height: 14),
-                      const _KnowledgeSearchBar(),
-                      const SizedBox(height: 18),
-                      Text(
-                        '我的知识库',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (state.isLoading && state.libraries.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 40),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      else if (state.libraries.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 40),
-                          child: Center(
-                            child: Text(
-                              '暂无知识库，点击右上角 + 创建',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.textHint,
-                              ),
-                            ),
-                          ),
-                        )
-                      else
-                        _KnowledgeLibraryGrid(libraries: state.libraries),
-                      if (state.errorMessage != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
+                    ),
+                    const SizedBox(height: 12),
+                    if (state.isLoading && state.libraries.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 40),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (state.libraries.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 40),
+                        child: Center(
                           child: Text(
-                            state.errorMessage!,
-                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                            '暂无知识库，点击右上角 + 创建',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: AppColors.textHint),
                           ),
                         ),
-                    ],
-                  ),
+                      )
+                    else
+                      _KnowledgeLibraryGrid(
+                        libraries: state.libraries,
+                        isSelectionMode: isSelectionMode,
+                        selectedIds: selectedIds,
+                        onTap: controller.toggleSelect,
+                      ),
+                    if (state.errorMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Text(
+                          state.errorMessage!,
+                          style:
+                              const TextStyle(color: Colors.red, fontSize: 12),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
+            if (isSelectionMode)
+              _SelectionBottomBar(
+                selectedCount: selectedIds.length,
+                onCancel: controller.toggleSelectionMode,
+                onDelete: () async {
+                  final count = selectedIds.length;
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('删除知识库'),
+                      content: Text(
+                          '确定要删除选中的 $count 个知识库吗？\n此操作不可撤销。'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('取消'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('删除',
+                              style: TextStyle(color: Colors.red)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true) {
+                    controller.deleteSelected();
+                  }
+                },
+              ),
           ],
         ),
       ),
@@ -146,30 +185,88 @@ class _KnowledgeBaseHomeScreenState
   }
 }
 
-class _KnowledgeBaseHeader extends StatelessWidget {
+class _KnowledgeBaseHeader extends StatefulWidget {
   const _KnowledgeBaseHeader({
     required this.currentSection,
     required this.onSectionSelected,
     required this.onCreatePressed,
+    required this.isSelectionMode,
+    required this.onToggleSelectionMode,
   });
 
   final AppNavSection currentSection;
   final ValueChanged<AppNavSection> onSectionSelected;
   final VoidCallback onCreatePressed;
+  final bool isSelectionMode;
+  final VoidCallback onToggleSelectionMode;
+
+  @override
+  State<_KnowledgeBaseHeader> createState() => _KnowledgeBaseHeaderState();
+}
+
+class _KnowledgeBaseHeaderState extends State<_KnowledgeBaseHeader> {
+  final _menuKey = GlobalKey<PopupMenuButtonState>();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        KnowledgeBaseTopBar(
-          currentSection: currentSection,
-          onSectionSelected: onSectionSelected,
-          title: '知识库',
-          showTitle: false,
-          trailing: AppHeaderAddButton(onPressed: onCreatePressed),
+    return KnowledgeBaseTopBar(
+      currentSection: widget.currentSection,
+      onSectionSelected: widget.onSectionSelected,
+      title: '知识库',
+      showTitle: false,
+      leading: Transform.translate(
+        offset: const Offset(-8, 0),
+        child: PopupMenuButton<String>(
+        key: _menuKey,
+        offset: const Offset(0, 40),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
         ),
-      ],
+        onSelected: (value) {
+          if (value == 'create') {
+            widget.onCreatePressed();
+          } else if (value == 'delete') {
+            widget.onToggleSelectionMode();
+          }
+        },
+        itemBuilder: (_) => [
+          const PopupMenuItem(
+            value: 'create',
+            child: Row(
+              children: [
+                Icon(Icons.add, size: 18),
+                SizedBox(width: 10),
+                Text('新建知识库'),
+              ],
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'delete',
+            child: Row(
+              children: [
+                Icon(Icons.delete_outline, size: 18),
+                SizedBox(width: 10),
+                Text('删除知识库'),
+              ],
+            ),
+          ),
+        ],
+        child: const SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: Icon(Icons.menu_rounded, size: 20),
+          ),
+        ),
+      ),
+      ),
+      trailing: widget.isSelectionMode
+          ? TextButton(
+              onPressed: widget.onToggleSelectionMode,
+              child: const Text('取消',
+                  style: TextStyle(color: AppColors.primary)),
+            )
+          : AppHeaderAddButton(onPressed: widget.onCreatePressed),
     );
   }
 }
@@ -210,9 +307,17 @@ class _KnowledgeSearchBar extends StatelessWidget {
 }
 
 class _KnowledgeLibraryGrid extends StatelessWidget {
-  const _KnowledgeLibraryGrid({required this.libraries});
+  const _KnowledgeLibraryGrid({
+    required this.libraries,
+    required this.isSelectionMode,
+    required this.selectedIds,
+    required this.onTap,
+  });
 
   final List<KnowledgeBaseLibrary> libraries;
+  final bool isSelectionMode;
+  final Set<String> selectedIds;
+  final ValueChanged<String> onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -227,7 +332,12 @@ class _KnowledgeLibraryGrid extends StatelessWidget {
               .map(
                 (item) => SizedBox(
                   width: cardWidth,
-                  child: _KnowledgeLibraryCard(item: item),
+                  child: _KnowledgeLibraryCard(
+                    item: item,
+                    isSelectionMode: isSelectionMode,
+                    isSelected: selectedIds.contains(item.id),
+                    onTap: () => onTap(item.id),
+                  ),
                 ),
               )
               .toList(),
@@ -238,9 +348,17 @@ class _KnowledgeLibraryGrid extends StatelessWidget {
 }
 
 class _KnowledgeLibraryCard extends StatelessWidget {
-  const _KnowledgeLibraryCard({required this.item});
+  const _KnowledgeLibraryCard({
+    required this.item,
+    required this.isSelectionMode,
+    required this.isSelected,
+    required this.onTap,
+  });
 
   final KnowledgeBaseLibrary item;
+  final bool isSelectionMode;
+  final bool isSelected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -248,32 +366,47 @@ class _KnowledgeLibraryCard extends StatelessWidget {
         item.latestQuestion!.isNotEmpty;
 
     return InkWell(
-      onTap: () {
-        AppNavigator.openKnowledgeBaseSession(
-          context,
-          kbid: item.id,
-        );
-      },
+      onTap: isSelectionMode
+          ? onTap
+          : () => AppNavigator.openKnowledgeBaseSession(context, kbid: item.id),
       borderRadius: BorderRadius.circular(20),
       child: AppCard(
         radius: 20,
         padding: const EdgeInsets.all(16),
         backgroundColor: Colors.white,
-        borderColor: AppColors.borderStrong,
+        borderColor: isSelected ? AppColors.primary : AppColors.borderStrong,
         child: SizedBox(
-          height: 140,
+          height: 130,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                item.title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      item.title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (isSelectionMode)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: Icon(
+                        isSelected
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
+                        color: isSelected ? AppColors.primary : AppColors.textHint,
+                        size: 20,
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 5),
               Text(
@@ -302,7 +435,7 @@ class _KnowledgeLibraryCard extends StatelessWidget {
               Text(
                 item.meta,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 13,
+                  fontSize: 11,
                   color: AppColors.textHint,
                   fontWeight: FontWeight.w500,
                 ),
@@ -311,6 +444,62 @@ class _KnowledgeLibraryCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectionBottomBar extends StatelessWidget {
+  const _SelectionBottomBar({
+    required this.selectedCount,
+    required this.onCancel,
+    required this.onDelete,
+  });
+
+  final int selectedCount;
+  final VoidCallback onCancel;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: AppColors.border),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            TextButton(
+              onPressed: onCancel,
+              child: const Text('取消'),
+            ),
+            const Spacer(),
+            Text(
+              '已选择 $selectedCount 项',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+            const SizedBox(width: 16),
+            TextButton(
+              onPressed: selectedCount == 0 ? null : onDelete,
+              child: Text(
+                '删除',
+                style: TextStyle(
+                  color: selectedCount == 0
+                      ? AppColors.textHint
+                      : Colors.red,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

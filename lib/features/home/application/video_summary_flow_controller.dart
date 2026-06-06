@@ -18,7 +18,6 @@ import '../video_summary_presentation_models.dart';
 import '../video_summary_repository.dart';
 import 'video_summary_session_history_controller.dart';
 import 'video_summary_settings_controller.dart';
-import 'video_summary_text_editing_controller.dart';
 
 final videoSummaryFlowControllerProvider =
     NotifierProvider<VideoSummaryFlowController, VideoSummaryFlowState>(
