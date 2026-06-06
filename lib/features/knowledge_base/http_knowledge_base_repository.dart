@@ -192,7 +192,7 @@ class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
       return KnowledgeSourceItem(
         id: video.videoId,
         title: video.fileName,
-        subtitle: '上传于 ${_formatDateTime(video.createdAt ?? '')}',
+        subtitle: '上传于 ${_formatDateTime(video.createdAt)}',
         kindLabel: '视频',
       );
     }).toList();

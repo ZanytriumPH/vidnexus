@@ -110,22 +110,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       flowCtrl.restoreSnapshot(snapshot);
 
       final historyCtrl = ref.read(videoSummarySessionHistoryProvider.notifier);
-      final sessionEntry = VideoSummarySessionHistoryEntry(
-        id: task.taskId,
-        title: task.title ?? videoId,
-        durationLabel: '0m 00s',
-        detail: switch (stage) {
-          VideoSummaryStage.finalChat => '已完成总结，可继续时间旅行追问',
-          VideoSummaryStage.draft => '已生成摘要，等待人工审阅',
-          _ => '已上传视频，可继续生成总结。',
-        },
-        snapshot: VideoSummarySessionSnapshot(
-          flowSnapshot: snapshot,
-          readyPreferenceText: task.userInitialPreference ?? '',
-          draftGuidanceText: '',
-          draftBodyText: task.draftSummary ?? '',
-        ),
-      );
       historyCtrl.addTempUploadSession(
         VideoSummarySessionSnapshot(
           flowSnapshot: snapshot,

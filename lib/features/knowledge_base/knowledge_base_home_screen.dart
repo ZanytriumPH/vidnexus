@@ -61,7 +61,7 @@ class _KnowledgeBaseHomeScreenState
                       Text(
                         '我的知识库',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontSize: 15,
+                          fontSize: 18,
                           fontWeight: FontWeight.w800,
                           color: AppColors.textPrimary,
                         ),
