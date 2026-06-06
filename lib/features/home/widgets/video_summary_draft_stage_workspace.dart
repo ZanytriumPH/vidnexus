@@ -22,6 +22,7 @@ class DraftStageWorkspace extends StatelessWidget {
     required this.onUploadCardPressed,
     required this.onDraftEditModeChanged,
     required this.onGenerateFinalPressed,
+    this.onVideoPlayback,
     super.key,
   });
 
@@ -35,6 +36,7 @@ class DraftStageWorkspace extends StatelessWidget {
   final VoidCallback onUploadCardPressed;
   final ValueChanged<bool> onDraftEditModeChanged;
   final VoidCallback? onGenerateFinalPressed;
+  final VoidCallback? onVideoPlayback;
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +51,7 @@ class DraftStageWorkspace extends StatelessWidget {
             processingSnapshot: null,
             processingExpanded: false,
             onTap: onUploadCardPressed,
+            onVideoPlayback: onVideoPlayback,
           ),
           const SizedBox(height: 12),
           DraftBodyCard(

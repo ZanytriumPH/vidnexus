@@ -74,7 +74,7 @@ class ReadyStageWorkspace extends StatelessWidget {
                 const SizedBox(height: 12),
                 ReadyPrimaryButton(
                   label: isUploading
-                      ? '正在上传视频...'
+                      ? (uploadProgress >= 1.0 ? '正在处理视频...' : '正在上传视频...')
                       : (isGenerating
                           ? '正在生成中...'
                           : (highlighted ? '开始生成初稿' : '请先上传视频')),
@@ -116,7 +116,7 @@ class ReadyStageWorkspace extends StatelessWidget {
         const SizedBox(height: 24),
         ReadyPrimaryButton(
           label: isUploading
-              ? '正在上传视频...'
+              ? (uploadProgress >= 1.0 ? '正在处理视频...' : '正在上传视频...')
               : (isGenerating
                   ? '正在生成中...'
                   : (highlighted ? '开始生成初稿' : '请先上传视频')),

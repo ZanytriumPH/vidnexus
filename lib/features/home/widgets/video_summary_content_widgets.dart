@@ -40,6 +40,10 @@ class VideoSummaryWorkspace extends StatelessWidget {
     required this.onTimestampRangeChanged,
     required this.isUploading,
     required this.uploadProgress,
+    this.finalDraftProgressMessage,
+    this.onAddToKbPressed,
+    this.onVideoPlayback,
+    this.onRefreshPressed,
     super.key,
   });
 
@@ -73,6 +77,10 @@ class VideoSummaryWorkspace extends StatelessWidget {
   final ValueChanged<TimestampRangeSelection> onTimestampRangeChanged;
   final bool isUploading;
   final double uploadProgress;
+  final String? finalDraftProgressMessage;
+  final VoidCallback? onAddToKbPressed;
+  final VoidCallback? onVideoPlayback;
+  final VoidCallback? onRefreshPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +102,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
           processingSnapshot: processingSnapshot!,
           processingExpanded: processingExpanded,
           onProcessingCardPressed: onProcessingCardPressed,
+          onRefreshPressed: onRefreshPressed,
         ),
       VideoSummaryStage.draft when draftResult != null => DraftStageWorkspace(
         highlighted: highlighted,
@@ -106,12 +115,13 @@ class VideoSummaryWorkspace extends StatelessWidget {
         onUploadCardPressed: onUploadCardPressed,
         onDraftEditModeChanged: onDraftEditModeChanged,
         onGenerateFinalPressed: onGenerateFinalPressed,
+        onVideoPlayback: onVideoPlayback,
       ),
-      VideoSummaryStage.finalChat when finalSummaryData != null =>
+      VideoSummaryStage.finalChat when finalSummaryData != null || isGenerating =>
         FinalChatStageWorkspace(
           highlighted: highlighted,
           videoAsset: videoAsset,
-          finalSummaryData: finalSummaryData!,
+          finalSummaryData: finalSummaryData,
           chatMessages: chatMessages,
           chatController: chatController,
           isSendingChat: isSendingChat,
@@ -124,6 +134,10 @@ class VideoSummaryWorkspace extends StatelessWidget {
           onSendChatPressed: onSendChatPressed,
           onTimestampScopeChanged: onTimestampScopeChanged,
           onTimestampRangeChanged: onTimestampRangeChanged,
+          onAddToKbPressed: onAddToKbPressed,
+          onVideoPlayback: onVideoPlayback,
+          isGenerating: isGenerating,
+          finalDraftProgressMessage: finalDraftProgressMessage,
         ),
       _ => const SizedBox.shrink(),
     };

@@ -20,7 +20,7 @@ class AppUserAvatarButton extends ConsumerWidget {
       final initial = username.isNotEmpty ? username[0].toUpperCase() : '?';
 
       return GestureDetector(
-        onTap: () => _showUserMenu(context, ref),
+        onTap: () => _confirmLogout(context, ref),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -68,57 +68,42 @@ class AppUserAvatarButton extends ConsumerWidget {
     );
   }
 
-  void _showUserMenu(BuildContext context, WidgetRef ref) {
-    _showSharedUserMenu(context, ref);
+}
+
+/// 退出登录确认对话框（供 AppUserAvatarButton 使用）。
+Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      title: const Text('退出登录'),
+      content: const Text('确定要退出当前账号吗？'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('取消'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          style: TextButton.styleFrom(foregroundColor: const Color(0xFFDC2626)),
+          child: const Text('退出'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmed == true && context.mounted) {
+    await ref.read(authControllerProvider.notifier).logout();
   }
 }
 
-/// 用户菜单弹出（供 AppUserAvatarButton 和 AppDrawerUserTile 共享）。
-void _showSharedUserMenu(BuildContext context, WidgetRef ref) {
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.white,
-    showDragHandle: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (context) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '账号',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.logout_rounded),
-                title: const Text('退出登录'),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  ref.read(authControllerProvider.notifier).logout();
-                },
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
-}
-
 /// 侧边栏版用户区（尺寸略大，带背景）。
+/// 点击后触发 [onTap] 回调，由父组件决定行为（如打开设置）。
 class AppDrawerUserTile extends ConsumerWidget {
-  const AppDrawerUserTile({super.key});
+  const AppDrawerUserTile({this.onTap, super.key});
+
+  /// 点击回调，由父组件（抽屉）注入设置页导航等行为。
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -129,7 +114,7 @@ class AppDrawerUserTile extends ConsumerWidget {
       final initial = username.isNotEmpty ? username[0].toUpperCase() : '?';
 
       return InkWell(
-        onTap: () => _showSharedUserMenu(context, ref),
+        onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Container(
           height: 52,
@@ -168,7 +153,7 @@ class AppDrawerUserTile extends ConsumerWidget {
                           ),
                     ),
                     Text(
-                      '查看账号',
+                      '设置',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             fontSize: 10,
                             color: AppColors.textSecondary,
@@ -178,7 +163,7 @@ class AppDrawerUserTile extends ConsumerWidget {
                 ),
               ),
               const Icon(
-                Icons.chevron_right_rounded,
+                Icons.settings_outlined,
                 size: 18,
                 color: AppColors.textSecondary,
               ),

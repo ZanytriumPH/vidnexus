@@ -8,7 +8,11 @@ import 'http_video_summary_repository.dart';
 import 'video_summary_models.dart';
 
 /// 默认视频 ID（后续由上传/选择视频时动态设置）。
-const String _defaultVideoId = 'vid_default';
+const String defaultVideoId = 'vid_default';
+
+/// 当前视频 ID，独立于 repository provider，避免 defaultKbidProvider 解析时
+/// repository 重建导致 videoId 被重置为 [defaultVideoId]。
+final currentVideoIdProvider = StateProvider<String>((ref) => defaultVideoId);
 
 /// 获取当前用户的默认知识库 ID（不存在则自动创建）。
 final defaultKbidProvider = FutureProvider<String>((ref) async {
@@ -37,12 +41,15 @@ final videoSummaryRepositoryProvider = Provider<VideoSummaryRepository>((ref) {
   final kbidAsync = ref.watch(defaultKbidProvider);
   final kbid = kbidAsync.valueOrNull ?? '';
 
+  // 从独立 provider 读取 videoId，不受 repository 重建影响
+  final videoId = ref.watch(currentVideoIdProvider);
+
   return HttpVideoSummaryRepository(
     taskService: ref.watch(taskServiceProvider),
     videoQAService: ref.watch(videoQAServiceProvider),
     wsClient: ref.watch(wsClientProvider),
     kbid: kbid,
-    videoId: _defaultVideoId,
+    videoId: videoId,
   );
 });
 
@@ -77,6 +84,17 @@ abstract class VideoSummaryRepository {
     required String timestamp,
     int? windowSeconds,
   });
+
+  /// 查询单个任务的状态，用于会话恢复时判断后台任务是否已完成。
+  Future<VideoSummaryTaskInfo?> getTaskStatus(String taskId);
+
+  /// 恢复对已有任务的 WebSocket 进度监听（不创建新任务）。
+  /// 用于 Phase 1 切回时重新接收实时 WS 进度推送。
+  Stream<VideoSummaryProcessingData> resumeTaskProgress(String taskId);
+
+  /// 恢复对已有任务的终稿生成监听（不重新调用 approveAndFinalize）。
+  /// 用于 Phase 2 切回时重新等待 WS completed 事件。
+  Future<VideoSummaryFinalResultData> resumeFinalGeneration(String taskId);
 
   void updateVideoId(String newId);
   void updateKbid(String newId);

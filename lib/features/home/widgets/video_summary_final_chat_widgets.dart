@@ -1,45 +1,69 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_buttons.dart';
+import '../../../app/widgets/app_typing_indicator.dart';
 import '../../../app/widgets/composer_attachment_button.dart';
+import '../../../services/service_providers.dart';
+import '../../knowledge_base/application/knowledge_base_controller.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
 import 'timestamp_interval_picker_sheet.dart';
 import 'video_summary_markdown_body.dart';
 
 class ChatThread extends StatelessWidget {
-  const ChatThread({required this.summary, required this.messages, super.key});
+  const ChatThread({
+    required this.summary,
+    required this.messages,
+    this.onAddToKbPressed,
+    this.isWaiting = false,
+    super.key,
+  });
 
   final FinalSummaryData summary;
   final List<ChatMessage> messages;
+  final VoidCallback? onAddToKbPressed;
+  final bool isWaiting;
 
   @override
   Widget build(BuildContext context) {
     final messageStyles = context.appMessageStyles;
+    // 空系统消息不渲染（此时 typing indicator 正在展示）
+    final visibleMessages = messages.where((m) =>
+        m.sender == SummaryChatSender.user || m.text.isNotEmpty);
 
     return Column(
       children: [
         Padding(
           padding: EdgeInsets.only(bottom: messageStyles.messageSpacing),
-          child: _FinalSummaryBubble(summary: summary),
+          child: _FinalSummaryBubble(
+            summary: summary,
+            onAddToKbPressed: onAddToKbPressed,
+          ),
         ),
-        ...messages.map(
+        ...visibleMessages.map(
           (message) => Padding(
             padding: EdgeInsets.only(bottom: messageStyles.messageSpacing),
             child: _SummaryChatBubble(message: message),
           ),
         ),
+        if (isWaiting)
+          const AppTypingIndicator(),
       ],
     );
   }
 }
 
 class _FinalSummaryBubble extends StatelessWidget {
-  const _FinalSummaryBubble({required this.summary});
+  const _FinalSummaryBubble({
+    required this.summary,
+    this.onAddToKbPressed,
+  });
 
   final FinalSummaryData summary;
+  final VoidCallback? onAddToKbPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -77,13 +101,10 @@ class _FinalSummaryBubble extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              const ActionIconButton(icon: Icons.copy_all_outlined),
-              const SizedBox(width: 6),
-              const ActionIconButton(icon: Icons.note_alt_outlined),
-              const SizedBox(width: 6),
-              const ActionIconButton(icon: Icons.image_outlined),
-              const SizedBox(width: 6),
-              const ActionIconButton(icon: Icons.photo_outlined),
+              if (onAddToKbPressed != null) ...[
+                _AddToKbButton(onPressed: onAddToKbPressed),
+                const SizedBox(width: 6),
+              ],
             ],
           ),
           SizedBox(height: messageStyles.messageSpacing),
@@ -159,46 +180,164 @@ class _SummaryChatBubbleBody extends StatelessWidget {
             ),
           ),
         ],
+        if (message.citations != null && message.citations!.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _VideoCitationSection(citations: message.citations!),
+        ],
       ],
     );
   }
 }
 
-class MessageActionRow extends StatelessWidget {
-  const MessageActionRow({super.key});
+class _VideoCitationSection extends StatefulWidget {
+  const _VideoCitationSection({required this.citations});
+
+  final List<ChatMessageCitation> citations;
+
+  @override
+  State<_VideoCitationSection> createState() => _VideoCitationSectionState();
+}
+
+class _VideoCitationSectionState extends State<_VideoCitationSection> {
+  bool _isExpanded = false;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: const [
-        ActionIconButton(icon: Icons.copy_all_outlined),
-        SizedBox(width: 6),
-        ActionIconButton(icon: Icons.note_alt_outlined),
-        SizedBox(width: 6),
-        ActionIconButton(icon: Icons.image_outlined),
-        SizedBox(width: 6),
-        ActionIconButton(icon: Icons.photo_outlined),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _isExpanded = !_isExpanded),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              children: [
+                Text(
+                  '参考来源 (${widget.citations.length})',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textHint,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                AnimatedRotation(
+                  turns: _isExpanded ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 14,
+                    color: AppColors.textHint,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedCrossFade(
+          firstChild: const SizedBox.shrink(),
+          secondChild: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Column(
+              children: widget.citations
+                  .map((citation) => _VideoCitationRow(citation: citation))
+                  .toList(),
+            ),
+          ),
+          crossFadeState: _isExpanded
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          duration: const Duration(milliseconds: 200),
+        ),
       ],
     );
   }
 }
 
-class ActionIconButton extends StatelessWidget {
-  const ActionIconButton({required this.icon, super.key});
+class _VideoCitationRow extends StatelessWidget {
+  const _VideoCitationRow({required this.citation});
 
-  final IconData icon;
+  final ChatMessageCitation citation;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 22,
-      height: 22,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFD7DFE7)),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.format_quote_rounded,
+            size: 14,
+            color: AppColors.textHint,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              citation.quote,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontStyle: FontStyle.italic,
+                color: AppColors.textSecondary,
+                height: 1.3,
+              ),
+            ),
+          ),
+          if (citation.timeRange != null) ...[
+            const SizedBox(width: 6),
+            Text(
+              citation.timeRange!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 10,
+                color: AppColors.textHint,
+              ),
+            ),
+          ],
+        ],
       ),
-      child: Icon(icon, size: 13, color: AppColors.textSecondary),
+    );
+  }
+}
+
+class _AddToKbButton extends StatelessWidget {
+  const _AddToKbButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE7F0FF),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFBFD1FF)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(
+              Icons.library_books_rounded,
+              size: 15,
+              color: Color(0xFF275FD8),
+            ),
+            SizedBox(width: 5),
+            Text(
+              '加入知识库',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF275FD8),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -513,3 +652,369 @@ class _TimestampActionTile extends StatelessWidget {
 }
 
 enum _TimestampAction { edit, disable }
+
+/// 弹出知识库选择底部弹窗，用户选择后将当前视频加入对应知识库。
+Future<void> showAddToKnowledgeBaseSheet({
+  required BuildContext context,
+  required WidgetRef ref,
+  required String videoId,
+}) async {
+  final librariesAsync = ref.read(libraryListControllerProvider);
+
+  // 确保知识库列表已加载
+  if (librariesAsync.libraries.isEmpty && !librariesAsync.isLoading) {
+    ref.read(libraryListControllerProvider.notifier).refresh();
+  }
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    showDragHandle: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (sheetContext) {
+      return _AddToKnowledgeBaseSheet(
+        ref: ref,
+        videoId: videoId,
+      );
+    },
+  );
+}
+
+class _AddToKnowledgeBaseSheet extends ConsumerStatefulWidget {
+  const _AddToKnowledgeBaseSheet({
+    required this.ref,
+    required this.videoId,
+  });
+
+  final WidgetRef ref;
+  final String videoId;
+
+  @override
+  ConsumerState<_AddToKnowledgeBaseSheet> createState() =>
+      _AddToKnowledgeBaseSheetState();
+}
+
+class _AddToKnowledgeBaseSheetState
+    extends ConsumerState<_AddToKnowledgeBaseSheet> {
+  bool _isCreating = false;
+
+  Future<void> _createAndBind(BuildContext context) async {
+    final nameController = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('新建知识库'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(hintText: '知识库名称'),
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) => Navigator.pop(ctx, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, nameController.text.trim()),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+
+    if (name == null || name.isEmpty || !mounted) return;
+
+    setState(() => _isCreating = true);
+
+    try {
+      final controller = ref.read(libraryListControllerProvider.notifier);
+      final newLibrary = await controller.createLibrary(name: name);
+      if (newLibrary == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('创建知识库失败，请重试')),
+        );
+        return;
+      }
+
+      final kbService = ref.read(knowledgeBaseServiceProvider);
+      await kbService.bindVideo(kbid: newLibrary.id, videoId: widget.videoId);
+
+      if (!mounted) return;
+      final navigator = Navigator.of(context);
+      final messenger = ScaffoldMessenger.of(context);
+      navigator.pop(); // 关闭选择 sheet
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('已创建「$name」并加入'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('操作失败：$e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = _KbSheetStrings.of(context);
+    final librariesState = ref.watch(libraryListControllerProvider);
+    final kbService = ref.watch(knowledgeBaseServiceProvider);
+
+    return SafeArea(
+      top: false,
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.5,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              // 新建知识库 — 固定置顶
+              _NewKbTile(
+                isLoading: _isCreating,
+                onTap: _isCreating ? null : () => _createAndBind(context),
+              ),
+              const SizedBox(height: 8),
+              // 知识库列表 — 可滚动
+              if (librariesState.isLoading)
+                const Expanded(
+                  child: Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else if (librariesState.libraries.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      l10n.emptyHint,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textHint,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView(
+                    children: librariesState.libraries
+                        .where((l) => l.title != '默认知识库')
+                        .map(
+                      (library) => _KnowledgeBaseTile(
+                        title: library.title,
+                        meta: library.meta,
+                        onTap: () async {
+                          Navigator.of(context).pop();
+                          try {
+                            await kbService.bindVideo(
+                              kbid: library.id,
+                              videoId: widget.videoId,
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.success(library.title)),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.failure(e.toString())),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ).toList(),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 新建知识库条目，固定在列表顶部。
+class _NewKbTile extends StatelessWidget {
+  const _NewKbTile({required this.isLoading, this.onTap});
+
+  final bool isLoading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F4FF),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFD0DAF0),
+            strokeAlign: BorderSide.strokeAlignInside,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE0E8F8),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: Padding(
+                        padding: EdgeInsets.all(7),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF5B7EC2),
+                        ),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.add_rounded,
+                      size: 18,
+                      color: Color(0xFF5B7EC2),
+                    ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              '新建知识库',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF3B5FA0),
+              ),
+            ),
+            const Spacer(),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: Color(0xFF8FA8D0),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KnowledgeBaseTile extends StatelessWidget {
+  const _KnowledgeBaseTile({
+    required this.title,
+    required this.meta,
+    required this.onTap,
+  });
+
+  final String title;
+  final String meta;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F9FC),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFD7DFE7)),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.library_books_outlined,
+                size: 20,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        meta,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 11,
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: AppColors.textSecondary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 简单本地化字符串封装，避免散写中文。
+class _KbSheetStrings {
+  const _KbSheetStrings._();
+
+  static _KbSheetStrings of(BuildContext context) =>
+      const _KbSheetStrings._();
+
+  String get title => '加入知识库';
+  String get emptyHint => '暂无知识库，请先创建';
+  String success(String kbName) => '已加入知识库「$kbName」';
+  String failure(String error) => '加入失败：$error';
+}

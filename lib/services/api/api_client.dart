@@ -94,6 +94,7 @@ class ApiClient {
   static Future<void> updateBaseUrl(String url) async {
     final dio = instance;
     dio.options.baseUrl = url;
+    _config.setBaseUrlOverride(url);
     await _config.persistBaseUrl(url);
   }
 
@@ -102,6 +103,7 @@ class ApiClient {
     final url = await _config.baseUrl;
     final dio = instance;
     dio.options.baseUrl = url;
+    _config.setBaseUrlOverride(url);
   }
 
   /// 生成请求追踪 ID。

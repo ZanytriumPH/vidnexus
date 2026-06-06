@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/widgets/app_card.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
+import 'streamlit_progress_card.dart';
 import 'video_summary_processing_widgets.dart';
 
 class ProcessingStageWorkspace extends StatelessWidget {
@@ -12,6 +13,7 @@ class ProcessingStageWorkspace extends StatelessWidget {
     required this.processingSnapshot,
     required this.processingExpanded,
     required this.onProcessingCardPressed,
+    this.onRefreshPressed,
     super.key,
   });
 
@@ -20,6 +22,7 @@ class ProcessingStageWorkspace extends StatelessWidget {
   final ProcessingSnapshot processingSnapshot;
   final bool processingExpanded;
   final VoidCallback onProcessingCardPressed;
+  final VoidCallback? onRefreshPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -57,14 +60,16 @@ class ProcessingStageWorkspace extends StatelessWidget {
                 );
               },
               child: processingExpanded
-                  ? ProcessingDetailCard(
+                  ? StreamlitProgressCard(
                       key: const ValueKey('expanded'),
                       snapshot: processingSnapshot,
                       onTap: onProcessingCardPressed,
+                      onRefresh: onRefreshPressed,
                     )
                   : ProcessingCollapsedHintCard(
                       key: const ValueKey('collapsed'),
                       onTap: onProcessingCardPressed,
+                      onRefresh: onRefreshPressed,
                     ),
             ),
           ),

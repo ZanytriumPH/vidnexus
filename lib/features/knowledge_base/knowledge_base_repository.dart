@@ -36,4 +36,10 @@ abstract class KnowledgeBaseRepository {
 
   /// 获取知识库下的视频来源列表。
   Future<List<KnowledgeSourceItem>> listSources(String kbid);
+
+  /// 向知识库绑定视频。
+  Future<void> bindVideo({required String kbid, required String videoId});
+
+  /// 从知识库中移除视频来源。
+  Future<void> deleteSource({required String kbid, required String sourceId});
 }

@@ -14,7 +14,10 @@ class HeroCard extends StatelessWidget {
     required this.processingExpanded,
     this.isUploading = false,
     this.uploadProgress = 0.0,
+    this.isFinalGenerating = false,
+    this.finalDraftProgressMessage,
     this.onTap,
+    this.onVideoPlayback,
     super.key,
   });
 
@@ -25,7 +28,10 @@ class HeroCard extends StatelessWidget {
   final bool processingExpanded;
   final bool isUploading;
   final double uploadProgress;
+  final bool isFinalGenerating;
+  final String? finalDraftProgressMessage;
   final VoidCallback? onTap;
+  final VoidCallback? onVideoPlayback;
 
   @override
   Widget build(BuildContext context) {
@@ -44,25 +50,32 @@ class HeroCard extends StatelessWidget {
     final bool isDraft = stage == VideoSummaryStage.draft;
     final bool isFinal = stage == VideoSummaryStage.finalChat;
     final bool disableTapOverlay = isDraft || isFinal;
-    final String pillLabel = switch (stage) {
-      VideoSummaryStage.ready => '本地上传',
-      VideoSummaryStage.processing => processingSnapshot?.statusLabel ?? '处理中',
-      VideoSummaryStage.draft => '处理已完成',
-      VideoSummaryStage.finalChat => '终稿已生成',
-    };
-    final String title = switch (stage) {
-      VideoSummaryStage.ready => '本地上传',
-      VideoSummaryStage.processing => '正在生成结构化初稿',
-      VideoSummaryStage.draft => '初稿已生成，处理详情已自动折叠',
-      VideoSummaryStage.finalChat => '当前会话已切换为可追问对话窗口',
-    };
-    final String? subtitle = switch (stage) {
-      VideoSummaryStage.ready => '从设备选择文件',
-      VideoSummaryStage.processing =>
-        processingSnapshot?.etaLabel ?? '正在准备处理内容。',
-      VideoSummaryStage.draft => '你现在可以按需编辑初稿与补充终稿的总结指导。',
-      VideoSummaryStage.finalChat => null,
-    };
+    final String pillLabel = isFinalGenerating
+        ? '生成中'
+        : switch (stage) {
+            VideoSummaryStage.ready => '本地上传',
+            VideoSummaryStage.processing =>
+              processingSnapshot?.statusLabel ?? '处理中',
+            VideoSummaryStage.draft => '处理已完成',
+            VideoSummaryStage.finalChat => '终稿已生成',
+          };
+    final String title = isFinalGenerating
+        ? '最终稿生成中...'
+        : switch (stage) {
+            VideoSummaryStage.ready => '本地上传',
+            VideoSummaryStage.processing => '正在生成结构化初稿',
+            VideoSummaryStage.draft => '初稿已生成，处理详情已自动折叠',
+            VideoSummaryStage.finalChat => '当前会话已切换为可追问对话窗口',
+          };
+    final String? subtitle = isFinalGenerating
+        ? (finalDraftProgressMessage ?? '正在提交审批...')
+        : switch (stage) {
+            VideoSummaryStage.ready => '从设备选择文件',
+            VideoSummaryStage.processing =>
+              processingSnapshot?.etaLabel ?? '正在准备处理内容。',
+            VideoSummaryStage.draft => '你现在可以按需编辑初稿与补充终稿的总结指导。',
+            VideoSummaryStage.finalChat => null,
+          };
 
     return AppCard(
       radius: 18,
@@ -96,7 +109,7 @@ class HeroCard extends StatelessWidget {
               Text(
                 title,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: AppColors.textPrimary,
                 ),
@@ -106,7 +119,7 @@ class HeroCard extends StatelessWidget {
                 Text(
                   subtitle,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 10,
+                    fontSize: 12,
                     color: const Color(0xFF384A59),
                     fontWeight: FontWeight.w600,
                     height: 1.45,
@@ -119,7 +132,7 @@ class HeroCard extends StatelessWidget {
                   '${videoAsset.fileName} · ${videoAsset.durationLabel}',
                   softWrap: true,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 10,
+                    fontSize: 12,
                     color: const Color(0xFF51606D),
                   ),
                 ),
@@ -134,10 +147,11 @@ class HeroCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    AnimatedPercentLabel(
-                      value: processingSnapshot!.progress * 100,
+                    Text(
+                      '${(processingSnapshot!.progress * 100).round()}%',
+                      textAlign: TextAlign.left,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontSize: 16,
+                        fontSize: 18,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -145,9 +159,10 @@ class HeroCard extends StatelessWidget {
                 ),
               ],
               if (isDraft || isFinal)
-                const WhiteButtonBar(
+                WhiteButtonBar(
                   label: '视频回放',
                   leadingIcon: Icons.play_arrow_rounded,
+                  onTap: onVideoPlayback,
                 ),
             ],
           ),
@@ -261,7 +276,9 @@ class _ReadyUploadCallout extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                '正在上传: ${(uploadProgress * 100).toStringAsFixed(0)}%',
+                uploadProgress >= 1.0
+                    ? '正在处理视频，请稍候...'
+                    : '正在上传: ${(uploadProgress * 100).toStringAsFixed(0)}%',
                 textAlign: TextAlign.left,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: 13,
@@ -309,7 +326,7 @@ class StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 28,
+      height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: const Color(0xFFF7FCFF),
@@ -319,7 +336,7 @@ class StatusPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
         ),
@@ -332,151 +349,58 @@ class WhiteButtonBar extends StatelessWidget {
   const WhiteButtonBar({
     required this.label,
     required this.leadingIcon,
+    this.onTap,
     super.key,
   });
 
   final String label;
   final IconData leadingIcon;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 36,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD4DCE5)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(leadingIcon, size: 18, color: AppColors.textPrimary),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
+        child: Container(
+          height: 36,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFD4DCE5)),
           ),
-        ],
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(leadingIcon, size: 20, color: AppColors.textPrimary),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
 
-class ProcessingDetailCard extends StatelessWidget {
-  const ProcessingDetailCard({
-    required this.snapshot,
-    this.onTap,
-    super.key,
-  });
-
-  final ProcessingSnapshot snapshot;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-          Row(
-            children: [
-              Text(
-                '详细处理信息',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF2F4F7),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '点击收起',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '展开后显示实时任务进度',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 11,
-              color: AppColors.textHint,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...snapshot.steps.map(
-            (step) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: ProcessingStepTile(step: step),
-            ),
-          ),
-          Container(
-            height: 54,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF7F8FA),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: const BoxDecoration(
-                    color: Colors.black,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.arrow_forward_rounded,
-                    color: Colors.white,
-                    size: 14,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '完成后自动进入总结初稿页\n后续可按需编辑初稿与补充终稿总结指导',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 11,
-                      color: AppColors.textPrimary,
-                      height: 1.3,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-  }
-}
-
 class ProcessingCollapsedHintCard extends StatelessWidget {
-  const ProcessingCollapsedHintCard({this.onTap, super.key});
+  const ProcessingCollapsedHintCard({this.onTap, this.onRefresh, super.key});
 
   final VoidCallback? onTap;
+  final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -523,75 +447,28 @@ class ProcessingCollapsedHintCard extends StatelessWidget {
               ],
             ),
           ),
+          if (onRefresh != null) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: onRefresh,
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF2F4F7),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.refresh_rounded,
+                  size: 16,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     ),
   );
-  }
-}
-
-class ProcessingStepTile extends StatelessWidget {
-  const ProcessingStepTile({required this.step, super.key});
-
-  final ProcessingStep step;
-
-  @override
-  Widget build(BuildContext context) {
-    final progressValue = step.progress / 100;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F8FA),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  step.label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 48,
-                child: AnimatedPercentLabel(
-                  value: step.progress.toDouble(),
-                  textAlign: TextAlign.right,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          AnimatedProgressBar(
-            value: progressValue,
-            minHeight: 4,
-            backgroundColor: const Color(0xFFE3E9EF),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            step.detail,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 11,
-              color: AppColors.textSecondary,
-              height: 1.3,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -641,51 +518,6 @@ class AnimatedProgressBar extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class AnimatedPercentLabel extends ImplicitlyAnimatedWidget {
-  const AnimatedPercentLabel({
-    required this.value,
-    required this.style,
-    this.textAlign = TextAlign.left,
-    super.key,
-    super.curve = Curves.easeOutCubic,
-    super.duration = const Duration(milliseconds: 420),
-  });
-
-  final double value;
-  final TextStyle? style;
-  final TextAlign textAlign;
-
-  @override
-  ImplicitlyAnimatedWidgetState<AnimatedPercentLabel> createState() =>
-      _AnimatedPercentLabelState();
-}
-
-class _AnimatedPercentLabelState
-    extends ImplicitlyAnimatedWidgetState<AnimatedPercentLabel> {
-  Tween<double>? _valueTween;
-
-  @override
-  void forEachTween(TweenVisitor<dynamic> visitor) {
-    _valueTween = visitor(
-          _valueTween,
-          widget.value,
-          (dynamic value) => Tween<double>(begin: value as double),
-        )
-        as Tween<double>?;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final animatedValue = _valueTween?.evaluate(animation) ?? widget.value;
-
-    return Text(
-      '${animatedValue.round()}%',
-      textAlign: widget.textAlign,
-      style: widget.style,
     );
   }
 }

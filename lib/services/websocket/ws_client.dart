@@ -106,7 +106,9 @@ class WsClient {
         return;
       }
 
-      String wsUrl = '$baseUrl/ws/progress';
+      // /vapi → /vws（nginx 为 API 和 WebSocket 分配了不同前缀）
+      final wsBase = baseUrl.replaceFirst('/vapi', '/vws');
+      String wsUrl = '$wsBase/ws/progress';
       if (wsUrl.startsWith('https://')) {
         wsUrl = wsUrl.replaceFirst('https://', 'wss://');
       } else if (wsUrl.startsWith('http://')) {
@@ -120,6 +122,7 @@ class WsClient {
         },
       );
 
+      debugPrint('[WS] Connecting to: $uri');
       _channel = WebSocketChannel.connect(uri);
       _state = WsConnectionState.connected;
       _reconnectAttempts = 0;

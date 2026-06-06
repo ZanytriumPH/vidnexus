@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../services/models/common_dto.dart';
-import '../../services/polling/task_poller.dart'; // TaskFailedException
 import '../../services/task_service.dart';
 import '../../services/video_qa_service.dart';
 import '../../services/websocket/ws_client.dart';
 import '../../services/websocket/ws_models.dart';
 import '../../services/sse/sse_models.dart';
+import 'domain/chunk_progress_estimator.dart';
 import 'domain/video_summary_domain_models.dart';
 import 'video_summary_models.dart';
 import 'video_summary_repository.dart';
@@ -23,19 +23,15 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     required TaskService taskService,
     VideoQAService? videoQAService,
     required WsClient wsClient,
-    TaskPoller? taskPoller,
     required this.kbid,
     required this.videoId,
   })  : _taskService = taskService,
         _videoQAService = videoQAService,
-        _wsClient = wsClient,
-        _taskPoller = taskPoller ??
-            TaskPoller(taskService: taskService);
+        _wsClient = wsClient;
 
   final TaskService _taskService;
   final VideoQAService? _videoQAService;
   final WsClient _wsClient;
-  final TaskPoller _taskPoller;
 
   /// 当前知识库 ID。
   @override
@@ -52,6 +48,12 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
   /// 去重集合：记录已处理的 scopeId:sequence，防止 Redis 双通道重复推送。
   Set<String> _seenSequences = {};
+
+  /// 分片进度估算器：从 WS 单值 + 阶段推导 4 轨并行进度。
+  final ChunkProgressEstimator _estimator = ChunkProgressEstimator();
+
+  /// 状态日志缓冲区：保留最近 20 条后端消息。
+  final List<String> _statusLog = [];
 
   @override
   void updateVideoId(String newId) {
@@ -98,6 +100,206 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   }
 
   @override
+  Future<VideoSummaryTaskInfo?> getTaskStatus(String taskId) async {
+    try {
+      final resp = await _taskService.getTask(taskId);
+      final dto = resp.data;
+      if (dto == null) return null;
+      return VideoSummaryTaskInfo(
+        taskId: dto.taskId,
+        videoId: dto.videoId,
+        kbid: dto.kbid,
+        workflowState: WorkflowState.fromApi(dto.workflowState),
+        draftSummary: dto.draftSummary,
+        finalSummary: dto.finalSummary,
+        title: dto.title,
+        userInitialPreference: dto.userInitialPreference,
+      );
+    } catch (e) {
+      debugPrint('[HttpRepo] getTaskStatus 失败 — taskId=$taskId: $e');
+      return null;
+    }
+  }
+
+  @override
+  Stream<VideoSummaryProcessingData> resumeTaskProgress(String taskId) async* {
+    // 重置状态追踪器（和 startDraftGeneration 保持一致）
+    _lastProgress = 0.0;
+    _seenSequences = {};
+    _estimator.reset();
+    _statusLog.clear();
+    _taskId = taskId;
+
+    if (kDebugMode) {
+      debugPrint('[HttpRepo] resumeTaskProgress — 开始监听 WS 事件 taskId=$taskId');
+    }
+
+    // 订阅 WebSocket 事件（与 startDraftGeneration 相同的处理逻辑）
+    final wsStream = _wsClient.eventStream.where((env) =>
+        env.scope == WSScope.videoSummaryTask &&
+        env.scopeId == taskId);
+
+    final controller = StreamController<VideoSummaryProcessingData>();
+    StreamSubscription<WSEventEnvelope>? wsSubscription;
+
+    // 恢复场景的首事件超时缩短为 15s（并行轮询提供兜底）
+    Timer? firstEventTimeout;
+    firstEventTimeout = Timer(const Duration(seconds: 15), () {
+      if (!controller.isClosed) {
+        debugPrint('[HttpRepo] resumeTaskProgress — 首事件超时（15s）taskId=$taskId');
+        controller.addError(
+          TimeoutException('恢复进度监听超时，taskId=$taskId'),
+        );
+        controller.close();
+      }
+    });
+
+    Timer? totalTimeout;
+    const totalTimeoutDuration = Duration(seconds: 120);
+
+    wsSubscription = wsStream.listen(
+      (env) {
+        if (controller.isClosed) return;
+        if (env.eventType == WSEventType.reconnectAck) return;
+
+        final seqKey = '${env.scopeId}:${env.sequence}';
+        if (_seenSequences.contains(seqKey)) return;
+        _seenSequences.add(seqKey);
+        if (_seenSequences.length > 200) {
+          _seenSequences = _seenSequences.skip(100).toSet();
+        }
+
+        if (firstEventTimeout != null) {
+          firstEventTimeout!.cancel();
+          firstEventTimeout = null;
+          totalTimeout = Timer(totalTimeoutDuration, () {
+            if (!controller.isClosed) {
+              debugPrint('[HttpRepo] resumeTaskProgress — 总超时 taskId=$taskId');
+              controller.addError(
+                TimeoutException('任务处理超时（${totalTimeoutDuration.inSeconds}s），taskId=$taskId'),
+              );
+              controller.close();
+            }
+          });
+        }
+
+        if (env.eventType == WSEventType.error) {
+          debugPrint('[HttpRepo] resumeTaskProgress — error: ${env.message}');
+          controller.addError(TaskFailedException(taskId));
+          controller.close();
+          return;
+        }
+
+        if (env.eventType == WSEventType.completed) {
+          if (kDebugMode) {
+            debugPrint('[HttpRepo] resumeTaskProgress — completed taskId=$taskId');
+          }
+          final finalChunkProgress = _estimator.estimate(
+            wsProgress: 100,
+            wsMessage: env.message,
+            wsStageLabel: env.stage?.name,
+            substage: env.substage,
+            payload: env.payload,
+          );
+          controller.add(VideoSummaryProcessingData(
+            progress: 1.0,
+            currentMessage: env.message ?? '初稿生成完成',
+            chunkProgress: finalChunkProgress,
+            statusLog: List<String>.from(_statusLog),
+          ));
+          controller.close();
+          return;
+        }
+
+        final msg = env.message;
+        if (msg != null && msg.isNotEmpty && env.substage != 'chunk_processing') {
+          _statusLog.add(msg);
+          if (_statusLog.length > 20) _statusLog.removeAt(0);
+        }
+
+        final chunkProgress = _estimator.estimate(
+          wsProgress: env.progress,
+          wsMessage: env.message,
+          wsStageLabel: env.stage?.name,
+          substage: env.substage,
+          payload: env.payload,
+        );
+
+        final progressVal = env.progress != null
+            ? env.progress! / 100.0
+            : _lastProgress;
+        _lastProgress = progressVal;
+
+        controller.add(VideoSummaryProcessingData(
+          progress: progressVal,
+          currentMessage: env.message ?? '',
+          chunkProgress: chunkProgress,
+          statusLog: List<String>.from(_statusLog),
+        ));
+
+        if (kDebugMode) {
+          debugPrint(
+            '[HttpRepo] WS进度(恢复) — stage=${env.stage?.name} '
+            'progress=${env.progress}% '
+            'displayProgress=${(progressVal * 100).toStringAsFixed(0)}% '
+            'msg=${env.message}',
+          );
+        }
+      },
+      onError: (e) {
+        debugPrint('[HttpRepo] resumeTaskProgress — WS error: $e');
+        if (!controller.isClosed) {
+          controller.addError(e);
+          controller.close();
+        }
+      },
+      onDone: () {
+        debugPrint('[HttpRepo] resumeTaskProgress — WS stream done taskId=$taskId');
+        if (!controller.isClosed) controller.close();
+      },
+    );
+
+    controller.onCancel = () {
+      firstEventTimeout?.cancel();
+      totalTimeout?.cancel();
+      wsSubscription?.cancel();
+    };
+
+    // 竞态窗口守护：WS 订阅已就绪，再次检查后端是否在订阅建立间隙已完成。
+    // 若已完成则直接推送 completion 事件，避免漏掉已发出的 completed 消息。
+    try {
+      final gapCheckResp = await _taskService.getTask(taskId);
+      final gapData = gapCheckResp.data;
+      if (!controller.isClosed &&
+          gapData != null &&
+          gapData.draftSummary != null &&
+          gapData.draftSummary!.isNotEmpty) {
+        if (kDebugMode) {
+          debugPrint('[HttpRepo] resumeTaskProgress — 竞态窗口守护：后端已有初稿，直接闭合');
+        }
+        final finalChunkProgress = _estimator.estimate(
+          wsProgress: 100,
+          wsMessage: '初稿已生成',
+          wsStageLabel: null,
+          substage: null,
+          payload: null,
+        );
+        controller.add(VideoSummaryProcessingData(
+          progress: 1.0,
+          currentMessage: '初稿已生成',
+          chunkProgress: finalChunkProgress,
+          statusLog: List<String>.from(_statusLog),
+        ));
+        controller.close();
+      }
+    } catch (_) {
+      // 守护检查失败不影响 WS 监听
+    }
+
+    yield* controller.stream;
+  }
+
+  @override
   VideoAssetInfo getVideoAsset() {
     // 同步方法，返回合法默认值；真实数据通过 fetchDraftResult 异步获取。
     // durationLabel 必须是 parseVideoSummaryDurationLabel 可解析的格式：
@@ -110,71 +312,6 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     );
   }
 
-  VideoSummaryProcessingStage _mapWSStage(WSStage? stage) {
-    if (stage == null) return VideoSummaryProcessingStage.acquiringVideo;
-    return switch (stage) {
-      WSStage.extraction => VideoSummaryProcessingStage.acquiringVideo,
-      WSStage.transcribing => VideoSummaryProcessingStage.transcribingAudio,
-      WSStage.extractingKeyframes => VideoSummaryProcessingStage.extractingFrames,
-      WSStage.ragRetrieval => VideoSummaryProcessingStage.dispatchingChunks,
-      WSStage.llmReasoning => VideoSummaryProcessingStage.analyzingAudioChunks,
-      WSStage.analysis => VideoSummaryProcessingStage.analyzingAudioChunks,
-      WSStage.synthesis => VideoSummaryProcessingStage.synthesizingChunks,
-      WSStage.cleanup => VideoSummaryProcessingStage.waitingHumanReview,
-    };
-  }
-
-  List<VideoSummaryProcessingStepData> _buildWSSteps(WSStage? stage, int progress) {
-    int preprocessProgress = 0;
-    int analysisProgress = 0;
-    int synthesisProgress = 0;
-
-    if (stage == null) {
-      preprocessProgress = progress;
-    } else {
-      switch (stage) {
-        case WSStage.extraction:
-        case WSStage.transcribing:
-        case WSStage.extractingKeyframes:
-          preprocessProgress = progress.clamp(0, 100);
-          break;
-        case WSStage.ragRetrieval:
-        case WSStage.llmReasoning:
-        case WSStage.analysis:
-          preprocessProgress = 100;
-          analysisProgress = progress.clamp(0, 100);
-          break;
-        case WSStage.synthesis:
-        case WSStage.cleanup:
-          preprocessProgress = 100;
-          analysisProgress = 100;
-          synthesisProgress = progress.clamp(0, 100);
-          break;
-      }
-    }
-
-    return [
-      VideoSummaryProcessingStepData(
-        phase: VideoSummaryProcessingPhase.preprocessing,
-        progress: preprocessProgress,
-        completedUnits: preprocessProgress,
-        totalUnits: 100,
-      ),
-      VideoSummaryProcessingStepData(
-        phase: VideoSummaryProcessingPhase.analysis,
-        progress: analysisProgress,
-        completedUnits: analysisProgress,
-        totalUnits: 100,
-      ),
-      VideoSummaryProcessingStepData(
-        phase: VideoSummaryProcessingPhase.synthesis,
-        progress: synthesisProgress,
-        completedUnits: synthesisProgress,
-        totalUnits: 100,
-      ),
-    ];
-  }
-
   @override
   Stream<VideoSummaryProcessingData> startDraftGeneration({
     String? userInitialPreference,
@@ -182,6 +319,8 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     // 每次开始新任务时重置状态
     _lastProgress = 0.0;
     _seenSequences = {};
+    _estimator.reset();
+    _statusLog.clear();
 
     if (kDebugMode) {
       debugPrint(
@@ -217,6 +356,29 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       debugPrint('[HttpRepo] 任务已创建 — taskId=$_taskId state=${data.workflowState}');
     }
 
+    // 短路优化：后端已有初稿时（Phase-1 已完成），跳过 startAnalysis + WS，直接返回完成事件。
+    // 避免重复执行（旧行为 bug）和不必要的 60s WS 等待。
+    if (data.draftSummary != null && data.draftSummary!.isNotEmpty) {
+      if (kDebugMode) {
+        debugPrint('[HttpRepo] 后端已有初稿，跳过 WS 直接返回');
+      }
+      final shortcutController = StreamController<VideoSummaryProcessingData>();
+      shortcutController.add(const VideoSummaryProcessingData(
+        progress: 1.0,
+        currentMessage: '初稿已生成',
+        chunkProgress: VideoSummaryChunkProgressData(
+          stage: VideoSummaryChunkProgressStage.finished,
+          totalChunks: 1,
+          doneCount: 1,
+          overallPercent: 100,
+        ),
+        statusLog: [],
+      ));
+      shortcutController.close();
+      yield* shortcutController.stream;
+      return;
+    }
+
     // 2. 触发 Phase-1 分析工作流
     try {
       await _taskService.startAnalysis(_taskId!);
@@ -236,11 +398,12 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     final controller = StreamController<VideoSummaryProcessingData>();
     StreamSubscription<WSEventEnvelope>? wsSubscription;
 
-    // 首次事件超时：启动分析后 15 秒内必须收到第一条 WS 事件
+    // 首次事件超时：启动分析后 120 秒内必须收到第一条 WS 事件
+    // 给 Celery Worker 冷启动留足余量（见 docs/ws-events.md 场景 16）
     Timer? firstEventTimeout;
-    firstEventTimeout = Timer(const Duration(seconds: 15), () {
+    firstEventTimeout = Timer(const Duration(seconds: 120), () {
       if (!controller.isClosed) {
-        debugPrint('[HttpRepo] WebSocket 首事件超时（15s 内未收到任何进度消息）');
+        debugPrint('[HttpRepo] WebSocket 首事件超时（120s 内未收到任何进度消息）');
         controller.addError(
           TimeoutException('任务启动超时，未收到后端进度反馈，taskId=$taskId'),
         );
@@ -248,9 +411,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       }
     });
 
-    // 总超时计时器：第一个事件到达后 180 秒内未收到 completed/error 事件则超时
+    // 总超时计时器：第一个事件到达后 900 秒内未收到 completed/error 事件则超时
     Timer? totalTimeout;
-    const totalTimeoutDuration = Duration(seconds: 180);
+    const totalTimeoutDuration = Duration(seconds: 900);
 
     wsSubscription = wsStream.listen(
       (env) {
@@ -301,12 +464,19 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
           if (kDebugMode) {
             debugPrint('[HttpRepo] 收到 completed 事件 — taskId=$taskId');
           }
-          // 发送最终 100% 进度
+          // 驱动估算器到 100% 后取最终状态
+          final finalChunkProgress = _estimator.estimate(
+            wsProgress: 100,
+            wsMessage: env.message,
+            wsStageLabel: env.stage?.name,
+            substage: env.substage,
+            payload: env.payload,
+          );
           controller.add(VideoSummaryProcessingData(
             progress: 1.0,
-            currentStage: VideoSummaryProcessingStage.waitingHumanReview,
             currentMessage: env.message ?? '初稿生成完成',
-            steps: _buildWSSteps(WSStage.cleanup, 100),
+            chunkProgress: finalChunkProgress,
+            statusLog: List<String>.from(_statusLog),
           ));
           controller.close();
           return;
@@ -315,30 +485,47 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
         // progress / status_update 事件：
         // 后端仅在 [[PROGRESS]] 消息携带具体进度值，其余状态消息 progress=null。
         // 对于 progress=null 的消息：保持上次进度不变，仅更新阶段和文本。
-        final hasProgress = env.progress != null;
-        final progressVal = hasProgress
+
+        // ── 状态日志：非 chunk_processing 的消息追加到日志 ──
+        final msg = env.message;
+        if (msg != null &&
+            msg.isNotEmpty &&
+            env.substage != 'chunk_processing') {
+          _statusLog.add(msg);
+          if (_statusLog.length > 20) {
+            _statusLog.removeAt(0);
+          }
+        }
+
+        // ── 单轨分片进度（优先从 payload 读取）──
+        final chunkProgress = _estimator.estimate(
+          wsProgress: env.progress,
+          wsMessage: env.message,
+          wsStageLabel: env.stage?.name,
+          substage: env.substage,
+          payload: env.payload,
+        );
+
+        // env.progress 现在准确（旧后端始终为 0），直接使用。
+        // 对于纯文本状态消息（progress=null），保持上次值不变。
+        final progressVal = env.progress != null
             ? env.progress! / 100.0
-            : _lastProgress; // 保持上次进度，不回退到 0
+            : _lastProgress;
         _lastProgress = progressVal;
 
-        final currentStage = _mapWSStage(env.stage);
         final currentMessage = env.message ?? '';
-
-        // 严格使用后端下发的 stage + progress 构建步骤进度
-        final stepProgress = env.progress ?? (_lastProgress * 100).round();
-        final steps = _buildWSSteps(env.stage, stepProgress);
 
         controller.add(VideoSummaryProcessingData(
           progress: progressVal,
-          currentStage: currentStage,
           currentMessage: currentMessage,
-          steps: steps,
+          chunkProgress: chunkProgress,
+          statusLog: List<String>.from(_statusLog),
         ));
 
         if (kDebugMode) {
           debugPrint(
             '[HttpRepo] WS进度 — stage=${env.stage?.name} '
-            'hasProgress=$hasProgress progress=${env.progress}% '
+            'progress=${env.progress}% '
             'displayProgress=${(progressVal * 100).toStringAsFixed(0)}% '
             'msg=${env.message}',
           );
@@ -410,26 +597,58 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       draftSummary: draftParagraphs.join('\n\n'),
     );
 
-    try {
-      await _taskService.approveAndFinalize(
-        taskId,
-        editedAggregatedChunkInsights: draftParagraphs.join('\n\n'),
-        humanGuidance: guidance,
-      );
-      if (kDebugMode) {
-        debugPrint('[HttpRepo] 审批已提交 — taskId=$taskId');
-      }
-    } catch (e) {
-      debugPrint('[HttpRepo] approveAndFinalize 失败: $e');
+    await _taskService.approveAndFinalize(
+      taskId,
+      editedAggregatedChunkInsights: draftParagraphs.join('\n\n'),
+      humanGuidance: guidance,
+    );
+    if (kDebugMode) {
+      debugPrint('[HttpRepo] 审批已提交 — taskId=$taskId');
     }
 
-    // 2. 轮询等待终稿完成
-    try {
-      await for (final _ in _taskPoller.pollTask(taskId)) {
-        // 仅等待终态，不关心中间进度
+    // 2. 监听 WebSocket 等待终稿完成（后端在 workflow_state 变化时主动推送）
+    final wsStream = _wsClient.eventStream.where(
+      (env) => env.scope == WSScope.videoSummaryTask && env.scopeId == taskId,
+    );
+
+    final completer = Completer<void>();
+    StreamSubscription<WSEventEnvelope>? wsSubscription;
+    Timer? timeout;
+
+    wsSubscription = wsStream.listen(
+      (env) {
+        if (env.eventType == WSEventType.completed) {
+          if (kDebugMode) {
+            debugPrint('[HttpRepo] Phase-2 WS completed — taskId=$taskId');
+          }
+          if (!completer.isCompleted) completer.complete();
+        } else if (env.eventType == WSEventType.error) {
+          debugPrint('[HttpRepo] Phase-2 WS error — taskId=$taskId msg=${env.message}');
+          if (!completer.isCompleted) {
+            completer.completeError(TaskFailedException(taskId));
+          }
+        }
+      },
+      onError: (e) {
+        if (!completer.isCompleted) completer.completeError(e);
+      },
+    );
+
+    // 总超时与 Phase-1 一致：900s 内未收到 completed/error 则超时
+    timeout = Timer(const Duration(seconds: 900), () {
+      if (!completer.isCompleted) {
+        debugPrint('[HttpRepo] Phase-2 WS 超时（900s）— taskId=$taskId');
+        completer.completeError(
+          TimeoutException('终稿生成超时（900s），taskId=$taskId'),
+        );
       }
-    } on PollingTimeoutException {
-      // 超时但仍尝试获取最终结果
+    });
+
+    try {
+      await completer.future;
+    } finally {
+      wsSubscription.cancel();
+      timeout.cancel();
     }
 
     // 3. 获取最终任务数据
@@ -444,6 +663,95 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     return VideoSummaryFinalResultData(
       body: finalText,
       references: const [], // 引用来源由 Phase 5 QA 接口返回
+    );
+  }
+
+  @override
+  Future<VideoSummaryFinalResultData> resumeFinalGeneration(String taskId) async {
+    _taskId = taskId;
+
+    // 先检查任务是否已完成（短路优化 + 竞态窗口守护）
+    try {
+      final checkResp = await _taskService.getTask(taskId);
+      final checkData = checkResp.data;
+      if (checkData != null) {
+        final state = WorkflowState.fromApi(checkData.workflowState);
+        if (state == WorkflowState.completed) {
+          if (kDebugMode) {
+            debugPrint('[HttpRepo] resumeFinalGeneration — 后端已完成，直接获取数据');
+          }
+          final finalText = checkData.finalSummary ?? checkData.draftSummary ?? '';
+          return VideoSummaryFinalResultData(
+            body: finalText,
+            references: const [],
+          );
+        }
+      }
+    } catch (_) {
+      // 短路检查失败不影响后续 WS 监听
+    }
+
+    if (kDebugMode) {
+      debugPrint('[HttpRepo] resumeFinalGeneration — 开始监听 WS taskId=$taskId');
+    }
+
+    // 监听 WebSocket 等待终稿完成（与 generateFinalSummary 相同的 WS 逻辑，
+    // 但不调用 approveAndFinalize）
+    final wsStream = _wsClient.eventStream.where(
+      (env) => env.scope == WSScope.videoSummaryTask && env.scopeId == taskId,
+    );
+
+    final completer = Completer<void>();
+    StreamSubscription<WSEventEnvelope>? wsSubscription;
+    Timer? timeout;
+
+    wsSubscription = wsStream.listen(
+      (env) {
+        if (env.eventType == WSEventType.completed) {
+          if (kDebugMode) {
+            debugPrint('[HttpRepo] resumeFinalGeneration — WS completed taskId=$taskId');
+          }
+          if (!completer.isCompleted) completer.complete();
+        } else if (env.eventType == WSEventType.error) {
+          debugPrint('[HttpRepo] resumeFinalGeneration — WS error taskId=$taskId');
+          if (!completer.isCompleted) {
+            completer.completeError(TaskFailedException(taskId));
+          }
+        }
+      },
+      onError: (e) {
+        if (!completer.isCompleted) completer.completeError(e);
+      },
+    );
+
+    timeout = Timer(const Duration(seconds: 120), () {
+      if (!completer.isCompleted) {
+        debugPrint('[HttpRepo] resumeFinalGeneration — WS 超时（120s）taskId=$taskId');
+        completer.completeError(
+          TimeoutException('终稿生成超时（120s），taskId=$taskId'),
+        );
+      }
+    });
+
+    try {
+      await completer.future;
+    } finally {
+      wsSubscription.cancel();
+      timeout.cancel();
+    }
+
+    // 获取最终任务数据
+    final resp = await _taskService.getTask(taskId);
+    final dto = resp.data;
+    if (dto == null) {
+      throw StateError('Task $taskId not found after final generation');
+    }
+
+    final finalText = dto.finalSummary ?? dto.draftSummary ?? '';
+
+    return VideoSummaryFinalResultData(
+      body: finalText,
+      references: const [],
     );
   }
 
@@ -485,7 +793,10 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
           } else if (event.type == SSEEventType.done) {
             final done = event.parseData<TimeTravelQADoneData>(TimeTravelQADoneData.fromJson);
             if (done?.answerContent != null && done!.answerContent!.isNotEmpty) {
-              controller.add(VideoSummaryChatReplyData(text: done.answerContent!));
+              controller.add(VideoSummaryChatReplyData(
+                text: done.answerContent!,
+                citedSources: done.citedSources,
+              ));
             }
             controller.close();
           } else if (event.type == SSEEventType.error) {

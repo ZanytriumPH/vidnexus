@@ -28,3 +28,15 @@ class KnowledgeBaseSourcesRouteArguments {
 
   final String kbid;
 }
+
+class HomeRouteArguments {
+  const HomeRouteArguments({this.videoId, this.taskId});
+
+  /// 可选：从知识库来源页跳转时携带的视频 ID，
+  /// 首页会自动查找对应任务并恢复该视频的最终稿会话。
+  final String? videoId;
+
+  /// 可选：从知识库 cited_resources 点击时携带的任务 ID，
+  /// 首页会直接按 taskId 获取任务详情并恢复，无需 listTasks 全量匹配。
+  final String? taskId;
+}

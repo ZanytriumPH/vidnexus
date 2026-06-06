@@ -1,22 +1,6 @@
 import '../video_summary_models.dart';
 
 /// 这里只放 repository 可稳定返回的业务结果数据，不放界面展示结构。
-enum VideoSummaryProcessingPhase { preprocessing, analysis, synthesis }
-
-enum VideoSummaryProcessingStage {
-  acquiringVideo,
-  extractingAudio,
-  extractingFrames,
-  transcribingAudio,
-  bootingWorkflow,
-  planningChunks,
-  dispatchingChunks,
-  analyzingAudioChunks,
-  analyzingVisionChunks,
-  synthesizingChunks,
-  aggregatingChunks,
-  waitingHumanReview,
-}
 
 enum VideoSummaryChunkProgressStage { running, finished }
 
@@ -24,52 +8,70 @@ class VideoSummaryChunkProgressData {
   const VideoSummaryChunkProgressData({
     required this.stage,
     required this.totalChunks,
-    required this.audioDone,
-    required this.visionDone,
-    required this.synthesisDone,
-    required this.overallDone,
-    required this.overallTotal,
+    required this.doneCount,
     required this.overallPercent,
   });
 
   final VideoSummaryChunkProgressStage stage;
   final int totalChunks;
-  final int audioDone;
-  final int visionDone;
-  final int synthesisDone;
-  final int overallDone;
-  final int overallTotal;
+  final int doneCount;
   final int overallPercent;
-}
 
-class VideoSummaryProcessingStepData {
-  const VideoSummaryProcessingStepData({
-    required this.phase,
-    required this.progress,
-    required this.completedUnits,
-    required this.totalUnits,
-  });
-
-  final VideoSummaryProcessingPhase phase;
-  final int progress;
-  final int completedUnits;
-  final int totalUnits;
+  /// 从 WS 下发的 payload 直接构造（新后端单轨 honest 数据）。
+  ///
+  /// 后端 WebSocket payload 下发：
+  /// - total_chunks: 总分片数
+  /// - done_count: 已完成分片数
+  /// - overall_percent: 完成百分比 0-100
+  /// - stage: "running" | "finished"
+  factory VideoSummaryChunkProgressData.fromPayload(
+    Map<String, dynamic>? payload, {
+    int fallbackTotalChunks = 5,
+  }) {
+    if (payload == null || payload.isEmpty) {
+      return VideoSummaryChunkProgressData(
+        stage: VideoSummaryChunkProgressStage.running,
+        totalChunks: fallbackTotalChunks,
+        doneCount: 0,
+        overallPercent: 0,
+      );
+    }
+    final totalChunks =
+        (payload['total_chunks'] as int?) ?? fallbackTotalChunks;
+    final doneCount = (payload['done_count'] as int?) ?? 0;
+    final overallPercent = (payload['overall_percent'] as int?) ??
+        (totalChunks > 0 ? ((doneCount / totalChunks) * 100).round() : 0);
+    final stageStr = payload['stage'] as String?;
+    return VideoSummaryChunkProgressData(
+      stage: stageStr == 'finished'
+          ? VideoSummaryChunkProgressStage.finished
+          : VideoSummaryChunkProgressStage.running,
+      totalChunks: totalChunks,
+      doneCount: doneCount,
+      overallPercent: overallPercent,
+    );
+  }
 }
 
 class VideoSummaryProcessingData {
   const VideoSummaryProcessingData({
     required this.progress,
-    required this.currentStage,
     required this.currentMessage,
-    required this.steps,
     this.chunkProgress,
+    this.statusLog = const [],
   });
 
+  /// 整体进度 0.0–1.0，驱动 HeroCard 总体进度条。
   final double progress;
-  final VideoSummaryProcessingStage currentStage;
+
+  /// 当前后端状态消息，用于 eta 标签展示。
   final String currentMessage;
-  final List<VideoSummaryProcessingStepData> steps;
+
+  /// 单轨分片进度，用于 StreamlitProgressCard。
   final VideoSummaryChunkProgressData? chunkProgress;
+
+  /// 最近 N 条后端状态消息，用于分片面板底部的滚动日志。
+  final List<String> statusLog;
 }
 
 class VideoSummaryDraftData {
@@ -108,10 +110,15 @@ class VideoSummaryFinalResultData {
 }
 
 class VideoSummaryChatReplyData {
-  const VideoSummaryChatReplyData({required this.text, this.reference});
+  const VideoSummaryChatReplyData({
+    required this.text,
+    this.reference,
+    this.citedSources,
+  });
 
   final String text;
   final VideoSummaryReferenceRange? reference;
+  final List<Map<String, dynamic>>? citedSources;
 }
 
 // ──── Phase 3: 后端任务状态映射 ────
@@ -177,4 +184,14 @@ class VideoSummaryTaskInfo {
   final String? title;
   final String? fileName;
   final String? userInitialPreference;
+}
+
+/// 任务处理失败异常（workflow_state = FAILED）。
+class TaskFailedException implements Exception {
+  const TaskFailedException(this.taskId);
+
+  final String taskId;
+
+  @override
+  String toString() => 'Task $taskId failed on server';
 }

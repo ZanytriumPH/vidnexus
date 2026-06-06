@@ -10,13 +10,20 @@ import 'application/knowledge_base_controller.dart';
 import 'knowledge_base_models.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
 
-class KnowledgeBaseSourcesScreen extends ConsumerWidget {
+class KnowledgeBaseSourcesScreen extends ConsumerStatefulWidget {
   const KnowledgeBaseSourcesScreen({required this.kbid, super.key});
 
   final String kbid;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<KnowledgeBaseSourcesScreen> createState() =>
+      _KnowledgeBaseSourcesScreenState();
+}
+
+class _KnowledgeBaseSourcesScreenState
+    extends ConsumerState<KnowledgeBaseSourcesScreen> {
+  @override
+  Widget build(BuildContext context) {
     final library = ref.watch(selectedLibraryControllerProvider).selectedLibrary;
     final sources = library?.sources ?? [];
 
@@ -72,7 +79,10 @@ class KnowledgeBaseSourcesScreen extends ConsumerWidget {
                       ...sources.map(
                         (source) => Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: _KnowledgeSourceCard(source: source),
+                          child: _KnowledgeSourceCard(
+                            source: source,
+                            onDelete: () => _confirmDeleteSource(source),
+                          ),
                         ),
                       ),
                   ],
@@ -86,30 +96,64 @@ class KnowledgeBaseSourcesScreen extends ConsumerWidget {
   }
 
   void _openNewConversation(BuildContext context, WidgetRef ref) {
-    final libraryTitle = ref.read(selectedLibraryControllerProvider).selectedLibrary?.title ?? '';
+    final libraryTitle =
+        ref.read(selectedLibraryControllerProvider).selectedLibrary?.title ?? '';
     AppNavigator.openKnowledgeBaseChat(
       context,
-      kbid: kbid,
+      kbid: widget.kbid,
       initialConversation: buildEmptyKnowledgeConversation(
         libraryTitle: libraryTitle,
       ),
     );
   }
+
+  Future<void> _confirmDeleteSource(KnowledgeSourceItem source) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('移除来源'),
+        content: Text('确定要从知识库中移除"${source.title}"吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('移除', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      ref
+          .read(selectedLibraryControllerProvider.notifier)
+          .deleteSource(source.id);
+    }
+  }
 }
 
 class _KnowledgeSourceCard extends StatelessWidget {
-  const _KnowledgeSourceCard({required this.source});
+  const _KnowledgeSourceCard({required this.source, required this.onDelete});
 
   final KnowledgeSourceItem source;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      radius: 20,
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-      backgroundColor: Colors.white,
-      borderColor: AppColors.borderStrong,
-      child: Row(
+    return InkWell(
+      onTap: () => AppNavigator.goToHomeWithVideo(
+        context,
+        videoId: source.id,
+      ),
+      borderRadius: BorderRadius.circular(20),
+      child: AppCard(
+        radius: 20,
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        backgroundColor: Colors.white,
+        borderColor: AppColors.borderStrong,
+        child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
@@ -142,6 +186,8 @@ class _KnowledgeSourceCard extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -157,16 +203,15 @@ class _KnowledgeSourceCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            '×',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontSize: 22,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textPrimary,
+          InkWell(
+            onTap: onDelete,
+            borderRadius: BorderRadius.circular(14),
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.close, size: 22, color: AppColors.textHint),
             ),
           ),
         ],
-      ),
-    );
+      ),      ),    );
   }
 }

@@ -105,7 +105,7 @@ class _KnowledgeBaseSessionScreenState
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            '历史对话',
+                            '历史会话',
                             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
@@ -115,7 +115,7 @@ class _KnowledgeBaseSessionScreenState
                           const SizedBox(height: 10),
                           if (library.conversations.isEmpty)
                             Text(
-                              '暂无对话',
+                              '暂无会话',
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AppColors.textHint,
                               ),
@@ -164,20 +164,21 @@ class _KnowledgeBaseSessionScreenState
 
   void _startNewConversation() {
     final prompt = _composerController.text.trim();
-    if (prompt.isEmpty) {
-      return;
-    }
+    if (prompt.isEmpty) return;
 
     _composerController.clear();
     final chatService = ref.read(globalChatServiceProvider);
+    final controller = ref.read(selectedLibraryControllerProvider.notifier);
     final kbid = widget.kbid;
+    final nowLabel = _nowLabel();
 
-    // 先跳转到加载态，再异步创建真实会话
+    // 先用临时 ID 跳转到聊天页
+    final tempId = 'creating-${DateTime.now().millisecondsSinceEpoch}';
     final tempPreview = KnowledgeConversationPreview(
-      id: 'creating-${DateTime.now().millisecondsSinceEpoch}',
+      id: tempId,
       title: prompt,
       preview: '正在创建会话…',
-      dateLabel: '刚刚',
+      dateLabel: nowLabel,
       messages: [
         KnowledgeChatMessage(sender: KnowledgeChatSender.user, text: prompt),
         const KnowledgeChatMessage(
@@ -188,29 +189,32 @@ class _KnowledgeBaseSessionScreenState
     );
     _openConversation(tempPreview);
 
-    // 异步创建真实会话并通知 chat screen 刷新
-    chatService.createChat(kbid: kbid, chatTitle: prompt).then((resp) {
+    // 异步创建真实会话（title 限制 255 字符，换行替换为空格）
+    final safeTitle = _sanitizeChatTitle(prompt);
+    chatService.createChat(kbid: kbid, chatTitle: safeTitle).then((resp) {
       final chatId = resp.data?.chatId;
-      if (chatId != null && chatId.isNotEmpty && mounted) {
-        // chat screen 已通过 initialConversation.id 获取到临时 ID，
-        // 此处通过 Controller 通知更新 chatId 并自动触发首次 QA。
-        // 为简单起见，我们用 pushReplacement 替换路由。
-        final realConversation = KnowledgeConversationPreview(
-          id: chatId,
-          title: prompt,
-          preview: '新对话已创建，正在围绕这组资料继续追问。',
-          dateLabel: '刚刚',
-          messages: [
-            KnowledgeChatMessage(sender: KnowledgeChatSender.user, text: prompt),
-          ],
-        );
-        AppNavigator.popCurrent(context);
-        AppNavigator.openKnowledgeBaseChat(
-          context,
-          kbid: kbid,
-          initialConversation: realConversation,
-        );
-      }
+      if (chatId == null || chatId.isEmpty || !mounted) return;
+
+      final realConversation = KnowledgeConversationPreview(
+        id: chatId,
+        title: prompt,
+        preview: '新对话已创建，正在围绕库中资料进行回答。',
+        dateLabel: nowLabel,
+        messages: [
+          KnowledgeChatMessage(sender: KnowledgeChatSender.user, text: prompt),
+        ],
+      );
+
+      // ★ 立即插入到对话列表，用户返回时即可看到
+      controller.addConversation(realConversation);
+
+      // 替换路由为真实会话
+      AppNavigator.popCurrent(context);
+      AppNavigator.openKnowledgeBaseChat(
+        context,
+        kbid: kbid,
+        initialConversation: realConversation,
+      );
     }).catchError((_) {
       // 创建失败时 chat screen 仍显示临时状态，用户可重试
     });
@@ -218,7 +222,9 @@ class _KnowledgeBaseSessionScreenState
 
   void _startEmptyConversation() {
     final chatService = ref.read(globalChatServiceProvider);
+    final controller = ref.read(selectedLibraryControllerProvider.notifier);
     final kbid = widget.kbid;
+    final nowLabel = _nowLabel();
 
     final tempPreview = buildEmptyKnowledgeConversation(
       libraryTitle: ref.read(selectedLibraryControllerProvider).selectedLibrary?.title ?? '',
@@ -227,27 +233,46 @@ class _KnowledgeBaseSessionScreenState
 
     chatService.createChat(kbid: kbid, chatTitle: '新的会话').then((resp) {
       final chatId = resp.data?.chatId;
-      if (chatId != null && chatId.isNotEmpty && mounted) {
-        final realConversation = KnowledgeConversationPreview(
-          id: chatId,
-          title: '新的会话',
-          preview: '已进入新会话，可以直接围绕当前知识库继续提问。',
-          dateLabel: '刚刚',
-          messages: [
-            KnowledgeChatMessage(
-              sender: KnowledgeChatSender.system,
-              text: '已为"${ref.read(selectedLibraryControllerProvider).selectedLibrary?.title ?? ''}"新建会话。你可以直接提问，我会只基于当前知识库的资料继续回答。',
-            ),
-          ],
-        );
-        AppNavigator.popCurrent(context);
-        AppNavigator.openKnowledgeBaseChat(
-          context,
-          kbid: kbid,
-          initialConversation: realConversation,
-        );
-      }
+      if (chatId == null || chatId.isEmpty || !mounted) return;
+
+      final realConversation = KnowledgeConversationPreview(
+        id: chatId,
+        title: '新的会话',
+        preview: '已进入新会话，可以直接围绕当前知识库继续提问。',
+        dateLabel: nowLabel,
+        messages: [
+          KnowledgeChatMessage(
+            sender: KnowledgeChatSender.system,
+            text: '已为"${ref.read(selectedLibraryControllerProvider).selectedLibrary?.title ?? ''}"新建会话。你可以直接提问，我会只基于当前知识库的资料继续回答。',
+          ),
+        ],
+      );
+
+      // ★ 立即插入到对话列表
+      controller.addConversation(realConversation);
+
+      AppNavigator.popCurrent(context);
+      AppNavigator.openKnowledgeBaseChat(
+        context,
+        kbid: kbid,
+        initialConversation: realConversation,
+      );
     }).catchError((_) {});
+  }
+
+  /// 生成 "M月d日" 格式的时间标签（与后端 _buildDateLabel 一致）。
+  String _nowLabel() {
+    final now = DateTime.now();
+    return '${now.month}月${now.day}日';
+  }
+
+  /// 将用户输入裁剪为合法的 chat_title（≤255 字符，换行替换为空格）。
+  String _sanitizeChatTitle(String input) {
+    var sanitized = input.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (sanitized.length > 255) {
+      sanitized = sanitized.substring(0, 255);
+    }
+    return sanitized;
   }
 }
 
@@ -288,6 +313,8 @@ class _ConversationPreviewCard extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                       color: AppColors.textPrimary,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -296,8 +323,9 @@ class _ConversationPreviewCard extends StatelessWidget {
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                       color: AppColors.textSecondary,
-                      height: 1.35,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
