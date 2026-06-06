@@ -13,7 +13,6 @@ import 'application/video_summary_flow_controller.dart';
 import 'application/video_summary_session_history_controller.dart';
 import 'application/video_summary_settings_controller.dart';
 import 'application/video_summary_text_editing_controller.dart';
-import 'domain/video_summary_domain_models.dart';
 import 'video_summary_models.dart';
 import 'video_summary_presentation_models.dart';
 import 'video_summary_repository.dart';
@@ -104,7 +103,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       };
 
       final draftParagraphs = draftSummary != null
-          ? draftSummary!
+          ? draftSummary
               .split(RegExp(r'\n\s*\n'))
               .map((p) => p.trim())
               .where((p) => p.isNotEmpty)
