@@ -1,3 +1,5 @@
+import '../../services/models/global_chat_dto.dart';
+
 enum KnowledgeChatSender { user, system }
 
 class KnowledgeChatMessage {
@@ -5,11 +7,13 @@ class KnowledgeChatMessage {
     required this.sender,
     required this.text,
     this.timestampLabel,
+    this.citedSources,
   });
 
   final KnowledgeChatSender sender;
   final String text;
   final String? timestampLabel;
+  final List<CitedSource>? citedSources;
 }
 
 class KnowledgeConversationPreview {

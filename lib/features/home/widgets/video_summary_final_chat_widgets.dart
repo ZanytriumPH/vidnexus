@@ -180,7 +180,123 @@ class _SummaryChatBubbleBody extends StatelessWidget {
             ),
           ),
         ],
+        if (message.citations != null && message.citations!.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _VideoCitationSection(citations: message.citations!),
+        ],
       ],
+    );
+  }
+}
+
+class _VideoCitationSection extends StatefulWidget {
+  const _VideoCitationSection({required this.citations});
+
+  final List<ChatMessageCitation> citations;
+
+  @override
+  State<_VideoCitationSection> createState() => _VideoCitationSectionState();
+}
+
+class _VideoCitationSectionState extends State<_VideoCitationSection> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _isExpanded = !_isExpanded),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              children: [
+                Text(
+                  '参考来源 (${widget.citations.length})',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textHint,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                AnimatedRotation(
+                  turns: _isExpanded ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 14,
+                    color: AppColors.textHint,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedCrossFade(
+          firstChild: const SizedBox.shrink(),
+          secondChild: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Column(
+              children: widget.citations
+                  .map((citation) => _VideoCitationRow(citation: citation))
+                  .toList(),
+            ),
+          ),
+          crossFadeState: _isExpanded
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          duration: const Duration(milliseconds: 200),
+        ),
+      ],
+    );
+  }
+}
+
+class _VideoCitationRow extends StatelessWidget {
+  const _VideoCitationRow({required this.citation});
+
+  final ChatMessageCitation citation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.format_quote_rounded,
+            size: 14,
+            color: AppColors.textHint,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              citation.quote,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontStyle: FontStyle.italic,
+                color: AppColors.textSecondary,
+                height: 1.3,
+              ),
+            ),
+          ),
+          if (citation.timeRange != null) ...[
+            const SizedBox(width: 6),
+            Text(
+              citation.timeRange!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 10,
+                color: AppColors.textHint,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

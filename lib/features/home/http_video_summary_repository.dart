@@ -793,7 +793,10 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
           } else if (event.type == SSEEventType.done) {
             final done = event.parseData<TimeTravelQADoneData>(TimeTravelQADoneData.fromJson);
             if (done?.answerContent != null && done!.answerContent!.isNotEmpty) {
-              controller.add(VideoSummaryChatReplyData(text: done.answerContent!));
+              controller.add(VideoSummaryChatReplyData(
+                text: done.answerContent!,
+                citedSources: done.citedSources,
+              ));
             }
             controller.close();
           } else if (event.type == SSEEventType.error) {

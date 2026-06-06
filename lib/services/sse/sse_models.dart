@@ -112,12 +112,14 @@ class TimeTravelQADoneData {
     required this.taskId,
     required this.qaId,
     this.answerContent,
+    this.citedSources,
     this.timestamp,
   });
 
   final String taskId;
   final String qaId;
   final String? answerContent;
+  final List<Map<String, dynamic>>? citedSources;
   final String? timestamp;
 
   factory TimeTravelQADoneData.fromJson(Map<String, dynamic> json) =>
@@ -125,6 +127,9 @@ class TimeTravelQADoneData {
         taskId: json['task_id'] as String? ?? '',
         qaId: json['qa_id'] as String? ?? '',
         answerContent: json['answer_content'] as String?,
+        citedSources: (json['cited_sources'] as List<dynamic>?)
+            ?.map((e) => e as Map<String, dynamic>)
+            .toList(),
         timestamp: json['timestamp'] as String?,
       );
 }

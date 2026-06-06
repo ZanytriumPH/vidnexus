@@ -24,7 +24,10 @@ class AppRouter {
           final args = settings.arguments as HomeRouteArguments?;
           return _buildRoute(
             settings: settings,
-            builder: (_) => HomeScreen(videoId: args?.videoId),
+            builder: (_) => HomeScreen(
+              videoId: args?.videoId,
+              taskId: args?.taskId,
+            ),
           );
         case AppRoutes.videoSummarySearch:
           final args = _requireArguments<VideoSummarySearchRouteArguments>(
@@ -142,12 +145,19 @@ class AppNavigator {
   }
 
   /// 跳转到首页并自动恢复指定视频的总结会话。
-  static void goToHomeWithVideo(BuildContext context, {required String videoId}) {
+  ///
+  /// 当同时提供 [taskId] 时，会直接通过 taskId 获取任务详情（无需 listTasks 全量匹配），
+  /// 优先用于知识库 cited_resources 点击等已有明确 task 的场景。
+  static void goToHomeWithVideo(
+    BuildContext context, {
+    required String videoId,
+    String? taskId,
+  }) {
     Navigator.pushNamedAndRemoveUntil(
       context,
       AppRoutes.home,
       (route) => false,
-      arguments: HomeRouteArguments(videoId: videoId),
+      arguments: HomeRouteArguments(videoId: videoId, taskId: taskId),
     );
   }
 

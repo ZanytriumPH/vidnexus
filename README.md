@@ -99,6 +99,7 @@ flutter run -d e8f2a035 --dart-define=API_BASE_URL=http://localhost:8000
 adb reverse tcp:8000 tcp:8000
 
 # 2. 直接在手机上点击 VidNexus 图标打开即可
+
 ```
 
 > 因为首次启动时已经持久化了后端地址，之后只需确保端口转发已建立，直接打开 App 即可。

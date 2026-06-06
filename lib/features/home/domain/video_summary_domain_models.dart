@@ -110,10 +110,15 @@ class VideoSummaryFinalResultData {
 }
 
 class VideoSummaryChatReplyData {
-  const VideoSummaryChatReplyData({required this.text, this.reference});
+  const VideoSummaryChatReplyData({
+    required this.text,
+    this.reference,
+    this.citedSources,
+  });
 
   final String text;
   final VideoSummaryReferenceRange? reference;
+  final List<Map<String, dynamic>>? citedSources;
 }
 
 // ──── Phase 3: 后端任务状态映射 ────

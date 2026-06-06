@@ -9,6 +9,7 @@ import '../../app/widgets/app_markdown_body.dart';
 import '../../app/widgets/app_typing_indicator.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_header_add_button.dart';
+import '../../app/widgets/citation_card.dart';
 import '../../services/service_providers.dart';
 import 'application/knowledge_base_chat_controller.dart';
 import 'application/knowledge_base_controller.dart';
@@ -226,7 +227,33 @@ class _KnowledgeChatBubble extends StatelessWidget {
         color: messageStyles.systemSurface,
         borderRadius: BorderRadius.circular(messageStyles.chatBubbleRadius),
       ),
-      child: AppMarkdownBody(data: message.text),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppMarkdownBody(data: message.text),
+          if (message.citedSources != null &&
+              message.citedSources!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            CitationCards(
+              citedSources: message.citedSources!,
+              onCitationTap: (source) {
+                // 优先按 taskId 精确跳转（避免 listTasks+videoId 匹配到同一视频的其他 task）
+                final taskId = source.taskId;
+                final videoId = source.videoId;
+                if (taskId != null && taskId.isNotEmpty) {
+                  AppNavigator.goToHomeWithVideo(
+                    context,
+                    videoId: videoId ?? '',
+                    taskId: taskId,
+                  );
+                } else if (videoId != null && videoId.isNotEmpty) {
+                  AppNavigator.goToHomeWithVideo(context, videoId: videoId);
+                }
+              },
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
