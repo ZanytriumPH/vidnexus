@@ -243,7 +243,7 @@ class VideoSummarySessionHistoryController
               : null,
           finalSummaryData: stage == VideoSummaryStage.finalChat
               ? FinalSummaryData(
-                  summaryTitle: task.title ?? '',
+                  summaryTitle: '视频总结',
                   summaryBody: task.finalSummary ?? '',
                   timestampChips: const [],
                   messages: const [],

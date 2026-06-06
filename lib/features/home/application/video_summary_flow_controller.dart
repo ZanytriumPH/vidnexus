@@ -1365,7 +1365,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
       final finalBody = taskInfo.finalSummary ?? taskInfo.draftSummary ?? '';
       final summaryData = FinalSummaryData(
-        summaryTitle: taskInfo.title ?? '',
+        summaryTitle: '视频总结',
         summaryBody: finalBody,
         timestampChips: const [],
         messages: const [],

@@ -146,9 +146,24 @@ class HttpKnowledgeBaseRepository extends KnowledgeBaseRepository {
     final parts = <String>[];
     if (category != null && category.isNotEmpty) parts.add(category);
     if (createdAt != null && createdAt.isNotEmpty) {
-      parts.add('创建于 $createdAt');
+      parts.add('创建于 ${_formatDateTime(createdAt)}');
     }
     return parts.isEmpty ? '暂无信息' : parts.join(' · ');
+  }
+
+  /// 将 ISO 时间戳转换为 "年/月/日 时:分" 格式（例：2026/05/18 10:00）。
+  String _formatDateTime(String isoString) {
+    try {
+      final dt = DateTime.parse(isoString).toLocal();
+      final y = dt.year.toString();
+      final m = dt.month.toString().padLeft(2, '0');
+      final d = dt.day.toString().padLeft(2, '0');
+      final h = dt.hour.toString().padLeft(2, '0');
+      final min = dt.minute.toString().padLeft(2, '0');
+      return '$y/$m/$d $h:$min';
+    } catch (_) {
+      return isoString;
+    }
   }
 
   /// 将 ISO 时间戳格式化为简短日期标签（如 "5月17日"）。
