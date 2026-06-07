@@ -92,7 +92,7 @@ class _ReadyStageWorkspaceState extends State<ReadyStageWorkspace> {
         ),
         const SizedBox(height: 20),
         // 近期上传视频列表
-        _RecentVideosHeader(onRefresh: _loadVideos),
+        _RecentVideosHeader(onRefresh: _loadVideos, isLoading: _isLoading),
         const SizedBox(height: 8),
         Expanded(
           child: _buildVideoList(),
@@ -147,10 +147,50 @@ class _ReadyStageWorkspaceState extends State<ReadyStageWorkspace> {
   }
 }
 
-class _RecentVideosHeader extends StatelessWidget {
-  const _RecentVideosHeader({required this.onRefresh});
+class _RecentVideosHeader extends StatefulWidget {
+  const _RecentVideosHeader({required this.onRefresh, required this.isLoading});
 
   final VoidCallback onRefresh;
+  final bool isLoading;
+
+  @override
+  State<_RecentVideosHeader> createState() => _RecentVideosHeaderState();
+}
+
+class _RecentVideosHeaderState extends State<_RecentVideosHeader>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _spinController;
+
+  @override
+  void initState() {
+    super.initState();
+    _spinController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_RecentVideosHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isLoading && !oldWidget.isLoading) {
+      _spinController.repeat();
+    } else if (!widget.isLoading && oldWidget.isLoading) {
+      _spinController.stop();
+      // 将图标归位到初始角度
+      _spinController.animateBack(
+        0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _spinController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -167,7 +207,7 @@ class _RecentVideosHeader extends StatelessWidget {
         const Spacer(),
         InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: onRefresh,
+          onTap: widget.isLoading ? null : widget.onRefresh,
           child: Container(
             width: 32,
             height: 32,
@@ -175,10 +215,13 @@ class _RecentVideosHeader extends StatelessWidget {
               color: AppColors.surfaceMuted,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(
-              Icons.refresh_rounded,
-              size: 18,
-              color: AppColors.textSecondary,
+            child: RotationTransition(
+              turns: _spinController,
+              child: const Icon(
+                Icons.refresh_rounded,
+                size: 18,
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
         ),
