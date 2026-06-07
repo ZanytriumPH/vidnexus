@@ -20,14 +20,21 @@ class KnowledgeBaseHomeScreen extends ConsumerStatefulWidget {
 
 class _KnowledgeBaseHomeScreenState
     extends ConsumerState<KnowledgeBaseHomeScreen> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
   @override
   void initState() {
     super.initState();
-    // 每次进入知识库首页时，确保列表数据已加载。
-    // 覆盖两场景：① Provider 缓存中已有旧数据 ② 首次创建 Provider 时 build() 已触发
     Future.microtask(() {
       ref.read(libraryListControllerProvider.notifier).refresh();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -37,10 +44,12 @@ class _KnowledgeBaseHomeScreenState
     final isSelectionMode = state.isSelectionMode;
     final selectedIds = state.selectedIds;
 
-    // 过滤掉系统自动创建的默认知识库（视频总结功能依赖，不允许用户删除）
-    final displayLibraries = state.libraries
-        .where((l) => l.title != '默认知识库')
-        .toList();
+    // 过滤掉系统默认知识库 + 搜索关键词
+    final displayLibraries = state.libraries.where((l) {
+      if (l.title == '默认知识库') return false;
+      if (_searchQuery.isEmpty) return true;
+      return l.title.contains(_searchQuery);
+    }).toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -64,7 +73,10 @@ class _KnowledgeBaseHomeScreenState
                       onToggleSelectionMode: controller.toggleSelectionMode,
                     ),
                     const SizedBox(height: 14),
-                    const _KnowledgeSearchBar(),
+                    _KnowledgeSearchBar(
+                      controller: _searchController,
+                      onChanged: (value) => setState(() => _searchQuery = value),
+                    ),
                     const SizedBox(height: 18),
                     Text(
                       '我的知识库',
@@ -280,10 +292,18 @@ class _KnowledgeBaseHeaderState extends State<_KnowledgeBaseHeader> {
 }
 
 class _KnowledgeSearchBar extends StatelessWidget {
-  const _KnowledgeSearchBar();
+  const _KnowledgeSearchBar({
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final hasText = controller.text.isNotEmpty;
+
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -296,18 +316,47 @@ class _KnowledgeSearchBar extends StatelessWidget {
         children: [
           const Icon(
             Icons.search_rounded,
-            size: 18,
+            size: 16,
             color: AppColors.textSecondary,
           ),
-          const SizedBox(width: 10),
-          Text(
-            '搜索知识库、资料或问答',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 12,
-              color: AppColors.textHint,
-              fontWeight: FontWeight.w500,
+          const SizedBox(width: 0),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: onChanged,
+              onTapOutside: (_) => FocusScope.of(context).unfocus(),
+              decoration: const InputDecoration(
+                hintText: '搜索',
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                isCollapsed: true,
+                hintStyle: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textHint,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
+          if (hasText)
+            InkWell(
+              onTap: () {
+                controller.clear();
+                onChanged('');
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(Icons.close, size: 16, color: AppColors.textHint),
+              ),
+            ),
         ],
       ),
     );

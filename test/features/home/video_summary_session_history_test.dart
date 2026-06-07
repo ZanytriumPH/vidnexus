@@ -7,7 +7,6 @@ import 'package:vidnexus/features/home/application/video_summary_session_history
 import 'package:vidnexus/features/home/application/video_summary_text_editing_controller.dart';
 import 'package:vidnexus/features/home/video_summary_repository.dart';
 import 'package:vidnexus/features/home/video_summary_models.dart';
-import 'package:vidnexus/features/home/domain/video_summary_domain_models.dart';
 import 'package:vidnexus/services/task_service.dart';
 import 'package:vidnexus/services/video_qa_service.dart';
 import 'package:vidnexus/services/websocket/ws_client.dart';

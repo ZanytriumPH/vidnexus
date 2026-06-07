@@ -351,6 +351,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             flowState.videoAsset.title.isEmpty);
   }
 
+  /// 侧边栏条目标题：若已完成最终稿则提取 markdown # 标题，否则显示原始会话标题。
+  String _drawerTitle(VideoSummarySessionHistoryEntry session) {
+    final body = session.snapshot.flowSnapshot.finalSummaryData?.summaryBody;
+    if (body != null && body.isNotEmpty) {
+      final match = RegExp(r'^#\s+(.+)$', multiLine: true).firstMatch(body);
+      if (match != null) {
+        final title = match.group(1)?.trim();
+        if (title != null && title.isNotEmpty) return title;
+      }
+    }
+    return session.title;
+  }
+
+  /// 该会话是否已生成最终稿（可从 markdown 提取标题）。
+  bool _hasFinalDraftTitle(VideoSummarySessionHistoryEntry session) {
+    final body = session.snapshot.flowSnapshot.finalSummaryData?.summaryBody;
+    if (body == null || body.isEmpty) return false;
+    return RegExp(r'^#\s+.+$', multiLine: true).hasMatch(body);
+  }
+
   // 新建会话：重置流程状态和文本状态。
   // 空会话已在 _isCurrentSessionEmpty 中判断，避免重复重置。
   // 若当前会话已完成视频上传但尚未创建后端任务，先将其保存为内存临时会话再重置。
@@ -392,10 +412,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final sessions = sessionHistory.sessions
         .where((session) => session.id != 'session-current')
         .map(
-          (session) => VideoSummaryDrawerSessionItem(
+          (session) {
+            final hasFinal = _hasFinalDraftTitle(session);
+            return VideoSummaryDrawerSessionItem(
             id: session.id,
-            title: session.title,
-            durationLabel: session.durationLabel,
+            title: _drawerTitle(session),
+            durationLabel: hasFinal ? '' : session.durationLabel,
             detail: session.detail,
             isActive: session.id == sessionHistory.activeSessionId,
             kbName: session.snapshot.flowSnapshot.videoAsset?.kbName,

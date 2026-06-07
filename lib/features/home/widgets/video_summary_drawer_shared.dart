@@ -57,7 +57,11 @@ class VideoSummaryDrawerSessionCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    '${session.title} / ${session.durationLabel}',
+                    session.durationLabel.isNotEmpty
+                        ? '${session.title} / ${session.durationLabel}'
+                        : session.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,

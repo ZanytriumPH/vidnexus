@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/app.dart';
@@ -6,6 +7,12 @@ import 'services/api/api_client.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 固定竖屏，禁止自动旋转为横屏
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
 
   // 恢复持久化的 baseUrl（SecureStorage > 环境变量 > 默认值）
   await ApiClient.restoreBaseUrl();

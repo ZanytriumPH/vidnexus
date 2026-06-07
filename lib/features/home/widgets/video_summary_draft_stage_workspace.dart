@@ -50,7 +50,7 @@ class DraftStageWorkspace extends StatelessWidget {
             videoAsset: videoAsset,
             processingSnapshot: null,
             processingExpanded: false,
-            onTap: onUploadCardPressed,
+            onTap: null,
             onVideoPlayback: onVideoPlayback,
           ),
           const SizedBox(height: 12),
