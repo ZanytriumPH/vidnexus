@@ -27,6 +27,7 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
 
   VideoResourceResponseData? _video;
   List<VideoSummaryTaskResponseData> _tasks = [];
+  int _taskTotalCount = 0;
   bool _isLoading = true;
   String? _error;
 
@@ -56,6 +57,7 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
       setState(() {
         _video = videoResp.data;
         _tasks = tasksResp.data;
+        _taskTotalCount = tasksResp.pagination?.total ?? tasksResp.data.length;
         _isLoading = false;
       });
     } catch (e) {
@@ -227,7 +229,7 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '关联任务 (${_tasks.length})',
+          '关联任务 ($_taskTotalCount)',
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 12),
