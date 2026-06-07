@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/routing/app_router.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../../services/models/common_dto.dart';
 import '../../../services/models/video_resource_dto.dart';
 import '../../../services/video_service.dart';
@@ -128,10 +129,10 @@ class _ReadyStageWorkspaceState extends State<ReadyStageWorkspace> {
     }
     return RefreshIndicator(
       onRefresh: _loadVideos,
-      child: ListView.separated(
+      child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(top: 4),
         itemCount: _videos.length,
-        separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (context, index) {
           final video = _videos[index];
           return _VideoListItem(
@@ -158,15 +159,28 @@ class _RecentVideosHeader extends StatelessWidget {
         Text(
           '最近上传',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontSize: 15,
             fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
           ),
         ),
         const Spacer(),
-        IconButton(
-          icon: const Icon(Icons.refresh, size: 20),
-          onPressed: onRefresh,
-          visualDensity: VisualDensity.compact,
-          tooltip: '刷新列表',
+        InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onRefresh,
+          child: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceMuted,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.refresh_rounded,
+              size: 18,
+              color: AppColors.textSecondary,
+            ),
+          ),
         ),
       ],
     );
@@ -183,37 +197,91 @@ class _VideoListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final taskCount = video.taskRefCount ?? 0;
     final dateLabel = _fmtTime(video.createdAt);
+    final fileName =
+        video.fileName.isNotEmpty ? video.fileName : video.videoId;
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-      title: Text(
-        video.fileName.isNotEmpty ? video.fileName : video.videoId,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-      ),
-      subtitle: Text(
-        dateLabel.isNotEmpty ? dateLabel : video.videoId,
-        style: TextStyle(
-          fontSize: 12,
-          color: Theme.of(context).colorScheme.outline,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFEEF0F4)),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                // 视频图标
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F4FF),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.videocam_rounded,
+                    size: 20,
+                    color: Color(0xFF4B6BF5),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // 标题 + 日期
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        fileName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        dateLabel.isNotEmpty ? dateLabel : video.videoId,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // 任务数徽章
+                if (taskCount > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEBF3FE),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '$taskCount',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF2F69E8),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
-      trailing: taskCount > 0
-          ? Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEBF3FE),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '$taskCount个任务',
-                style: const TextStyle(fontSize: 11, color: Color(0xFF2F69E8)),
-              ),
-            )
-          : null,
-      onTap: onTap,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     );
   }
 }
