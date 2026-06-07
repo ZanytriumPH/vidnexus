@@ -616,16 +616,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       onRefreshPressed: ref
           .read(videoSummaryFlowControllerProvider.notifier)
           .refreshProcessingStatus,
-      onAddToKbPressed: () {
-        final repo = ref.read(videoSummaryRepositoryProvider);
-        final videoId = repo.videoId;
-        if (videoId.isEmpty || videoId == 'vid_default') return;
-        showAddToKnowledgeBaseSheet(
-          context: context,
-          ref: ref,
-          videoId: videoId,
-        );
-      },
       onCloneToKbPressed: () {
         final repo = ref.read(videoSummaryRepositoryProvider);
         final videoId = repo.videoId;

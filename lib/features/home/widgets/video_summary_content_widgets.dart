@@ -40,7 +40,6 @@ class VideoSummaryWorkspace extends StatelessWidget {
     required this.isUploading,
     required this.uploadProgress,
     this.finalDraftProgressMessage,
-    this.onAddToKbPressed,
     this.onCloneToKbPressed,
     this.onVideoPlayback,
     this.onRefreshPressed,
@@ -76,7 +75,6 @@ class VideoSummaryWorkspace extends StatelessWidget {
   final bool isUploading;
   final double uploadProgress;
   final String? finalDraftProgressMessage;
-  final VoidCallback? onAddToKbPressed;
   final VoidCallback? onCloneToKbPressed;
   final VoidCallback? onVideoPlayback;
   final VoidCallback? onRefreshPressed;
@@ -132,7 +130,6 @@ class VideoSummaryWorkspace extends StatelessWidget {
           onSendChatPressed: onSendChatPressed,
           onTimestampScopeChanged: onTimestampScopeChanged,
           onTimestampRangeChanged: onTimestampRangeChanged,
-          onAddToKbPressed: onAddToKbPressed,
           onCloneToKbPressed: onCloneToKbPressed,
           onVideoPlayback: onVideoPlayback,
           isGenerating: isGenerating,
