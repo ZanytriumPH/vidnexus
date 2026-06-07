@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +7,8 @@ import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_buttons.dart';
 import '../../../app/widgets/app_typing_indicator.dart';
 import '../../../app/widgets/composer_attachment_button.dart';
+import '../../../services/models/common_dto.dart';
+import '../../../services/models/video_summary_task_dto.dart';
 import '../../../services/service_providers.dart';
 import '../../knowledge_base/application/knowledge_base_controller.dart';
 import '../video_summary_models.dart';
@@ -18,6 +21,7 @@ class ChatThread extends StatelessWidget {
     required this.summary,
     required this.messages,
     this.onAddToKbPressed,
+    this.onCloneToKbPressed,
     this.isWaiting = false,
     super.key,
   });
@@ -25,14 +29,16 @@ class ChatThread extends StatelessWidget {
   final FinalSummaryData summary;
   final List<ChatMessage> messages;
   final VoidCallback? onAddToKbPressed;
+  final VoidCallback? onCloneToKbPressed;
   final bool isWaiting;
 
   @override
   Widget build(BuildContext context) {
     final messageStyles = context.appMessageStyles;
     // 空系统消息不渲染（此时 typing indicator 正在展示）
-    final visibleMessages = messages.where((m) =>
-        m.sender == SummaryChatSender.user || m.text.isNotEmpty);
+    final visibleMessages = messages.where(
+      (m) => m.sender == SummaryChatSender.user || m.text.isNotEmpty,
+    );
 
     return Column(
       children: [
@@ -41,6 +47,7 @@ class ChatThread extends StatelessWidget {
           child: _FinalSummaryBubble(
             summary: summary,
             onAddToKbPressed: onAddToKbPressed,
+            onCloneToKbPressed: onCloneToKbPressed,
           ),
         ),
         ...visibleMessages.map(
@@ -49,8 +56,7 @@ class ChatThread extends StatelessWidget {
             child: _SummaryChatBubble(message: message),
           ),
         ),
-        if (isWaiting)
-          const AppTypingIndicator(),
+        if (isWaiting) const AppTypingIndicator(),
       ],
     );
   }
@@ -60,10 +66,12 @@ class _FinalSummaryBubble extends StatelessWidget {
   const _FinalSummaryBubble({
     required this.summary,
     this.onAddToKbPressed,
+    this.onCloneToKbPressed,
   });
 
   final FinalSummaryData summary;
   final VoidCallback? onAddToKbPressed;
+  final VoidCallback? onCloneToKbPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -101,16 +109,16 @@ class _FinalSummaryBubble extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              if (onCloneToKbPressed != null)
+                _CloneToKbButton(onPressed: onCloneToKbPressed),
               if (onAddToKbPressed != null) ...[
-                _AddToKbButton(onPressed: onAddToKbPressed),
                 const SizedBox(width: 6),
+                _AddToKbButton(onPressed: onAddToKbPressed),
               ],
             ],
           ),
           SizedBox(height: messageStyles.messageSpacing),
-          VideoSummaryMarkdownBody(
-            data: summary.summaryBody,
-          ),
+          VideoSummaryMarkdownBody(data: summary.summaryBody),
         ],
       ),
     );
@@ -342,6 +350,43 @@ class _AddToKbButton extends StatelessWidget {
   }
 }
 
+class _CloneToKbButton extends StatelessWidget {
+  const _CloneToKbButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0F4FF),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFD0DAF0)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.content_copy, size: 15, color: Color(0xFF3B5FA0)),
+            SizedBox(width: 5),
+            Text(
+              '克隆到知识库',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF3B5FA0),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class ChatComposer extends StatelessWidget {
   const ChatComposer({
     required this.controller,
@@ -450,7 +495,6 @@ class ChatComposer extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _TimestampScopeActionButton extends StatelessWidget {
@@ -658,6 +702,7 @@ Future<void> showAddToKnowledgeBaseSheet({
   required BuildContext context,
   required WidgetRef ref,
   required String videoId,
+  String? taskId,
 }) async {
   final librariesAsync = ref.read(libraryListControllerProvider);
 
@@ -678,6 +723,7 @@ Future<void> showAddToKnowledgeBaseSheet({
       return _AddToKnowledgeBaseSheet(
         ref: ref,
         videoId: videoId,
+        taskId: taskId,
       );
     },
   );
@@ -687,10 +733,12 @@ class _AddToKnowledgeBaseSheet extends ConsumerStatefulWidget {
   const _AddToKnowledgeBaseSheet({
     required this.ref,
     required this.videoId,
+    this.taskId,
   });
 
   final WidgetRef ref;
   final String videoId;
+  final String? taskId;
 
   @override
   ConsumerState<_AddToKnowledgeBaseSheet> createState() =>
@@ -700,6 +748,169 @@ class _AddToKnowledgeBaseSheet extends ConsumerStatefulWidget {
 class _AddToKnowledgeBaseSheetState
     extends ConsumerState<_AddToKnowledgeBaseSheet> {
   bool _isCreating = false;
+
+  Future<void> _handleKbSelected(
+    BuildContext context,
+    String kbid,
+    String kbName,
+  ) async {
+    setState(() => _isCreating = true);
+    final kbService = ref.read(knowledgeBaseServiceProvider);
+    try {
+      if (widget.taskId != null) {
+        // Clone task result to the target KB
+        final taskService = ref.read(taskServiceProvider);
+        debugPrint('[CloneToKb] 开始克隆 taskId=${widget.taskId} kbid=$kbid');
+        await taskService.cloneTaskToKb(widget.taskId!, kbid: kbid);
+        debugPrint('[CloneToKb] 克隆成功');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('已克隆到「$kbName」'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        if (context.mounted) Navigator.of(context).pop();
+      } else {
+        // Existing behavior: bind video to KB
+        debugPrint('[AddToKb] 开始绑定 videoId=$widget.videoId kbid=$kbid');
+        await kbService.bindVideo(kbid: kbid, videoId: widget.videoId);
+        debugPrint('[AddToKb] 绑定成功');
+        if (context.mounted) {
+          final l10n = _KbSheetStrings.of(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(l10n.success(kbName)),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        if (context.mounted) Navigator.of(context).pop();
+      }
+    } on DioException catch (e) {
+      debugPrint(
+        '[CloneToKb] DioException statusCode=${e.response?.statusCode} '
+        'taskId=${widget.taskId}',
+      );
+      if (e.response?.statusCode == 409 && widget.taskId != null) {
+        // 409 for clone: target KB already has a task for this video
+        // Keep sheet open — show conflict dialog on top
+        final conflict = TaskConflictData.tryExtract(e.response?.data);
+        debugPrint('[CloneToKb] 409 conflict: existingTaskId=${conflict?.existingTaskId}');
+        if (conflict != null && context.mounted) {
+          final replace = await _showCloneConflictDialog(
+            context,
+            conflict,
+            kbName,
+          );
+          debugPrint('[CloneToKb] 用户选择替换: $replace');
+          if (replace == true && context.mounted) {
+            try {
+              final taskService = ref.read(taskServiceProvider);
+              debugPrint(
+                '[CloneToKb] 带 replaceExistingTaskId=${conflict.existingTaskId} 重试',
+              );
+              await taskService.cloneTaskToKb(
+                widget.taskId!,
+                kbid: kbid,
+                replaceExistingTaskId: conflict.existingTaskId,
+              );
+              debugPrint('[CloneToKb] 替换克隆成功');
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('已克隆到「$kbName」'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            } catch (e2) {
+              debugPrint('[CloneToKb] 替换克隆失败: $e2');
+              if (context.mounted) {
+                final msg = e2 is DioException
+                    ? ApiError.fromDioException(e2).userMessage
+                    : e2.toString();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('克隆失败：$msg'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          }
+        }
+        // Pop sheet after conflict handling (whether replaced or cancelled)
+        if (context.mounted) Navigator.of(context).pop();
+      } else if (e.response?.statusCode == 409) {
+        // 加入知识库时视频已存在
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('「$kbName」中已存在该视频'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        if (context.mounted) Navigator.of(context).pop();
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('操作失败：${e.message}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        if (context.mounted) Navigator.of(context).pop();
+      }
+    } catch (e) {
+      debugPrint('[CloneToKb] 非 Dio 异常: $e');
+      if (context.mounted) {
+        final l10n = _KbSheetStrings.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.failure(e.toString())),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      if (context.mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
+    }
+  }
+
+  Future<bool> _showCloneConflictDialog(
+    BuildContext context,
+    TaskConflictData conflict,
+    String kbName,
+  ) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('任务已存在'),
+        content: Text(
+          '「$kbName」中已存在同一视频的摘要任务，是否替换？',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('替换', style: TextStyle(color: Color(0xFFEF4444))),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
 
   Future<void> _createAndBind(BuildContext context) async {
     final nameController = TextEditingController();
@@ -738,9 +949,9 @@ class _AddToKnowledgeBaseSheetState
       final newLibrary = await controller.createLibrary(name: name);
       if (newLibrary == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('创建知识库失败，请重试')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('创建知识库失败，请重试')));
         return;
       }
 
@@ -759,9 +970,9 @@ class _AddToKnowledgeBaseSheetState
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('操作失败：$e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('操作失败：$e')));
     } finally {
       if (mounted) setState(() => _isCreating = false);
     }
@@ -771,7 +982,6 @@ class _AddToKnowledgeBaseSheetState
   Widget build(BuildContext context) {
     final l10n = _KbSheetStrings.of(context);
     final librariesState = ref.watch(libraryListControllerProvider);
-    final kbService = ref.watch(knowledgeBaseServiceProvider);
 
     return SafeArea(
       top: false,
@@ -821,37 +1031,17 @@ class _AddToKnowledgeBaseSheetState
                     children: librariesState.libraries
                         .where((l) => l.title != '默认知识库')
                         .map(
-                      (library) => _KnowledgeBaseTile(
-                        title: library.title,
-                        meta: library.meta,
-                        onTap: () async {
-                          Navigator.of(context).pop();
-                          try {
-                            await kbService.bindVideo(
-                              kbid: library.id,
-                              videoId: widget.videoId,
-                            );
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(l10n.success(library.title)),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(l10n.failure(e.toString())),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
-                          }
-                        },
-                      ),
-                    ).toList(),
+                          (library) => _KnowledgeBaseTile(
+                            title: library.title,
+                            meta: library.meta,
+                            onTap: () => _handleKbSelected(
+                              context,
+                              library.id,
+                              library.title,
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
                 ),
             ],
@@ -1010,8 +1200,7 @@ class _KnowledgeBaseTile extends StatelessWidget {
 class _KbSheetStrings {
   const _KbSheetStrings._();
 
-  static _KbSheetStrings of(BuildContext context) =>
-      const _KbSheetStrings._();
+  static _KbSheetStrings of(BuildContext context) => const _KbSheetStrings._();
 
   String get title => '加入知识库';
   String get emptyHint => '暂无知识库，请先创建';

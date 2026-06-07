@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../services/models/common_dto.dart';
+import '../../services/models/video_summary_task_dto.dart';
 import '../../services/task_service.dart';
 import '../../services/video_qa_service.dart';
 import '../../services/websocket/ws_client.dart';
@@ -25,9 +27,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     required WsClient wsClient,
     required this.kbid,
     required this.videoId,
-  })  : _taskService = taskService,
-        _videoQAService = videoQAService,
-        _wsClient = wsClient;
+  }) : _taskService = taskService,
+       _videoQAService = videoQAService,
+       _wsClient = wsClient;
 
   final TaskService _taskService;
   final VideoQAService? _videoQAService;
@@ -100,6 +102,59 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   }
 
   @override
+  Future<List<VideoSummaryTaskInfo>> listVideoTasks(
+    String videoId, {
+    int page = 1,
+    int pageSize = 50,
+  }) async {
+    final resp = await _taskService.listVideoTasks(
+      videoId,
+      params: PageParams(page: page, pageSize: pageSize, sort: '-created_at'),
+    );
+    return resp.data
+        .map(
+          (dto) => VideoSummaryTaskInfo(
+            taskId: dto.taskId,
+            videoId: dto.videoId,
+            kbid: dto.kbid,
+            workflowState: WorkflowState.fromApi(dto.workflowState),
+            draftSummary: dto.draftSummary,
+            finalSummary: dto.finalSummary,
+            title: dto.title,
+            userInitialPreference: dto.userInitialPreference,
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  Future<VideoSummaryTaskInfo> cloneTaskToKb(
+    String taskId, {
+    required String targetKbid,
+    String? replaceExistingTaskId,
+  }) async {
+    final resp = await _taskService.cloneTaskToKb(
+      taskId,
+      kbid: targetKbid,
+      replaceExistingTaskId: replaceExistingTaskId,
+    );
+    final dto = resp.data;
+    if (dto == null) {
+      throw StateError('cloneTaskToKb returned null data');
+    }
+    return VideoSummaryTaskInfo(
+      taskId: dto.taskId,
+      videoId: dto.videoId,
+      kbid: dto.kbid,
+      workflowState: WorkflowState.fromApi(dto.workflowState),
+      draftSummary: dto.draftSummary,
+      finalSummary: dto.finalSummary,
+      title: dto.title,
+      userInitialPreference: dto.userInitialPreference,
+    );
+  }
+
+  @override
   Future<VideoSummaryTaskInfo?> getTaskStatus(String taskId) async {
     try {
       final resp = await _taskService.getTask(taskId);
@@ -135,9 +190,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     }
 
     // 订阅 WebSocket 事件（与 startDraftGeneration 相同的处理逻辑）
-    final wsStream = _wsClient.eventStream.where((env) =>
-        env.scope == WSScope.videoSummaryTask &&
-        env.scopeId == taskId);
+    final wsStream = _wsClient.eventStream.where(
+      (env) => env.scope == WSScope.videoSummaryTask && env.scopeId == taskId,
+    );
 
     final controller = StreamController<VideoSummaryProcessingData>();
     StreamSubscription<WSEventEnvelope>? wsSubscription;
@@ -147,9 +202,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     firstEventTimeout = Timer(const Duration(seconds: 15), () {
       if (!controller.isClosed) {
         debugPrint('[HttpRepo] resumeTaskProgress — 首事件超时（15s）taskId=$taskId');
-        controller.addError(
-          TimeoutException('恢复进度监听超时，taskId=$taskId'),
-        );
+        controller.addError(TimeoutException('恢复进度监听超时，taskId=$taskId'));
         controller.close();
       }
     });
@@ -176,7 +229,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
             if (!controller.isClosed) {
               debugPrint('[HttpRepo] resumeTaskProgress — 总超时 taskId=$taskId');
               controller.addError(
-                TimeoutException('任务处理超时（${totalTimeoutDuration.inSeconds}s），taskId=$taskId'),
+                TimeoutException(
+                  '任务处理超时（${totalTimeoutDuration.inSeconds}s），taskId=$taskId',
+                ),
               );
               controller.close();
             }
@@ -192,7 +247,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
         if (env.eventType == WSEventType.completed) {
           if (kDebugMode) {
-            debugPrint('[HttpRepo] resumeTaskProgress — completed taskId=$taskId');
+            debugPrint(
+              '[HttpRepo] resumeTaskProgress — completed taskId=$taskId',
+            );
           }
           final finalChunkProgress = _estimator.estimate(
             wsProgress: 100,
@@ -201,18 +258,22 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
             substage: env.substage,
             payload: env.payload,
           );
-          controller.add(VideoSummaryProcessingData(
-            progress: 1.0,
-            currentMessage: env.message ?? '初稿生成完成',
-            chunkProgress: finalChunkProgress,
-            statusLog: List<String>.from(_statusLog),
-          ));
+          controller.add(
+            VideoSummaryProcessingData(
+              progress: 1.0,
+              currentMessage: env.message ?? '初稿生成完成',
+              chunkProgress: finalChunkProgress,
+              statusLog: List<String>.from(_statusLog),
+            ),
+          );
           controller.close();
           return;
         }
 
         final msg = env.message;
-        if (msg != null && msg.isNotEmpty && env.substage != 'chunk_processing') {
+        if (msg != null &&
+            msg.isNotEmpty &&
+            env.substage != 'chunk_processing') {
           _statusLog.add(msg);
           if (_statusLog.length > 20) _statusLog.removeAt(0);
         }
@@ -230,12 +291,14 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
             : _lastProgress;
         _lastProgress = progressVal;
 
-        controller.add(VideoSummaryProcessingData(
-          progress: progressVal,
-          currentMessage: env.message ?? '',
-          chunkProgress: chunkProgress,
-          statusLog: List<String>.from(_statusLog),
-        ));
+        controller.add(
+          VideoSummaryProcessingData(
+            progress: progressVal,
+            currentMessage: env.message ?? '',
+            chunkProgress: chunkProgress,
+            statusLog: List<String>.from(_statusLog),
+          ),
+        );
 
         if (kDebugMode) {
           debugPrint(
@@ -254,7 +317,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
         }
       },
       onDone: () {
-        debugPrint('[HttpRepo] resumeTaskProgress — WS stream done taskId=$taskId');
+        debugPrint(
+          '[HttpRepo] resumeTaskProgress — WS stream done taskId=$taskId',
+        );
         if (!controller.isClosed) controller.close();
       },
     );
@@ -284,12 +349,14 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
           substage: null,
           payload: null,
         );
-        controller.add(VideoSummaryProcessingData(
-          progress: 1.0,
-          currentMessage: '初稿已生成',
-          chunkProgress: finalChunkProgress,
-          statusLog: List<String>.from(_statusLog),
-        ));
+        controller.add(
+          VideoSummaryProcessingData(
+            progress: 1.0,
+            currentMessage: '初稿已生成',
+            chunkProgress: finalChunkProgress,
+            statusLog: List<String>.from(_statusLog),
+          ),
+        );
         controller.close();
       }
     } catch (_) {
@@ -314,8 +381,12 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
   @override
   Stream<VideoSummaryProcessingData> startDraftGeneration({
+    required String kbid,
     String? userInitialPreference,
   }) async* {
+    // 同步 kbid 供后续方法（fetchDraftResult / generateFinalSummary）使用
+    this.kbid = kbid;
+
     // 每次开始新任务时重置状态
     _lastProgress = 0.0;
     _seenSequences = {};
@@ -336,16 +407,33 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
         debugPrint('[HttpRepo] WebSocket 连接就绪');
       }
     } catch (e) {
-      debugPrint('[HttpRepo] WebSocket 连接失败（${e.toString().split('\n').first}），将无法接收实时进度');
+      debugPrint(
+        '[HttpRepo] WebSocket 连接失败（${e.toString().split('\n').first}），将无法接收实时进度',
+      );
       throw TaskFailedException('WebSocket 未连接，无法启动任务');
     }
 
     // 1. 创建任务（传入用户总结偏好）
-    final createResp = await _taskService.createTask(
-      kbid: kbid,
-      videoId: videoId,
-      userInitialPreference: userInitialPreference,
-    );
+    final ApiResponse<VideoSummaryTaskResponseData> createResp;
+    try {
+      createResp = await _taskService.createTask(
+        kbid: kbid,
+        videoId: videoId,
+        userInitialPreference: userInitialPreference,
+      );
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 409) {
+        final conflict = TaskConflictData.tryExtract(e.response?.data);
+        if (conflict != null) {
+          throw TaskConflictException(
+            existingTaskId: conflict.existingTaskId,
+            kbid: conflict.kbid,
+            message: conflict.message,
+          );
+        }
+      }
+      rethrow;
+    }
     final data = createResp.data;
     if (data == null) {
       throw StateError('Task creation returned null data');
@@ -353,7 +441,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     _taskId = data.taskId;
 
     if (kDebugMode) {
-      debugPrint('[HttpRepo] 任务已创建 — taskId=$_taskId state=${data.workflowState}');
+      debugPrint(
+        '[HttpRepo] 任务已创建 — taskId=$_taskId state=${data.workflowState}',
+      );
     }
 
     // 短路优化：后端已有初稿时（Phase-1 已完成），跳过 startAnalysis + WS，直接返回完成事件。
@@ -363,17 +453,19 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
         debugPrint('[HttpRepo] 后端已有初稿，跳过 WS 直接返回');
       }
       final shortcutController = StreamController<VideoSummaryProcessingData>();
-      shortcutController.add(const VideoSummaryProcessingData(
-        progress: 1.0,
-        currentMessage: '初稿已生成',
-        chunkProgress: VideoSummaryChunkProgressData(
-          stage: VideoSummaryChunkProgressStage.finished,
-          totalChunks: 1,
-          doneCount: 1,
-          overallPercent: 100,
+      shortcutController.add(
+        const VideoSummaryProcessingData(
+          progress: 1.0,
+          currentMessage: '初稿已生成',
+          chunkProgress: VideoSummaryChunkProgressData(
+            stage: VideoSummaryChunkProgressStage.finished,
+            totalChunks: 1,
+            doneCount: 1,
+            overallPercent: 100,
+          ),
+          statusLog: [],
         ),
-        statusLog: [],
-      ));
+      );
       shortcutController.close();
       yield* shortcutController.stream;
       return;
@@ -391,9 +483,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
     // 3. 纯 WebSocket 监听进度 — 严格对齐后端 WSEventEnvelope 消息
     final taskId = _taskId!;
-    final wsStream = _wsClient.eventStream.where((env) =>
-        env.scope == WSScope.videoSummaryTask &&
-        env.scopeId == taskId);
+    final wsStream = _wsClient.eventStream.where(
+      (env) => env.scope == WSScope.videoSummaryTask && env.scopeId == taskId,
+    );
 
     final controller = StreamController<VideoSummaryProcessingData>();
     StreamSubscription<WSEventEnvelope>? wsSubscription;
@@ -442,7 +534,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
           totalTimeout = Timer(totalTimeoutDuration, () {
             if (!controller.isClosed) {
-              debugPrint('[HttpRepo] WebSocket 进度超时（${totalTimeoutDuration.inSeconds}s 内未完成）');
+              debugPrint(
+                '[HttpRepo] WebSocket 进度超时（${totalTimeoutDuration.inSeconds}s 内未完成）',
+              );
               controller.addError(
                 TimeoutException(
                   '任务处理超时（${totalTimeoutDuration.inSeconds}s），taskId=$taskId',
@@ -472,12 +566,14 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
             substage: env.substage,
             payload: env.payload,
           );
-          controller.add(VideoSummaryProcessingData(
-            progress: 1.0,
-            currentMessage: env.message ?? '初稿生成完成',
-            chunkProgress: finalChunkProgress,
-            statusLog: List<String>.from(_statusLog),
-          ));
+          controller.add(
+            VideoSummaryProcessingData(
+              progress: 1.0,
+              currentMessage: env.message ?? '初稿生成完成',
+              chunkProgress: finalChunkProgress,
+              statusLog: List<String>.from(_statusLog),
+            ),
+          );
           controller.close();
           return;
         }
@@ -515,12 +611,14 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
         final currentMessage = env.message ?? '';
 
-        controller.add(VideoSummaryProcessingData(
-          progress: progressVal,
-          currentMessage: currentMessage,
-          chunkProgress: chunkProgress,
-          statusLog: List<String>.from(_statusLog),
-        ));
+        controller.add(
+          VideoSummaryProcessingData(
+            progress: progressVal,
+            currentMessage: currentMessage,
+            chunkProgress: chunkProgress,
+            statusLog: List<String>.from(_statusLog),
+          ),
+        );
 
         if (kDebugMode) {
           debugPrint(
@@ -623,7 +721,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
           }
           if (!completer.isCompleted) completer.complete();
         } else if (env.eventType == WSEventType.error) {
-          debugPrint('[HttpRepo] Phase-2 WS error — taskId=$taskId msg=${env.message}');
+          debugPrint(
+            '[HttpRepo] Phase-2 WS error — taskId=$taskId msg=${env.message}',
+          );
           if (!completer.isCompleted) {
             completer.completeError(TaskFailedException(taskId));
           }
@@ -667,7 +767,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   }
 
   @override
-  Future<VideoSummaryFinalResultData> resumeFinalGeneration(String taskId) async {
+  Future<VideoSummaryFinalResultData> resumeFinalGeneration(
+    String taskId,
+  ) async {
     _taskId = taskId;
 
     // 先检查任务是否已完成（短路优化 + 竞态窗口守护）
@@ -680,7 +782,8 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
           if (kDebugMode) {
             debugPrint('[HttpRepo] resumeFinalGeneration — 后端已完成，直接获取数据');
           }
-          final finalText = checkData.finalSummary ?? checkData.draftSummary ?? '';
+          final finalText =
+              checkData.finalSummary ?? checkData.draftSummary ?? '';
           return VideoSummaryFinalResultData(
             body: finalText,
             references: const [],
@@ -709,11 +812,15 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       (env) {
         if (env.eventType == WSEventType.completed) {
           if (kDebugMode) {
-            debugPrint('[HttpRepo] resumeFinalGeneration — WS completed taskId=$taskId');
+            debugPrint(
+              '[HttpRepo] resumeFinalGeneration — WS completed taskId=$taskId',
+            );
           }
           if (!completer.isCompleted) completer.complete();
         } else if (env.eventType == WSEventType.error) {
-          debugPrint('[HttpRepo] resumeFinalGeneration — WS error taskId=$taskId');
+          debugPrint(
+            '[HttpRepo] resumeFinalGeneration — WS error taskId=$taskId',
+          );
           if (!completer.isCompleted) {
             completer.completeError(TaskFailedException(taskId));
           }
@@ -726,7 +833,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
     timeout = Timer(const Duration(seconds: 120), () {
       if (!completer.isCompleted) {
-        debugPrint('[HttpRepo] resumeFinalGeneration — WS 超时（120s）taskId=$taskId');
+        debugPrint(
+          '[HttpRepo] resumeFinalGeneration — WS 超时（120s）taskId=$taskId',
+        );
         completer.completeError(
           TimeoutException('终稿生成超时（120s），taskId=$taskId'),
         );
@@ -749,10 +858,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
 
     final finalText = dto.finalSummary ?? dto.draftSummary ?? '';
 
-    return VideoSummaryFinalResultData(
-      body: finalText,
-      references: const [],
-    );
+    return VideoSummaryFinalResultData(body: finalText, references: const []);
   }
 
   @override
@@ -767,7 +873,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     }
     final qaSvc = _videoQAService;
     if (qaSvc == null) {
-      throw UnimplementedError('VideoQAService not injected — add videoQAService to provider');
+      throw UnimplementedError(
+        'VideoQAService not injected — add videoQAService to provider',
+      );
     }
 
     final request = TimeTravelQAStreamRequest(
@@ -788,19 +896,28 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
             final delta = event.parseData<SSEDeltaData>(SSEDeltaData.fromJson);
             if (delta != null) {
               answerBuffer.write(delta.chunk);
-              controller.add(VideoSummaryChatReplyData(text: answerBuffer.toString()));
+              controller.add(
+                VideoSummaryChatReplyData(text: answerBuffer.toString()),
+              );
             }
           } else if (event.type == SSEEventType.done) {
-            final done = event.parseData<TimeTravelQADoneData>(TimeTravelQADoneData.fromJson);
-            if (done?.answerContent != null && done!.answerContent!.isNotEmpty) {
-              controller.add(VideoSummaryChatReplyData(
-                text: done.answerContent!,
-                citedSources: done.citedSources,
-              ));
+            final done = event.parseData<TimeTravelQADoneData>(
+              TimeTravelQADoneData.fromJson,
+            );
+            if (done?.answerContent != null &&
+                done!.answerContent!.isNotEmpty) {
+              controller.add(
+                VideoSummaryChatReplyData(
+                  text: done.answerContent!,
+                  citedSources: done.citedSources,
+                ),
+              );
             }
             controller.close();
           } else if (event.type == SSEEventType.error) {
-            controller.addError(Exception(event.data?.toString() ?? 'SSE stream error'));
+            controller.addError(
+              Exception(event.data?.toString() ?? 'SSE stream error'),
+            );
             controller.close();
           }
         },

@@ -10,10 +10,10 @@ import '../../services/service_providers.dart';
 import '../../services/video_service.dart';
 import '../auth/auth_controller.dart';
 import 'application/video_summary_flow_controller.dart';
+import 'application/video_summary_result_mapper.dart';
 import 'application/video_summary_session_history_controller.dart';
 import 'application/video_summary_settings_controller.dart';
 import 'application/video_summary_text_editing_controller.dart';
-import 'domain/video_summary_domain_models.dart';
 import 'video_summary_models.dart';
 import 'video_summary_presentation_models.dart';
 import 'video_summary_repository.dart';
@@ -47,14 +47,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.taskId != null) {
-      Future.microtask(() => _restoreVideoSession(widget.taskId!, isTaskId: true));
-    } else if (widget.videoId != null) {
-      Future.microtask(() => _restoreVideoSession(widget.videoId!));
+    final taskId = widget.taskId;
+    final videoId = widget.videoId;
+    debugPrint('[HomeScreen] initState — taskId=$taskId, videoId=$videoId');
+    if (taskId != null && taskId.isNotEmpty) {
+      Future.microtask(() => _restoreVideoSession(taskId, isTaskId: true));
+    } else if (videoId != null && videoId.isNotEmpty) {
+      Future.microtask(() => _restoreVideoSession(videoId));
     }
   }
 
   Future<void> _restoreVideoSession(String id, {bool isTaskId = false}) async {
+    debugPrint(
+      '[HomeScreen] _restoreVideoSession — id=$id, isTaskId=$isTaskId',
+    );
     final taskService = ref.read(taskServiceProvider);
     try {
       late final String taskId;
@@ -68,9 +74,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
       if (isTaskId) {
         // 优先路径：通过 taskId 直接获取任务详情（来自 cited_resources 点击）
+        debugPrint('[HomeScreen] getTask API starting — taskId=$id');
         final resp = await taskService.getTask(id);
         final dto = resp.data;
-        if (dto == null) return;
+        if (dto == null) {
+          debugPrint(
+            '[HomeScreen] getTask returned null data — taskId=$id, aborting',
+          );
+          return;
+        }
+        debugPrint(
+          '[HomeScreen] getTask success — workflowState=${dto.workflowState}, kbid=${dto.kbid}',
+        );
         taskId = dto.taskId;
         videoId = dto.videoId;
         workflowState = dto.workflowState;
@@ -83,7 +98,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // 兼容旧路径：listTasks + 按 videoId 匹配
         final resp = await taskService.listTasks();
         final match = resp.data.where((t) => t.videoId == id).toList();
-        if (match.isEmpty) return;
+        if (match.isEmpty) {
+          debugPrint(
+            '[HomeScreen] listTasks matched no task for videoId=$id, aborting',
+          );
+          return;
+        }
 
         final task = match.first;
         taskId = task.taskId;
@@ -99,16 +119,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final stage = switch (workflowState) {
         'COMPLETED' => VideoSummaryStage.finalChat,
         'WAITING_USER_APPROVAL' => VideoSummaryStage.draft,
-        'DRAFT_GENERATING' || 'FINAL_GENERATING' => VideoSummaryStage.processing,
+        'DRAFT_GENERATING' ||
+        'FINAL_GENERATING' => VideoSummaryStage.processing,
         _ => VideoSummaryStage.ready,
       };
 
       final draftParagraphs = draftSummary != null
           ? draftSummary!
-              .split(RegExp(r'\n\s*\n'))
-              .map((p) => p.trim())
-              .where((p) => p.isNotEmpty)
-              .toList()
+                .split(RegExp(r'\n\s*\n'))
+                .map((p) => p.trim())
+                .where((p) => p.isNotEmpty)
+                .toList()
           : <String>[];
 
       final snapshot = VideoSummaryFlowSnapshot(
@@ -119,6 +140,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           sourceLabel: kbid,
           fileName: title ?? videoId,
         ),
+        kbid: kbid,
         stage: stage,
         uploadHighlighted: true,
         processingExpanded: stage == VideoSummaryStage.processing,
@@ -127,8 +149,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         selectedTimestampEndSeconds:
             VideoSummaryFlowController.minimumTimestampRangeSeconds,
         isDraftEditMode: false,
-        processingSnapshot: null,
-        draftResult: (stage == VideoSummaryStage.draft ||
+        processingSnapshot: stage == VideoSummaryStage.processing
+            ? buildInitialProcessingSnapshot()
+            : null,
+        draftResult:
+            (stage == VideoSummaryStage.draft ||
                 stage == VideoSummaryStage.finalChat)
             ? DraftResult(paragraphs: draftParagraphs, suggestionHint: '')
             : null,
@@ -145,9 +170,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         uploadProgress: 0.0,
       );
 
+      debugPrint(
+        '[HomeScreen] restoreSnapshot — stage=$stage, taskId=$taskId, kbid=$kbid',
+      );
       if (!mounted) return;
       final flowCtrl = ref.read(videoSummaryFlowControllerProvider.notifier);
       flowCtrl.restoreSnapshot(snapshot);
+      debugPrint('[HomeScreen] restoreSnapshot completed');
 
       final historyCtrl = ref.read(videoSummarySessionHistoryProvider.notifier);
       historyCtrl.addTempUploadSession(
@@ -158,7 +187,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           draftBodyText: draftSummary ?? '',
         ),
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[HomeScreen] _restoreVideoSession failed: $e');
       // 查找失败则停留在首页默认状态
     }
   }
@@ -180,9 +210,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final nextLoggedIn = next.isLoggedIn;
       final userChanged = prev?.currentUser?.userId != next.currentUser?.userId;
 
-      if ((prevLoggedIn && !nextLoggedIn) ||  // 注销
-          (!prevLoggedIn && nextLoggedIn) ||  // 登录
-          (prevLoggedIn && nextLoggedIn && userChanged)) { // 切换账号
+      if ((prevLoggedIn && !nextLoggedIn) || // 注销
+          (!prevLoggedIn && nextLoggedIn) || // 登录
+          (prevLoggedIn && nextLoggedIn && userChanged)) {
+        // 切换账号
         ref.invalidate(videoSummarySessionHistoryProvider);
         ref.invalidate(videoSummaryFlowControllerProvider);
       }
@@ -192,10 +223,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final msg = next.errorMessage;
       if (msg != null && msg != prev?.errorMessage) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(msg),
-            behavior: SnackBarBehavior.floating,
-          ),
+          SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
         );
         ref.read(videoSummaryFlowControllerProvider.notifier).clearError();
       }
@@ -216,66 +244,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         key: _scaffoldKey,
         backgroundColor: Colors.white,
         drawerEnableOpenDragGesture: true,
-      drawer: VideoSummaryHistoryDrawer(
-        sessions: sessionHistory.sessions
-            .where(
-              (session) =>
-                  // "session-current" 是控制器 build() 创建的占位条目，
-                  // 仅用于内部状态管理，永远不在侧边栏中显示。
-                  session.id != 'session-current',
-            )
-            .map(
-              (session) => VideoSummaryDrawerSessionItem(
-                id: session.id,
-                title: session.title,
-                durationLabel: session.durationLabel,
-                detail: session.detail,
-                isActive: !_isCurrentSessionEmpty(flowState) &&
-                    session.id == sessionHistory.activeSessionId,
+        drawer: VideoSummaryHistoryDrawer(
+          sessions: sessionHistory.sessions
+              .where(
+                (session) =>
+                    // "session-current" 是控制器 build() 创建的占位条目，
+                    // 仅用于内部状态管理，永远不在侧边栏中显示。
+                    session.id != 'session-current',
+              )
+              .map(
+                (session) => VideoSummaryDrawerSessionItem(
+                  id: session.id,
+                  title: session.title,
+                  durationLabel: session.durationLabel,
+                  detail: session.detail,
+                  isActive:
+                      !_isCurrentSessionEmpty(flowState) &&
+                      session.id == sessionHistory.activeSessionId,
+                ),
+              )
+              .toList(),
+          isLoadingHistory: sessionHistory.isLoadingHistory,
+          errorMessage: sessionHistory.errorMessage,
+          onRetryHistory: () {
+            ref
+                .read(videoSummarySessionHistoryProvider.notifier)
+                .retryLoadHistory();
+          },
+          onNewSessionPressed: _createNewSessionFromDrawer,
+          onSessionSelected: _restoreSessionFromDrawer,
+          onSettingsPressed: _openSettingsFromDrawer,
+          onSearchPressed: _openSearchFromDrawer,
+        ),
+        body: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onHorizontalDragEnd: _handleHorizontalDragEnd,
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                12,
+                12,
+                12,
+                keyboardVisible ? 8 : 12,
               ),
-            )
-            .toList(),
-        isLoadingHistory: sessionHistory.isLoadingHistory,
-        errorMessage: sessionHistory.errorMessage,
-        onRetryHistory: () {
-          ref
-              .read(videoSummarySessionHistoryProvider.notifier)
-              .retryLoadHistory();
-        },
-        onNewSessionPressed: _createNewSessionFromDrawer,
-        onSessionSelected: _restoreSessionFromDrawer,
-        onSettingsPressed: _openSettingsFromDrawer,
-        onSearchPressed: _openSearchFromDrawer,
-      ),
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onHorizontalDragEnd: _handleHorizontalDragEnd,
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(12, 12, 12, keyboardVisible ? 8 : 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                HomeHeaderRow(
-                  currentSection: AppNavSection.videoSummary,
-                  onSectionSelected: (section) =>
-                      _handleSectionSelection(context, section),
-                  onMenuPressed: _openDrawer,
-                  onNewSessionPressed: _createNewSession,
-                ),
-                const SizedBox(height: 5),
-                Expanded(
-                  child: useBoundedStageLayout
-                      ? _buildWorkspace(flowState, textEditing)
-                      : SingleChildScrollView(
-                          child: _buildWorkspace(flowState, textEditing),
-                        ),
-                ),
-              ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  HomeHeaderRow(
+                    currentSection: AppNavSection.videoSummary,
+                    onSectionSelected: (section) =>
+                        _handleSectionSelection(context, section),
+                    onMenuPressed: _openDrawer,
+                    onNewSessionPressed: _createNewSession,
+                  ),
+                  const SizedBox(height: 5),
+                  Expanded(
+                    child: useBoundedStageLayout
+                        ? _buildWorkspace(flowState, textEditing)
+                        : SingleChildScrollView(
+                            child: _buildWorkspace(flowState, textEditing),
+                          ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -300,7 +334,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-   /// 当前会话是否为空（无任务、无上传、处于 ready 阶段）。
+  /// 当前会话是否为空（无任务、无上传、处于 ready 阶段）。
   /// 用于侧边栏过滤：空会话不在历史列表中显示。
   bool _isCurrentSessionEmpty(VideoSummaryFlowState flowState) {
     return flowState.taskId == null &&
@@ -360,7 +394,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         )
         .toList();
 
-    final shouldRestoreDrawer = _scaffoldKey.currentState?.isDrawerOpen ?? false;
+    final shouldRestoreDrawer =
+        _scaffoldKey.currentState?.isDrawerOpen ?? false;
     if (shouldRestoreDrawer) {
       AppNavigator.popCurrent(context);
       await WidgetsBinding.instance.endOfFrame;
@@ -446,6 +481,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         .sendChatMessage(message);
   }
 
+  Future<void> _handleUploadCardPressed() async {
+    final videoId = await ref
+        .read(videoSummaryFlowControllerProvider.notifier)
+        .pickAndUploadVideo();
+    if (videoId != null && mounted) {
+      AppNavigator.openVideoDetail(context, videoId: videoId);
+    }
+  }
+
   Future<void> _openVideoPlayback() async {
     final flowState = ref.read(videoSummaryFlowControllerProvider);
     final videoId = flowState.videoAsset.title;
@@ -470,16 +514,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       Navigator.of(context).pop(); // 关闭 loading
 
       // 本地开发模式 presigned_url 是 file:// 路径，转换为 HTTP 流式端点
-      if (videoUrl.startsWith('file://') && ossKey != null && ossKey.isNotEmpty) {
+      if (videoUrl.startsWith('file://') &&
+          ossKey != null &&
+          ossKey.isNotEmpty) {
         final baseUrl = ApiClient.instance.options.baseUrl;
-        videoUrl = '$baseUrl/api/v1/files/stream?object_key=${Uri.encodeComponent(ossKey)}';
+        videoUrl =
+            '$baseUrl/api/v1/files/stream?object_key=${Uri.encodeComponent(ossKey)}';
       }
 
       if (videoUrl.isEmpty) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('视频地址暂不可用，请稍后重试')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('视频地址暂不可用，请稍后重试')));
         return;
       }
 
@@ -494,9 +541,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     } catch (e) {
       if (!mounted) return;
       Navigator.of(context).pop(); // 关闭 loading
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('获取视频播放地址失败: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('获取视频播放地址失败: $e')));
     }
   }
 
@@ -513,7 +560,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       draftResult: flowState.draftResult,
       finalSummaryData: flowState.finalSummaryData,
       chatMessages: flowState.chatMessages,
-      readyPreferenceController: textEditing.readyPreferenceController,
       draftGuidanceController: textEditing.draftGuidanceController,
       chatController: textEditing.chatController,
       draftBodyController: textEditing.draftBodyController,
@@ -530,28 +576,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           .videoDurationInSeconds,
       selectedTimestampStartSeconds: flowState.selectedTimestampStartSeconds,
       selectedTimestampEndSeconds: flowState.selectedTimestampEndSeconds,
-      onUploadCardPressed: ref
-          .read(videoSummaryFlowControllerProvider.notifier)
-          .pickAndUploadVideo,
+      onUploadCardPressed: () {
+        _handleUploadCardPressed();
+      },
       onProcessingCardPressed: ref
           .read(videoSummaryFlowControllerProvider.notifier)
           .toggleProcessingExpanded,
       onDraftEditModeChanged: ref
           .read(videoSummaryFlowControllerProvider.notifier)
           .setDraftEditMode,
-      onStartPressed: flowState.isGenerating
-          ? null
-          : () {
-              final preference = ref
-                  .read(videoSummaryTextEditingControllerProvider)
-                  .readyPreferenceText;
-              ref
-                  .read(videoSummaryFlowControllerProvider.notifier)
-                  .startDraftGeneration(
-                    userInitialPreference:
-                        preference.isNotEmpty ? preference : null,
-                  );
-            },
       onGenerateFinalPressed: flowState.isGenerating
           ? null
           : _generateFinalSummary,
@@ -579,6 +612,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           context: context,
           ref: ref,
           videoId: videoId,
+        );
+      },
+      onCloneToKbPressed: () {
+        final repo = ref.read(videoSummaryRepositoryProvider);
+        final videoId = repo.videoId;
+        if (videoId.isEmpty || videoId == 'vid_default') return;
+        final flowState = ref.read(videoSummaryFlowControllerProvider);
+        final taskId = flowState.taskId;
+        if (taskId == null || taskId.isEmpty) return;
+        showAddToKnowledgeBaseSheet(
+          context: context,
+          ref: ref,
+          videoId: videoId,
+          taskId: taskId,
         );
       },
     );

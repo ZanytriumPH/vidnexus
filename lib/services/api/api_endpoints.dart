@@ -26,6 +26,9 @@ class ApiEndpoints {
   static const String videos = '$basePath/videos';
   static String video(String videoId) => '$basePath/videos/$videoId';
 
+  /// GET /api/v1/videos/{video_id}/tasks — 查询视频关联的所有摘要任务（分页）。
+  static String videoTasks(String videoId) => '$basePath/videos/$videoId/tasks';
+
   // -- video-summary-tasks --
   static const String tasks = '$basePath/tasks';
   static String task(String taskId) => '$basePath/tasks/$taskId';
@@ -51,6 +54,10 @@ class ApiEndpoints {
       '$basePath/tasks/$taskId/start-analysis';
   static String taskApproveAndFinalize(String taskId) =>
       '$basePath/tasks/$taskId/approve-and-finalize';
+
+  /// POST /api/v1/tasks/{task_id}/clone-to-kb — 将 Task 克隆到另一个 KB。
+  static String taskCloneToKb(String taskId) =>
+      '$basePath/tasks/$taskId/clone-to-kb';
 
   // -- time-travel QA stream (new.md 新增) --
   static String taskTimeTravelQAStream(String taskId) =>

@@ -281,7 +281,7 @@ void main() {
     test('fetchDraftResult parses draft_summary into paragraphs', () async {
       stubTaskCreationAndPollCompletion();
 
-      final genStream = repository.startDraftGeneration();
+      final genStream = repository.startDraftGeneration(kbid: testKbid);
       await genStream.first; // Poller terminates on WAITING_USER_APPROVAL
 
       // Re-stub getTask for fetchDraftResult
@@ -305,7 +305,7 @@ void main() {
     test('fetchDraftResult handles single paragraph', () async {
       stubTaskCreationAndPollCompletion();
 
-      final genStream = repository.startDraftGeneration();
+      final genStream = repository.startDraftGeneration(kbid: testKbid);
       await genStream.first;
 
       when(() => mockTaskService.getTask(testTaskId)).thenAnswer(
@@ -326,7 +326,7 @@ void main() {
     test('fetchDraftResult handles empty draft', () async {
       stubTaskCreationAndPollCompletion();
 
-      final genStream = repository.startDraftGeneration();
+      final genStream = repository.startDraftGeneration(kbid: testKbid);
       await genStream.first;
 
       when(() => mockTaskService.getTask(testTaskId)).thenAnswer(
@@ -362,7 +362,7 @@ void main() {
         () async {
       stubTaskCreationAndPollCompletion();
 
-      final genStream = repository.startDraftGeneration();
+      final genStream = repository.startDraftGeneration(kbid: testKbid);
       await genStream.first;
 
       // Stub updateTask
@@ -431,7 +431,7 @@ void main() {
     test('sendSummaryChatMessage creates QA and streams answer', () async {
       stubTaskCreationAndPollCompletion();
 
-      final genStream = repository.startDraftGeneration();
+      final genStream = repository.startDraftGeneration(kbid: testKbid);
       await genStream.first;
 
       // Stub createTimeTravelQAStream
@@ -481,7 +481,7 @@ void main() {
 
       stubTaskCreationAndPollCompletion();
 
-      final genStream = repoWithoutQA.startDraftGeneration();
+      final genStream = repoWithoutQA.startDraftGeneration(kbid: testKbid);
       await genStream.first;
 
       expect(

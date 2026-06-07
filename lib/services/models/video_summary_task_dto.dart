@@ -7,37 +7,37 @@ class TaskCreateRequest {
     required this.kbid,
     required this.videoId,
     this.userInitialPreference,
+    this.replaceExistingTaskId,
   });
 
   final String kbid;
   final String videoId;
   final String? userInitialPreference;
+  final String? replaceExistingTaskId;
 
   Map<String, dynamic> toJson() => {
-        'kbid': kbid,
-        'video_id': videoId,
-        if (userInitialPreference != null)
-          'user_initial_preference': userInitialPreference,
-      };
+    'kbid': kbid,
+    'video_id': videoId,
+    if (userInitialPreference != null)
+      'user_initial_preference': userInitialPreference,
+    if (replaceExistingTaskId != null)
+      'replace_existing_task_id': replaceExistingTaskId,
+  };
 }
 
 /// PATCH /api/v1/tasks/{task_id} 请求体（用户可写字段）。
 class TaskUpdateRequest {
-  const TaskUpdateRequest({
-    this.draftSummary,
-    this.userGuidance,
-    this.title,
-  });
+  const TaskUpdateRequest({this.draftSummary, this.userGuidance, this.title});
 
   final String? draftSummary;
   final String? userGuidance;
   final String? title;
 
   Map<String, dynamic> toJson() => {
-        if (draftSummary != null) 'draft_summary': draftSummary,
-        if (userGuidance != null) 'user_guidance': userGuidance,
-        if (title != null) 'title': title,
-      };
+    if (draftSummary != null) 'draft_summary': draftSummary,
+    if (userGuidance != null) 'user_guidance': userGuidance,
+    if (title != null) 'title': title,
+  };
 }
 
 /// VideoSummaryTask 响应 data 对象。
@@ -144,10 +144,10 @@ class ApproveAndFinalizeRequest {
   final String? humanGuidance;
 
   Map<String, dynamic> toJson() => {
-        if (editedAggregatedChunkInsights != null)
-          'edited_aggregated_chunk_insights': editedAggregatedChunkInsights,
-        if (humanGuidance != null) 'human_guidance': humanGuidance,
-      };
+    if (editedAggregatedChunkInsights != null)
+      'edited_aggregated_chunk_insights': editedAggregatedChunkInsights,
+    if (humanGuidance != null) 'human_guidance': humanGuidance,
+  };
 }
 
 /// POST /api/v1/tasks/{task_id}/approve-and-finalize 响应 data。
@@ -177,5 +177,77 @@ class ApproveAndFinalizeResponseData {
       acceptedAt: json['accepted_at'] as String?,
       message: json['message'] as String?,
     );
+  }
+}
+
+// ──── clone-to-kb + 409 conflict DTO ────
+
+/// POST /api/v1/tasks/{task_id}/clone-to-kb 请求体。
+class TaskCloneToKbRequest {
+  const TaskCloneToKbRequest({required this.kbid, this.replaceExistingTaskId});
+
+  final String kbid;
+  final String? replaceExistingTaskId;
+
+  Map<String, dynamic> toJson() => {
+    'kbid': kbid,
+    if (replaceExistingTaskId != null)
+      'replace_existing_task_id': replaceExistingTaskId,
+  };
+}
+
+/// 409 Conflict 响应体中的 data 字段，用于提取冲突信息。
+class TaskConflictData {
+  const TaskConflictData({
+    required this.existingTaskId,
+    required this.kbid,
+    this.message,
+  });
+
+  final String existingTaskId;
+  final String kbid;
+  final String? message;
+
+  factory TaskConflictData.fromJson(Map<String, dynamic> json) {
+    return TaskConflictData(
+      existingTaskId: json['existing_task_id'] as String? ?? '',
+      kbid: json['kbid'] as String? ?? '',
+      message: json['message'] as String?,
+    );
+  }
+
+  /// 从 409 响应体提取冲突数据，兼容多种后端响应格式：
+  /// - error envelope: {error: {details: {existing_task_id, kbid}}}
+  /// - flat: {existing_task_id, kbid, message}
+  /// - data envelope: {data: {existing_task_id, kbid}}
+  static TaskConflictData? tryExtract(dynamic respData) {
+    if (respData is! Map<String, dynamic>) return null;
+
+    Map<String, dynamic>? candidate;
+
+    // Path 1: error envelope (clone-to-kb / standard 4xx format)
+    final error = respData['error'];
+    if (error is Map<String, dynamic>) {
+      final details = error['details'];
+      if (details is Map<String, dynamic> &&
+          details.containsKey('existing_task_id')) {
+        candidate = details;
+      }
+    }
+
+    // Path 2: flat format (fields at top level)
+    candidate ??= respData.containsKey('existing_task_id') ? respData : null;
+
+    // Path 3: data envelope
+    if (candidate == null) {
+      final data = respData['data'];
+      if (data is Map<String, dynamic> &&
+          data.containsKey('existing_task_id')) {
+        candidate = data;
+      }
+    }
+
+    if (candidate == null) return null;
+    return TaskConflictData.fromJson(candidate);
   }
 }

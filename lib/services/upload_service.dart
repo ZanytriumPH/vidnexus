@@ -85,13 +85,13 @@ class UploadService {
   }
 
   /// 查询上传状态。
-  Future<ApiResponse<UploadStatusResponseData>> getStatus(
-    String uploadId,
-  ) async {
+  ///
+  /// 后端 GET /api/v1/uploads/{upload_id} 返回扁平 JSON（无 ApiResponse
+  /// 信封），与 initUpload 一致，因此直接解析。
+  Future<UploadStatusResponseData> getStatus(String uploadId) async {
     final resp = await _dio.get(ApiEndpoints.upload(uploadId));
-    return ApiResponse.fromJson(
+    return UploadStatusResponseData.fromJson(
       resp.data as Map<String, dynamic>,
-      UploadStatusResponseData.fromJson,
     );
   }
 }

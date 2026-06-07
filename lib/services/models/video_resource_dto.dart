@@ -36,6 +36,8 @@ class VideoResourceResponseData {
     this.keyframesOssPrefix,
     this.extractCompletedAt,
     this.createdAt,
+    this.fileHash,
+    this.taskRefCount,
   });
 
   final String videoId;
@@ -52,6 +54,8 @@ class VideoResourceResponseData {
   final String? keyframesOssPrefix;
   final String? extractCompletedAt;
   final String? createdAt;
+  final String? fileHash;
+  final int? taskRefCount;
 
   factory VideoResourceResponseData.fromJson(Map<String, dynamic> json) {
     return VideoResourceResponseData(
@@ -71,6 +75,8 @@ class VideoResourceResponseData {
       keyframesOssPrefix: json['keyframes_oss_prefix'] as String?,
       extractCompletedAt: json['extract_completed_at'] as String?,
       createdAt: json['created_at'] as String?,
+      fileHash: json['file_hash'] as String?,
+      taskRefCount: json['task_ref_count'] as int?,
     );
   }
 }

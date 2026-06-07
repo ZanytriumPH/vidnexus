@@ -310,24 +310,26 @@ void main() {
     });
 
     test('getStatus returns uploaded_chunks', () async {
+      // 后端 GET /api/v1/uploads/{upload_id} 返回扁平 JSON（无 ApiResponse
+      // 信封），与 initUpload 一致。
       fakeDio.getResponse = Response<Map<String, dynamic>>(
         requestOptions: RequestOptions(path: '/api/v1/uploads/upl_001'),
         statusCode: 200,
-        data: successEnvelope({
+        data: {
           'upload_id': 'upl_001',
           'uploaded_size': 31457280,
           'total_size': 524288000,
           'uploaded_chunks': [0, 1, 2],
-        }),
+        },
       );
 
       final service = const UploadService();
-      final resp = await service.getStatus('upl_001');
+      final data = await service.getStatus('upl_001');
 
-      expect(resp.data!.uploadId, 'upl_001');
-      expect(resp.data!.uploadedSize, 31457280);
-      expect(resp.data!.totalSize, 524288000);
-      expect(resp.data!.uploadedChunks, [0, 1, 2]);
+      expect(data.uploadId, 'upl_001');
+      expect(data.uploadedSize, 31457280);
+      expect(data.totalSize, 524288000);
+      expect(data.uploadedChunks, [0, 1, 2]);
     });
   });
 

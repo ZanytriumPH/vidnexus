@@ -29,6 +29,12 @@ class KnowledgeBaseSourcesRouteArguments {
   final String kbid;
 }
 
+class VideoDetailRouteArguments {
+  const VideoDetailRouteArguments({required this.videoId});
+
+  final String videoId;
+}
+
 class HomeRouteArguments {
   const HomeRouteArguments({this.videoId, this.taskId});
 

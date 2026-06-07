@@ -39,7 +39,8 @@ class VideoSummaryChunkProgressData {
     final totalChunks =
         (payload['total_chunks'] as int?) ?? fallbackTotalChunks;
     final doneCount = (payload['done_count'] as int?) ?? 0;
-    final overallPercent = (payload['overall_percent'] as int?) ??
+    final overallPercent =
+        (payload['overall_percent'] as int?) ??
         (totalChunks > 0 ? ((doneCount / totalChunks) * 100).round() : 0);
     final stageStr = payload['stage'] as String?;
     return VideoSummaryChunkProgressData(
@@ -194,4 +195,21 @@ class TaskFailedException implements Exception {
 
   @override
   String toString() => 'Task $taskId failed on server';
+}
+
+/// 创建 Task 时 (KB, video) 重复导致的 409 冲突异常。
+class TaskConflictException implements Exception {
+  const TaskConflictException({
+    required this.existingTaskId,
+    required this.kbid,
+    this.message,
+  });
+
+  final String existingTaskId;
+  final String kbid;
+  final String? message;
+
+  @override
+  String toString() =>
+      'TaskConflictException(existingTaskId: $existingTaskId, kbid: $kbid)';
 }

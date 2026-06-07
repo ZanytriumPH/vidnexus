@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
+import '../application/video_summary_result_mapper.dart';
 import 'video_summary_draft_stage_workspace.dart';
 import 'video_summary_final_chat_stage_workspace.dart';
 import 'video_summary_processing_stage_workspace.dart';
@@ -17,7 +18,6 @@ class VideoSummaryWorkspace extends StatelessWidget {
     required this.draftResult,
     required this.finalSummaryData,
     required this.chatMessages,
-    required this.readyPreferenceController,
     required this.draftGuidanceController,
     required this.chatController,
     required this.draftBodyController,
@@ -33,7 +33,6 @@ class VideoSummaryWorkspace extends StatelessWidget {
     required this.onUploadCardPressed,
     required this.onProcessingCardPressed,
     required this.onDraftEditModeChanged,
-    required this.onStartPressed,
     required this.onGenerateFinalPressed,
     required this.onSendChatPressed,
     required this.onTimestampScopeChanged,
@@ -42,6 +41,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
     required this.uploadProgress,
     this.finalDraftProgressMessage,
     this.onAddToKbPressed,
+    this.onCloneToKbPressed,
     this.onVideoPlayback,
     this.onRefreshPressed,
     super.key,
@@ -54,7 +54,6 @@ class VideoSummaryWorkspace extends StatelessWidget {
   final DraftResult? draftResult;
   final FinalSummaryData? finalSummaryData;
   final List<ChatMessage> chatMessages;
-  final TextEditingController readyPreferenceController;
   final TextEditingController draftGuidanceController;
   final TextEditingController chatController;
   final TextEditingController draftBodyController;
@@ -70,7 +69,6 @@ class VideoSummaryWorkspace extends StatelessWidget {
   final VoidCallback onUploadCardPressed;
   final VoidCallback onProcessingCardPressed;
   final ValueChanged<bool> onDraftEditModeChanged;
-  final VoidCallback? onStartPressed;
   final VoidCallback? onGenerateFinalPressed;
   final VoidCallback? onSendChatPressed;
   final ValueChanged<bool> onTimestampScopeChanged;
@@ -79,6 +77,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
   final double uploadProgress;
   final String? finalDraftProgressMessage;
   final VoidCallback? onAddToKbPressed;
+  final VoidCallback? onCloneToKbPressed;
   final VoidCallback? onVideoPlayback;
   final VoidCallback? onRefreshPressed;
 
@@ -88,22 +87,20 @@ class VideoSummaryWorkspace extends StatelessWidget {
       VideoSummaryStage.ready => ReadyStageWorkspace(
         highlighted: highlighted,
         videoAsset: videoAsset,
-        preferenceController: readyPreferenceController,
         isGenerating: isGenerating,
         onUploadCardPressed: onUploadCardPressed,
-        onStartPressed: onStartPressed,
         isUploading: isUploading,
         uploadProgress: uploadProgress,
       ),
-      VideoSummaryStage.processing when processingSnapshot != null =>
-        ProcessingStageWorkspace(
-          highlighted: highlighted,
-          videoAsset: videoAsset,
-          processingSnapshot: processingSnapshot!,
-          processingExpanded: processingExpanded,
-          onProcessingCardPressed: onProcessingCardPressed,
-          onRefreshPressed: onRefreshPressed,
-        ),
+      VideoSummaryStage.processing => ProcessingStageWorkspace(
+        highlighted: highlighted,
+        videoAsset: videoAsset,
+        processingSnapshot:
+            processingSnapshot ?? buildInitialProcessingSnapshot(),
+        processingExpanded: processingExpanded,
+        onProcessingCardPressed: onProcessingCardPressed,
+        onRefreshPressed: onRefreshPressed,
+      ),
       VideoSummaryStage.draft when draftResult != null => DraftStageWorkspace(
         highlighted: highlighted,
         videoAsset: videoAsset,
@@ -117,7 +114,8 @@ class VideoSummaryWorkspace extends StatelessWidget {
         onGenerateFinalPressed: onGenerateFinalPressed,
         onVideoPlayback: onVideoPlayback,
       ),
-      VideoSummaryStage.finalChat when finalSummaryData != null || isGenerating =>
+      VideoSummaryStage.finalChat
+          when finalSummaryData != null || isGenerating =>
         FinalChatStageWorkspace(
           highlighted: highlighted,
           videoAsset: videoAsset,
@@ -135,6 +133,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
           onTimestampScopeChanged: onTimestampScopeChanged,
           onTimestampRangeChanged: onTimestampRangeChanged,
           onAddToKbPressed: onAddToKbPressed,
+          onCloneToKbPressed: onCloneToKbPressed,
           onVideoPlayback: onVideoPlayback,
           isGenerating: isGenerating,
           finalDraftProgressMessage: finalDraftProgressMessage,

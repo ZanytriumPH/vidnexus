@@ -11,6 +11,7 @@ import '../../features/knowledge_base/knowledge_base_home_screen.dart';
 import '../../features/knowledge_base/knowledge_base_models.dart';
 import '../../features/knowledge_base/knowledge_base_session_screen.dart';
 import '../../features/knowledge_base/knowledge_base_sources_screen.dart';
+import '../../features/home/widgets/video_detail_screen.dart';
 import 'app_routes.dart';
 
 /// 统一处理命名路由到页面实例的映射。
@@ -21,7 +22,12 @@ class AppRouter {
     try {
       switch (settings.name) {
         case AppRoutes.home:
-          final args = settings.arguments as HomeRouteArguments?;
+          final rawArgs = settings.arguments;
+          final args = rawArgs as HomeRouteArguments?;
+          debugPrint(
+            '[AppRouter] home route — rawArgs type=${rawArgs.runtimeType}, '
+            'videoId=${args?.videoId}, taskId=${args?.taskId}',
+          );
           return _buildRoute(
             settings: settings,
             builder: (_) => HomeScreen(
@@ -68,6 +74,12 @@ class AppRouter {
           return _buildRoute(
             settings: settings,
             builder: (_) => KnowledgeBaseSourcesScreen(kbid: args.kbid),
+          );
+        case AppRoutes.videoDetail:
+          final args = _requireArguments<VideoDetailRouteArguments>(settings);
+          return _buildRoute(
+            settings: settings,
+            builder: (_) => VideoDetailScreen(videoId: args.videoId),
           );
         case AppRoutes.authLogin:
           return _buildRoute(
@@ -148,16 +160,24 @@ class AppNavigator {
   ///
   /// 当同时提供 [taskId] 时，会直接通过 taskId 获取任务详情（无需 listTasks 全量匹配），
   /// 优先用于知识库 cited_resources 点击等已有明确 task 的场景。
+  ///
+  /// 注意：不能使用 pushNamedAndRemoveUntil(context, '/')，因为 MaterialApp 同时设置
+  /// 了 home: AuthGate()，导致 Navigator 对 '/' 路由始终使用 AuthGate widget 而忽略
+  /// onGenerateRoute，造成 HomeRouteArguments 被丢弃。因此这里直接用 MaterialPageRoute
+  /// 创建 HomeScreen 实例。
   static void goToHomeWithVideo(
     BuildContext context, {
     required String videoId,
     String? taskId,
   }) {
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      AppRoutes.home,
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => HomeScreen(
+          videoId: videoId,
+          taskId: taskId,
+        ),
+      ),
       (route) => false,
-      arguments: HomeRouteArguments(videoId: videoId, taskId: taskId),
     );
   }
 
@@ -214,6 +234,16 @@ class AppNavigator {
     return Navigator.of(context).pushNamed<String>(
       AppRoutes.videoSummarySearch,
       arguments: arguments,
+    );
+  }
+
+  static Future<void> openVideoDetail(
+    BuildContext context, {
+    required String videoId,
+  }) {
+    return Navigator.of(context).pushNamed(
+      AppRoutes.videoDetail,
+      arguments: VideoDetailRouteArguments(videoId: videoId),
     );
   }
 

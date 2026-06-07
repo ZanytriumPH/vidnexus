@@ -24,6 +24,7 @@ class FinalChatStageWorkspace extends StatefulWidget {
     required this.onTimestampScopeChanged,
     required this.onTimestampRangeChanged,
     this.onAddToKbPressed,
+    this.onCloneToKbPressed,
     this.onVideoPlayback,
     this.isGenerating = false,
     this.finalDraftProgressMessage,
@@ -46,6 +47,7 @@ class FinalChatStageWorkspace extends StatefulWidget {
   final ValueChanged<bool> onTimestampScopeChanged;
   final ValueChanged<TimestampRangeSelection> onTimestampRangeChanged;
   final VoidCallback? onAddToKbPressed;
+  final VoidCallback? onCloneToKbPressed;
   final VoidCallback? onVideoPlayback;
   final bool isGenerating;
   final String? finalDraftProgressMessage;
@@ -154,6 +156,7 @@ class _FinalChatStageWorkspaceState extends State<FinalChatStageWorkspace>
                   summary: widget.finalSummaryData!,
                   messages: widget.chatMessages,
                   onAddToKbPressed: widget.onAddToKbPressed,
+                  onCloneToKbPressed: widget.onCloneToKbPressed,
                   isWaiting: widget.isSendingChat,
                 ),
                 const SizedBox(height: 12),

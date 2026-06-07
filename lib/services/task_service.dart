@@ -20,6 +20,7 @@ class TaskService {
     required String kbid,
     required String videoId,
     String? userInitialPreference,
+    String? replaceExistingTaskId,
   }) async {
     final resp = await _dio.post(
       ApiEndpoints.tasks,
@@ -27,6 +28,7 @@ class TaskService {
         kbid: kbid,
         videoId: videoId,
         userInitialPreference: userInitialPreference,
+        replaceExistingTaskId: replaceExistingTaskId,
       ).toJson(),
     );
     return ApiResponse.fromJson(
@@ -78,10 +80,20 @@ class TaskService {
     );
   }
 
+  /// 分页获取指定视频的所有任务。
+  Future<ApiListResponse<VideoSummaryTaskResponseData>> listVideoTasks(
+    String videoId, {
+    PageParams params = const PageParams(),
+  }) async {
+    return _dio.getPaginated<VideoSummaryTaskResponseData>(
+      ApiEndpoints.videoTasks(videoId),
+      params: params,
+      fromJsonT: VideoSummaryTaskResponseData.fromJson,
+    );
+  }
+
   /// 删除任务。
-  Future<ApiResponse<TaskDeleteResponseData>> deleteTask(
-    String taskId,
-  ) async {
+  Future<ApiResponse<TaskDeleteResponseData>> deleteTask(String taskId) async {
     final resp = await _dio.delete(ApiEndpoints.task(taskId));
     return ApiResponse.fromJson(
       resp.data as Map<String, dynamic>,
@@ -119,6 +131,25 @@ class TaskService {
     return ApiResponse.fromJson(
       resp.data as Map<String, dynamic>,
       ApproveAndFinalizeResponseData.fromJson,
+    );
+  }
+
+  /// 将 Task 的分析结果克隆到另一个 KB。
+  Future<ApiResponse<VideoSummaryTaskResponseData>> cloneTaskToKb(
+    String taskId, {
+    required String kbid,
+    String? replaceExistingTaskId,
+  }) async {
+    final resp = await _dio.post(
+      ApiEndpoints.taskCloneToKb(taskId),
+      data: TaskCloneToKbRequest(
+        kbid: kbid,
+        replaceExistingTaskId: replaceExistingTaskId,
+      ).toJson(),
+    );
+    return ApiResponse.fromJson(
+      resp.data as Map<String, dynamic>,
+      VideoSummaryTaskResponseData.fromJson,
     );
   }
 }

@@ -7,6 +7,7 @@ class AppRoutes {
   static const String knowledgeBaseSession = '/knowledge-base/session';
   static const String knowledgeBaseChat = '/knowledge-base/chat';
   static const String knowledgeBaseSources = '/knowledge-base/sources';
+  static const String videoDetail = '/video/detail';
   static const String authLogin = '/auth/login';
   static const String authRegister = '/auth/register';
 }

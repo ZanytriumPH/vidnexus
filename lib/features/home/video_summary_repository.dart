@@ -69,6 +69,7 @@ abstract class VideoSummaryRepository {
   });
 
   Stream<VideoSummaryProcessingData> startDraftGeneration({
+    required String kbid,
     String? userInitialPreference,
   });
 
@@ -105,6 +106,20 @@ abstract class VideoSummaryRepository {
 
   /// 当前视频 ID。
   String get videoId;
+
+  /// 获取指定视频的所有任务列表（分页）。
+  Future<List<VideoSummaryTaskInfo>> listVideoTasks(
+    String videoId, {
+    int page = 1,
+    int pageSize = 50,
+  });
+
+  /// 将 Task 的分析结果克隆到另一个知识库。
+  Future<VideoSummaryTaskInfo> cloneTaskToKb(
+    String taskId, {
+    required String targetKbid,
+    String? replaceExistingTaskId,
+  });
 
   /// 当前任务 ID。
   String? get activeTaskId;
