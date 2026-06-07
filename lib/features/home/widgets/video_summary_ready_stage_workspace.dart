@@ -182,7 +182,7 @@ class _VideoListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final taskCount = video.taskRefCount ?? 0;
-    final dateLabel = video.createdAt ?? '';
+    final dateLabel = _fmtTime(video.createdAt);
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -215,5 +215,21 @@ class _VideoListItem extends StatelessWidget {
       onTap: onTap,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     );
+  }
+}
+
+/// ISO 8601 → "yyyy-MM-dd HH:mm"（精确到分）。
+String _fmtTime(String? iso) {
+  if (iso == null || iso.isEmpty) return '';
+  try {
+    final dt = DateTime.parse(iso);
+    final y = dt.year.toString();
+    final mo = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    final h = dt.hour.toString().padLeft(2, '0');
+    final mi = dt.minute.toString().padLeft(2, '0');
+    return '$y-$mo-$d $h:$mi';
+  } catch (_) {
+    return iso;
   }
 }

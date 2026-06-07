@@ -362,6 +362,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           durationLabel: '0m 00s',
           sourceLabel: state.videoAsset.sourceLabel,
           fileName: fileName,
+          kbName: state.videoAsset.kbName,
         ),
       );
 
@@ -604,6 +605,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         durationLabel: newLabel,
         sourceLabel: currentAsset.sourceLabel,
         fileName: currentAsset.fileName,
+        kbName: currentAsset.kbName,
       );
       final defaultRange = _buildDefaultTimestampRange(newLabel);
       state = state.copyWith(
@@ -801,6 +803,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           durationLabel: durationLabel,
           sourceLabel: state.videoAsset.sourceLabel,
           fileName: fileName,
+          kbName: state.videoAsset.kbName,
         ),
       );
     } else {
@@ -813,6 +816,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           durationLabel: durationLabel,
           sourceLabel: _repository.kbid,
           fileName: fileName,
+          kbName: state.videoAsset.kbName,
         ),
         uploadHighlighted: true,
       );
@@ -939,10 +943,34 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           return;
         }
 
-        // 首帧到达时 task 已创建完毕，同步 taskId 到 state，
-        // 确保后续 captureSnapshot() 能拿到正确的 taskId
+        // 首帧到达时 task 已创建完毕，同步 taskId + kbName 到 state，
+        // 确保后续 captureSnapshot() 能拿到正确的 taskId 且 HeroCard 能显示 kbName 标签
         if (state.taskId == null && _repository.activeTaskId != null) {
-          state = state.copyWith(taskId: _repository.activeTaskId);
+          final repoKbName = _repository.kbName;
+          state = state.copyWith(
+            taskId: _repository.activeTaskId,
+            videoAsset: repoKbName != null
+                ? VideoAssetInfo(
+                    title: state.videoAsset.title,
+                    durationLabel: state.videoAsset.durationLabel,
+                    sourceLabel: state.videoAsset.sourceLabel,
+                    fileName: state.videoAsset.fileName,
+                    kbName: repoKbName,
+                  )
+                : state.videoAsset,
+          );
+          // 同步更新侧边栏条目（syncActiveSession 仅在上传时调用，此时补充更新 kbName）
+          if (repoKbName != null) {
+            ref.read(videoSummarySessionHistoryProvider.notifier)
+                .syncActiveSession(
+                  VideoSummarySessionSnapshot(
+                    flowSnapshot: captureSnapshot(),
+                    readyPreferenceText: '',
+                    draftGuidanceText: '',
+                    draftBodyText: '',
+                  ),
+                );
+          }
         }
         state = state.copyWith(
           processingSnapshot: mapProcessingDataToSnapshot(processingData),

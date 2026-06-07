@@ -6,12 +6,14 @@ class VideoAssetInfo {
     required this.durationLabel,
     required this.sourceLabel,
     required this.fileName,
+    this.kbName,
   });
 
   final String title;
   final String durationLabel;
   final String sourceLabel;
   final String fileName;
+  final String? kbName;
 }
 
 class TimestampRangeSelection {

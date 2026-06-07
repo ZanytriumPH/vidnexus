@@ -168,6 +168,7 @@ class VideoSummaryTaskInfo {
     required this.taskId,
     required this.videoId,
     required this.kbid,
+    this.kbName,
     required this.workflowState,
     this.draftSummary,
     this.finalSummary,
@@ -179,6 +180,7 @@ class VideoSummaryTaskInfo {
   final String taskId;
   final String videoId;
   final String kbid;
+  final String? kbName;
   final WorkflowState workflowState;
   final String? draftSummary;
   final String? finalSummary;

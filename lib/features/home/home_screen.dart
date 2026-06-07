@@ -67,6 +67,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       late final String videoId;
       late final String workflowState;
       late final String kbid;
+      late final String? kbName;
       late final String? draftSummary;
       late final String? finalSummary;
       late final String? title;
@@ -90,6 +91,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         videoId = dto.videoId;
         workflowState = dto.workflowState;
         kbid = dto.kbid;
+        kbName = dto.kbName;
         draftSummary = dto.draftSummary;
         finalSummary = dto.finalSummary;
         title = dto.title;
@@ -110,6 +112,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         videoId = task.videoId;
         workflowState = task.workflowState;
         kbid = task.kbid;
+        kbName = task.kbName;
         draftSummary = task.draftSummary;
         finalSummary = task.finalSummary;
         title = task.title;
@@ -139,6 +142,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           durationLabel: '0m 00s',
           sourceLabel: kbid,
           fileName: title ?? videoId,
+          kbName: kbName,
         ),
         kbid: kbid,
         stage: stage,
@@ -261,6 +265,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   isActive:
                       !_isCurrentSessionEmpty(flowState) &&
                       session.id == sessionHistory.activeSessionId,
+                  kbName:
+                      session.snapshot.flowSnapshot.videoAsset?.kbName,
+                  kbid:
+                      session.snapshot.flowSnapshot.videoAsset?.sourceLabel,
                 ),
               )
               .toList(),
@@ -390,6 +398,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             durationLabel: session.durationLabel,
             detail: session.detail,
             isActive: session.id == sessionHistory.activeSessionId,
+            kbName: session.snapshot.flowSnapshot.videoAsset?.kbName,
+            kbid: session.snapshot.flowSnapshot.videoAsset?.sourceLabel,
           ),
         )
         .toList();

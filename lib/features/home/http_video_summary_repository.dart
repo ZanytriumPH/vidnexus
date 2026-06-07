@@ -44,6 +44,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   String videoId;
 
   String? _taskId;
+  String? _kbName;
 
   /// 上次 WS 进度值（0.0~1.0），用于 progress=null 时保持不回退。
   double _lastProgress = 0.0;
@@ -75,6 +76,9 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   @override
   String? get activeTaskId => _taskId;
 
+  /// 当前任务关联的知识库名称（从 API 响应捕获）。
+  String? get kbName => _kbName;
+
   // ---- VideoSummaryRepository 实现 ----
 
   @override
@@ -91,6 +95,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
             taskId: dto.taskId,
             videoId: dto.videoId,
             kbid: dto.kbid,
+            kbName: dto.kbName,
             workflowState: WorkflowState.fromApi(dto.workflowState),
             draftSummary: dto.draftSummary,
             finalSummary: dto.finalSummary,
@@ -117,6 +122,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
             taskId: dto.taskId,
             videoId: dto.videoId,
             kbid: dto.kbid,
+            kbName: dto.kbName,
             workflowState: WorkflowState.fromApi(dto.workflowState),
             draftSummary: dto.draftSummary,
             finalSummary: dto.finalSummary,
@@ -142,10 +148,12 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     if (dto == null) {
       throw StateError('cloneTaskToKb returned null data');
     }
+    _kbName = dto.kbName;
     return VideoSummaryTaskInfo(
       taskId: dto.taskId,
       videoId: dto.videoId,
       kbid: dto.kbid,
+      kbName: dto.kbName,
       workflowState: WorkflowState.fromApi(dto.workflowState),
       draftSummary: dto.draftSummary,
       finalSummary: dto.finalSummary,
@@ -160,10 +168,12 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       final resp = await _taskService.getTask(taskId);
       final dto = resp.data;
       if (dto == null) return null;
+      _kbName = dto.kbName; // sync to repository cache
       return VideoSummaryTaskInfo(
         taskId: dto.taskId,
         videoId: dto.videoId,
         kbid: dto.kbid,
+        kbName: dto.kbName,
         workflowState: WorkflowState.fromApi(dto.workflowState),
         draftSummary: dto.draftSummary,
         finalSummary: dto.finalSummary,
@@ -376,6 +386,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       durationLabel: '0m 00s',
       sourceLabel: kbid,
       fileName: videoId,
+      kbName: _kbName,
     );
   }
 
@@ -439,10 +450,11 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       throw StateError('Task creation returned null data');
     }
     _taskId = data.taskId;
+    _kbName = data.kbName;
 
     if (kDebugMode) {
       debugPrint(
-        '[HttpRepo] 任务已创建 — taskId=$_taskId state=${data.workflowState}',
+        '[HttpRepo] 任务已创建 — taskId=$_taskId state=${data.workflowState} kbName=$_kbName',
       );
     }
 

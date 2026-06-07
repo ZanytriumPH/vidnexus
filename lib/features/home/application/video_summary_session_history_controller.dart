@@ -193,24 +193,64 @@ class VideoSummarySessionHistoryController
         }
       }
 
-      final historyEntries = tasks
-          .where((t) =>
-              !existingTaskIds.contains(t.taskId) &&
-              !tempVideoIds.contains(t.videoId))
-          .map((t) => _mapTaskToEntry(t, videoDetails[t.videoId]))
-          .toList();
+      // 从后端数据构建"应存在的条目"映射（taskId → entry）
+      final backendEntries = <String, VideoSummarySessionHistoryEntry>{};
+      for (final t in tasks) {
+        backendEntries[t.taskId] = _mapTaskToEntry(t, videoDetails[t.videoId]);
+      }
 
-      final merged = [currentSession, ...tempSessions, ...historyEntries];
+      // 已存在的条目标识
+      final existingIds = <String>{};
+      for (final s in state.sessions) {
+        if (s.id == 'session-current' || s.id.startsWith('temp-')) continue;
+        existingIds.add(s.id);
+        // 如果已有后端数据且当前条目缺失 kbName，用后端数据替换
+        if (backendEntries.containsKey(s.id) &&
+            s.snapshot.flowSnapshot.videoAsset?.kbName == null) {
+          // 将在下方 replaceExisting 中处理
+        }
+      }
+
+      // 合并：保留已有非 temp 条目（含用后端数据补全的），添加新的后端条目
+      final replaceExisting = <String, VideoSummarySessionHistoryEntry>{};
+      for (final s in state.sessions) {
+        if (s.id == 'session-current' || s.id.startsWith('temp-')) continue;
+        final be = backendEntries[s.id];
+        if (be != null &&
+            s.snapshot.flowSnapshot.videoAsset?.kbName == null) {
+          // 用后端数据补全缺失的 kbName
+          replaceExisting[s.id] = be;
+        }
+      }
+
+      final keptSessions = state.sessions.map((s) {
+        return replaceExisting[s.id] ?? s;
+      }).where((s) {
+        // session-current 保留，temp- 保留
+        if (s.id == 'session-current') return false; // 单独处理
+        return true;
+      }).toList();
+
+      // 添加后端中全新的条目
+      for (final entry in backendEntries.entries) {
+        if (!existingIds.contains(entry.key) &&
+            !tempVideoIds.contains(entry.value.snapshot.flowSnapshot.videoAsset?.title ?? '')) {
+          keptSessions.add(entry.value);
+        }
+      }
+
+      final merged = [currentSession, ...keptSessions];
+      final historyCount = merged.length - 1 - tempSessions.length;
       debugPrint(
         '[SessionHistory] _loadFromBackend DONE —'
         ' currentSession=${currentSession.id}'
         ' tempSessions(${tempSessions.length})=${tempSessions.map((s) => s.id).toList()}'
-        ' historyEntries(${historyEntries.length})=${historyEntries.map((e) => e.id).toList()}'
+        ' updatedExisting(${replaceExisting.length})=${replaceExisting.keys.toList()}'
         ' merged(${merged.length})=${merged.map((s) => s.id).toList()}',
       );
       state = state.copyWith(
         sessions: merged,
-        createdSessionCount: 1 + tempSessions.length + historyEntries.length,
+        createdSessionCount: merged.length,
         isLoadingHistory: false,
         clearError: true,
       );
@@ -260,6 +300,7 @@ class VideoSummarySessionHistoryController
             durationLabel: durationLabel,
             sourceLabel: task.kbid,
             fileName: fileName,
+            kbName: task.kbName,
           ),
           stage: stage,
           uploadHighlighted: stage != VideoSummaryStage.ready,

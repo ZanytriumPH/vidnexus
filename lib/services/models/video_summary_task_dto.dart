@@ -45,6 +45,7 @@ class VideoSummaryTaskResponseData {
   const VideoSummaryTaskResponseData({
     required this.taskId,
     required this.kbid,
+    this.kbName,
     required this.videoId,
     required this.workflowState,
     this.userInitialPreference,
@@ -59,6 +60,7 @@ class VideoSummaryTaskResponseData {
 
   final String taskId;
   final String kbid;
+  final String? kbName;
   final String videoId;
   final String workflowState;
   final String? userInitialPreference;
@@ -71,9 +73,19 @@ class VideoSummaryTaskResponseData {
   final String? updatedAt;
 
   factory VideoSummaryTaskResponseData.fromJson(Map<String, dynamic> json) {
+    final kbName = json['kb_name'] as String?;
+    final taskId = json['task_id'] as String? ?? '';
+    if (kbName != null) {
+      // ignore: avoid_print
+      print('[DTO] kb_name parsed: "$kbName" for task $taskId');
+    } else {
+      // ignore: avoid_print
+      print('[DTO] kb_name is NULL for task $taskId — keys: ${json.keys.join(", ")}');
+    }
     return VideoSummaryTaskResponseData(
-      taskId: json['task_id'] as String? ?? '',
+      taskId: taskId,
       kbid: json['kbid'] as String? ?? '',
+      kbName: kbName,
       videoId: json['video_id'] as String? ?? '',
       workflowState: json['workflow_state'] as String? ?? '',
       userInitialPreference: json['user_initial_preference'] as String?,

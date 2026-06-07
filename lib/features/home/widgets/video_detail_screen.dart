@@ -10,6 +10,7 @@ import '../../../services/service_providers.dart';
 import '../../../services/task_service.dart';
 import '../../../services/video_service.dart';
 import '../../knowledge_base/application/knowledge_base_controller.dart';
+import 'video_summary_processing_widgets.dart';
 
 /// 视频详情页：展示视频信息 + 关联任务列表 + 发起新任务。
 class VideoDetailScreen extends ConsumerStatefulWidget {
@@ -252,7 +253,7 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
   Widget _buildTaskItem(VideoSummaryTaskResponseData task) {
     final statusLabel = _workflowStateLabel(task.workflowState);
     final statusColor = _workflowStateColor(task.workflowState);
-    final dateLabel = task.createdAt ?? '';
+    final dateLabel = _formatDateTime(task.createdAt);
 
     return Card(
       elevation: 0,
@@ -289,12 +290,23 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      '${task.kbid}${dateLabel.isNotEmpty ? ' · $dateLabel' : ''}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade500,
-                      ),
+                    Row(
+                      children: [
+                        KbNameTag(
+                          kbName: task.kbName ?? '',
+                          kbid: task.kbid,
+                        ),
+                        if (dateLabel.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            dateLabel,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
@@ -349,6 +361,22 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
       return '${hours}h ${minutes.toString().padLeft(2, '0')}m ${seconds.toString().padLeft(2, '0')}s';
     }
     return '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
+  }
+
+  /// 将 ISO 8601 时间字符串转为 "yyyy-MM-dd HH:mm" 格式。
+  static String _formatDateTime(String? isoString) {
+    if (isoString == null || isoString.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(isoString);
+      final y = dt.year.toString();
+      final m = dt.month.toString().padLeft(2, '0');
+      final d = dt.day.toString().padLeft(2, '0');
+      final h = dt.hour.toString().padLeft(2, '0');
+      final min = dt.minute.toString().padLeft(2, '0');
+      return '$y-$m-$d $h:$min';
+    } catch (_) {
+      return isoString;
+    }
   }
 
   // ──── 发起新任务 BottomSheet ────

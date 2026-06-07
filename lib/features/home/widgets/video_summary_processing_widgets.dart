@@ -103,6 +103,11 @@ class HeroCard extends StatelessWidget {
               Row(
                 children: [
                   StatusPill(label: pillLabel),
+                  const SizedBox(width: 8),
+                  KbNameTag(
+                    kbName: videoAsset.kbName ?? '',
+                    kbid: videoAsset.sourceLabel,
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
@@ -530,4 +535,33 @@ Color progressColor(double value) {
         safeValue,
       ) ??
       AppColors.primary;
+}
+
+/// 知识库名称标签，在 HeroCard / 视频详情 / 侧边栏复用。
+class KbNameTag extends StatelessWidget {
+  const KbNameTag({required this.kbName, this.kbid, super.key});
+
+  final String kbName;
+  final String? kbid;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayText = kbName.isNotEmpty ? kbName : (kbid ?? '知识库');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3CD), // 黄色背景
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFFC107), width: 0.5),
+      ),
+      child: Text(
+        displayText,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF856404), // 深黄色文字
+        ),
+      ),
+    );
+  }
 }

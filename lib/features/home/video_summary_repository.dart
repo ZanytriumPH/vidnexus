@@ -123,4 +123,7 @@ abstract class VideoSummaryRepository {
 
   /// 当前任务 ID。
   String? get activeTaskId;
+
+  /// 当前任务关联的知识库名称（从 API 响应捕获）。
+  String? get kbName;
 }
