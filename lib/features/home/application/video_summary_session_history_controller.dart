@@ -167,10 +167,30 @@ class VideoSummarySessionHistoryController
         orElse: () => state.sessions.first,
       );
 
-      // 保留当前内存中已有的临时上传会话，避免异步加载后端列表时将其覆盖
+      // 保留当前内存中已有的临时上传会话，避免异步加载后端列表时将其覆盖。
+      // 同时收集已存在的 taskId，避免与后端历史条目重复。
       final tempSessions =
           state.sessions.where((s) => s.id.startsWith('temp-')).toList();
+      final existingTaskIds = <String>{};
+      final tempVideoIds = <String>{};
+      for (final s in state.sessions) {
+        if (s.id == 'session-current') continue;
+        if (!s.id.startsWith('temp-')) {
+          // 非 temp 条目（Step 1 重构后用 taskId 作为 ID）
+          existingTaskIds.add(s.id);
+        } else {
+          // temp 条目：记录其 videoId 用于去重
+          final vid = s.id.substring(5); // 去掉 'temp-' 前缀
+          if (vid.isNotEmpty) tempVideoIds.add(vid);
+          final tid = s.snapshot.flowSnapshot.taskId;
+          if (tid != null && tid.isNotEmpty) existingTaskIds.add(tid);
+        }
+      }
+
       final historyEntries = tasks
+          .where((t) =>
+              !existingTaskIds.contains(t.taskId) &&
+              !tempVideoIds.contains(t.videoId))
           .map((t) => _mapTaskToEntry(t, videoDetails[t.videoId]))
           .toList();
 
@@ -295,9 +315,29 @@ class VideoSummarySessionHistoryController
 
   void activateSession(String sessionId) {
     if (state.activeSessionId == sessionId) {
+      // 即使已是活跃会话，仍移动到顶部（用户可能从视频详情页重复点击同一任务）
+      _moveSessionToTop(sessionId);
       return;
     }
+    _moveSessionToTop(sessionId);
     state = state.copyWith(activeSessionId: sessionId);
+  }
+
+  /// 将指定会话移动到列表顶部（紧接 session-current 之后），实现"最近点击置顶"。
+  void _moveSessionToTop(String sessionId) {
+    final index = state.sessions.indexWhere((s) => s.id == sessionId);
+    if (index <= 1) return; // 已在顶部（index 0 = session-current，index 1 = 已是第一个）
+    final entry = state.sessions[index];
+    final current = state.sessions.firstWhere(
+      (s) => s.id == 'session-current',
+      orElse: () => state.sessions.first,
+    );
+    final others = state.sessions
+        .where((s) => s.id != sessionId && s.id != 'session-current')
+        .toList();
+    state = state.copyWith(
+      sessions: [current, entry, ...others],
+    );
   }
 
   void syncActiveSession(VideoSummarySessionSnapshot snapshot) {
@@ -318,8 +358,16 @@ class VideoSummarySessionHistoryController
         snapshot: snapshot,
       );
 
+      // 移除 temp 条目，同时去重：移除任何已存在的同 taskId 条目
+      // （例如 _loadFromBackend 已经加载了该任务）以及同 video 的残留 temp 条目
+      final videoId = flowSnapshot.videoAsset?.title ?? '';
       final otherSessions = state.sessions
-          .where((s) => s.id != tempId && s.id != 'session-current')
+          .where((s) =>
+              s.id != tempId &&
+              s.id != 'session-current' &&
+              s.id != taskId &&
+              s.snapshot.flowSnapshot.taskId != taskId &&
+              !(videoId.isNotEmpty && s.id == 'temp-$videoId'))
           .toList();
       final current = state.sessions.firstWhere(
         (s) => s.id == 'session-current',
@@ -346,10 +394,16 @@ class VideoSummarySessionHistoryController
         snapshot: snapshot,
       );
 
-      // 插入到 index 1（在 session-current 之后）
-      final current = state.sessions.first;
-      final otherSessions = state.sessions.skip(1).toList();
-      final sessions = [current, entry, ...otherSessions];
+      // 插入到 index 1，同时去重：移除任何已存在的同 taskId 条目
+      final videoId = flowSnapshot.videoAsset?.title ?? '';
+      final otherSessions = state.sessions
+          .skip(1) // 跳过 session-current
+          .where((s) =>
+              s.id != taskId &&
+              s.snapshot.flowSnapshot.taskId != taskId &&
+              !(videoId.isNotEmpty && s.id == 'temp-$videoId'))
+          .toList();
+      final sessions = [state.sessions.first, entry, ...otherSessions];
 
       state = state.copyWith(
         sessions: sessions,
@@ -391,15 +445,19 @@ class VideoSummarySessionHistoryController
 
   /// 当视频上传成功且 Celery 处理完毕时，创建一个仅在内存中生存的临时会话。
   /// 此临时会话不落盘，允许在应用退出后丢失。
+  ///
+  /// 若快照中已包含 [VideoSummaryFlowSnapshot.taskId]，则直接以 taskId 作为
+  /// 条目主键（而非 `temp-$videoId`），确保与 `_loadFromBackend` 加载的条目
+  /// 可去重。插入时始终将条目置于列表顶部（紧接 session-current 之后）。
   void addTempUploadSession(VideoSummarySessionSnapshot snapshot) {
     final flowSnapshot = snapshot.flowSnapshot;
     final videoId = flowSnapshot.videoAsset?.title ?? '';
     if (videoId.isEmpty || videoId == 'vid_default') return;
 
-    final entryId = 'temp-$videoId';
+    final taskId = flowSnapshot.taskId;
+    final useTaskId = taskId != null && taskId.isNotEmpty;
+    final entryId = useTaskId ? taskId! : 'temp-$videoId';
 
-    // 若已存在同一 videoId 的临时条目，更新而非新建
-    final existingIndex = state.sessions.indexWhere((s) => s.id == entryId);
     final entry = VideoSummarySessionHistoryEntry(
       id: entryId,
       title: flowSnapshot.videoAsset?.fileName ?? '视频总结会话',
@@ -408,21 +466,35 @@ class VideoSummarySessionHistoryController
       snapshot: snapshot,
     );
 
-    List<VideoSummarySessionHistoryEntry> sessions;
-    int nextCount;
-    if (existingIndex != -1) {
-      sessions = List<VideoSummarySessionHistoryEntry>.from(state.sessions);
-      sessions[existingIndex] = entry;
-      nextCount = state.createdSessionCount;
-    } else {
-      nextCount = state.createdSessionCount + 1;
-      // 插入到 current session 之后（index 0 之后）
-      final current = state.sessions.first;
-      sessions = [current, entry, ...state.sessions.skip(1)];
+    // 去重：收集需要从列表中移除的所有旧条目 ID
+    final toRemove = <String>{entryId};
+    if (useTaskId) {
+      // 清理可能残留的 temp-$videoId 条目（同一视频的旧临时条目）
+      toRemove.add('temp-$videoId');
+      // 清理任何 snapshot 中 taskId 匹配但 ID 不同的条目
+      // （例如 _loadFromBackend 以 taskId 加载的条目，或同视频的其他 temp 条目）
+      for (final s in state.sessions) {
+        if (s.id == 'session-current') continue;
+        if (s.snapshot.flowSnapshot.taskId == taskId && s.id != entryId) {
+          toRemove.add(s.id);
+        }
+      }
     }
 
+    final current = state.sessions.firstWhere(
+      (s) => s.id == 'session-current',
+      orElse: () => state.sessions.first,
+    );
+    final others = state.sessions
+        .where((s) => !toRemove.contains(s.id) && s.id != 'session-current')
+        .toList();
+
+    // 计算新计数：若条目之前不存在则 +1
+    final existed = state.sessions.any((s) => s.id == entryId);
+    final nextCount = existed ? state.createdSessionCount : state.createdSessionCount + 1;
+
     state = state.copyWith(
-      sessions: sessions,
+      sessions: [current, entry, ...others],
       activeSessionId: entryId,
       createdSessionCount: nextCount,
     );
