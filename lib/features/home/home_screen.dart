@@ -482,9 +482,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _handleUploadCardPressed() async {
+    debugPrint('[HomeScreen] _handleUploadCardPressed START');
     final videoId = await ref
         .read(videoSummaryFlowControllerProvider.notifier)
         .pickAndUploadVideo();
+    debugPrint('[HomeScreen] _handleUploadCardPressed DONE — videoId=$videoId mounted=$mounted');
     if (videoId != null && mounted) {
       AppNavigator.openVideoDetail(context, videoId: videoId);
     }

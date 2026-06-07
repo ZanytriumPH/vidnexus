@@ -53,7 +53,7 @@ class _ReadyStageWorkspaceState extends State<ReadyStageWorkspace> {
       );
       if (!mounted) return;
       setState(() {
-        _videos = resp.data;
+        _videos = _deduplicateVideos(resp.data);
         _isLoading = false;
       });
     } catch (e) {
@@ -63,6 +63,15 @@ class _ReadyStageWorkspaceState extends State<ReadyStageWorkspace> {
         _error = e.toString();
       });
     }
+  }
+
+  /// 按 videoId 去重，保留列表中首次出现的条目。
+  /// 由于 API 已按 -created_at 排序，首次出现即为最新记录。
+  List<VideoResourceResponseData> _deduplicateVideos(
+    List<VideoResourceResponseData> videos,
+  ) {
+    final seen = <String>{};
+    return videos.where((v) => seen.add(v.videoId)).toList();
   }
 
   @override

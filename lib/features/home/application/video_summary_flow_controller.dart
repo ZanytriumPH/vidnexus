@@ -340,13 +340,21 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       newVideoId ??= fileName;
       if (_activeSessionKey != owningSessionKey) return null;
 
-      // 2. 立即同步 videoId 到 repository、provider 以及 state.videoAsset，
-      //    确保 captureSnapshot 从这一刻起就携带正确的视频标识，
-      //    避免 syncActiveSession 用旧视频 ID 覆盖其他历史条目。
+      debugPrint(
+        '[FlowCtrl] pickAndUploadVideo START — newVideoId=$newVideoId'
+        ' fileName=$fileName stateTaskId=${state.taskId}',
+      );
+
       _repository.updateVideoId(newVideoId);
       ref.read(currentVideoIdProvider.notifier).state = newVideoId;
 
+      // 避免 handleFlowStateChanged → syncActiveSession 污染上一次上传的条目
+      ref
+          .read(videoSummarySessionHistoryProvider.notifier)
+          .activateSession('session-current');
+
       state = state.copyWith(
+        taskId: null, // 清除残留 taskId，避免条目以 taskId 而非 temp-$videoId 为主键
         isUploading: true,
         uploadProgress: 0.0,
         videoAsset: VideoAssetInfo(
@@ -447,32 +455,52 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         fileName,
       );
 
-      // 去重后 videoId 可能变化，同步更新 state 和 provider
-      if (resolvedVideoId != newVideoId) {
+      // 去重后 videoId 可能变化，同步更新 state 和 provider。
+      // 同时清理旧 videoId 对应的临时会话条目，避免侧边栏出现同一视频的多份记录。
+      final bool didDedupChangeId = resolvedVideoId != newVideoId;
+      if (didDedupChangeId) {
+        ref
+            .read(videoSummarySessionHistoryProvider.notifier)
+            .removeSession('temp-$newVideoId');
         newVideoId = resolvedVideoId;
         _repository.updateVideoId(resolvedVideoId);
         ref.read(currentVideoIdProvider.notifier).state = resolvedVideoId;
       }
 
-      // 6. 视频上传完成且 Celery 处理完毕，将当前会话以临时状态在侧边栏显示（仅保留在内存中，不进行本地落盘，高亮当前会话）
+      // 6. 上传完成：以完成态快照更新侧边栏。
+      final completedSnapshot = VideoSummarySessionSnapshot(
+        flowSnapshot: captureSnapshot(),
+        readyPreferenceText: '',
+        draftGuidanceText: '',
+        draftBodyText: '',
+      );
+
       if (_activeSessionKey == owningSessionKey) {
         ref
             .read(videoSummarySessionHistoryProvider.notifier)
-            .addTempUploadSession(
-              VideoSummarySessionSnapshot(
-                flowSnapshot: captureSnapshot(),
-                readyPreferenceText: '',
-                draftGuidanceText: '',
-                draftBodyText: '',
-              ),
-            );
+            .addTempUploadSession(completedSnapshot);
       } else {
-        _updateBackgroundTempSession(
-          newVideoId: newVideoId,
-          isUploading: false,
-          uploadProgress: 0.0,
-          stage: VideoSummaryStage.ready,
-        );
+        // 后台会话：若去重改变了 videoId，旧条目已被 removeSession 清理，
+        // 需用 addTempUploadSession 创建新条目（再恢复原活跃会话）；
+        // 若 videoId 未变，直接更新已有条目的上传状态即可。
+        if (didDedupChangeId) {
+          final originalActiveId = ref
+              .read(videoSummarySessionHistoryProvider)
+              .activeSessionId;
+          ref
+              .read(videoSummarySessionHistoryProvider.notifier)
+              .addTempUploadSession(completedSnapshot);
+          ref
+              .read(videoSummarySessionHistoryProvider.notifier)
+              .activateSession(originalActiveId);
+        } else {
+          _updateBackgroundTempSession(
+            newVideoId: newVideoId,
+            isUploading: false,
+            uploadProgress: 0.0,
+            stage: VideoSummaryStage.ready,
+          );
+        }
       }
 
       // 返回 videoId 供调用方决定是否跳转到视频详情页。
@@ -675,16 +703,19 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
           switch (state) {
             case 'done':
-              // 正常上传完成，使用原 videoId
+              // 正常上传完成。后端可能在 async_finalize_upload 中写入
+              // 与 createVideo 预注册不同的 video_id（例如后端内部合并了记录），
+              // 因此优先使用 GET /api/v1/uploads 返回的 video_id。
+              final resolvedId = data.videoId ?? videoId;
               await _applyCeleryReadyState(
-                videoId: videoId,
+                videoId: resolvedId,
                 owningSessionKey: owningSessionKey,
                 fileName: fileName,
                 durationSeconds: 0,
                 channel: 'HTTP polling',
                 attempt: attempt + 1,
               );
-              return videoId;
+              return resolvedId;
 
             case 'dedup_reused':
               // 去重复用已有视频，使用 upload 记录中的 video_id
@@ -757,6 +788,11 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         : '0m 00s';
 
     if (_activeSessionKey == owningSessionKey) {
+      debugPrint(
+        '[FlowCtrl] _applyCeleryReadyState — videoId=$videoId'
+        ' isUploading→false channel=$channel'
+        ' taskId=${state.taskId}',
+      );
       state = state.copyWith(
         isUploading: false,
         uploadHighlighted: true,

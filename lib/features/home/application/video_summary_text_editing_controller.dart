@@ -98,6 +98,20 @@ class VideoSummaryTextEditingController {
       });
     }
 
+    // 仅在关键字段变化时打印日志（避免每帧/每次按键刷屏）
+    if (previous?.isUploading != next.isUploading ||
+        previous?.taskId != next.taskId ||
+        previous?.stage != next.stage) {
+      debugPrint(
+        '[TextEditCtrl] handleFlowStateChanged —'
+        ' isUploading ${previous?.isUploading}→${next.isUploading}'
+        ' taskId ${previous?.taskId}→${next.taskId}'
+        ' stage ${previous?.stage}→${next.stage}'
+        ' syncPauseCount=$_syncPauseCount'
+        ' videoTitle=${next.videoAsset.title}',
+      );
+    }
+
     if (_syncPauseCount > 0) {
       return;
     }

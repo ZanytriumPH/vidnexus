@@ -98,6 +98,12 @@ class VideoSummarySessionHistoryController
     extends Notifier<VideoSummarySessionHistoryState> {
   VideoSummaryRepository get _repository => ref.read(videoSummaryRepositoryProvider);
 
+  /// 每次 state 写入自动过一遍去重：同一 videoId 只保留数据最完整的条目。
+  @override
+  set state(VideoSummarySessionHistoryState value) {
+    super.state = _deduplicate(value);
+  }
+
   @override
   VideoSummarySessionHistoryState build() {
     final videoAsset = _repository.getVideoAsset();
@@ -195,6 +201,13 @@ class VideoSummarySessionHistoryController
           .toList();
 
       final merged = [currentSession, ...tempSessions, ...historyEntries];
+      debugPrint(
+        '[SessionHistory] _loadFromBackend DONE —'
+        ' currentSession=${currentSession.id}'
+        ' tempSessions(${tempSessions.length})=${tempSessions.map((s) => s.id).toList()}'
+        ' historyEntries(${historyEntries.length})=${historyEntries.map((e) => e.id).toList()}'
+        ' merged(${merged.length})=${merged.map((s) => s.id).toList()}',
+      );
       state = state.copyWith(
         sessions: merged,
         createdSessionCount: 1 + tempSessions.length + historyEntries.length,
@@ -344,11 +357,18 @@ class VideoSummarySessionHistoryController
     final flowSnapshot = snapshot.flowSnapshot;
     final taskId = flowSnapshot.taskId;
 
+    debugPrint(
+      '[SessionHistory] syncActiveSession — activeSessionId=${state.activeSessionId}'
+      ' taskId=$taskId isUploading=${flowSnapshot.isUploading}'
+      ' videoId=${flowSnapshot.videoAsset?.title}',
+    );
+
     // 情况 A：如果当前活跃会话是临时上传会话，但现在已经有了 taskId（即用户点击了开始生成），
     // 那么我们需要删除原本的临时会话，晋升/替换为一个以 taskId 为主键的正式后端会话。
     if (state.activeSessionId.startsWith('temp-') &&
         taskId != null &&
         taskId.isNotEmpty) {
+      debugPrint('[SessionHistory] syncActiveSession → CASE A (promote temp→taskId)');
       final tempId = state.activeSessionId;
       final entry = VideoSummarySessionHistoryEntry(
         id: taskId,
@@ -386,6 +406,7 @@ class VideoSummarySessionHistoryController
     if (state.activeSessionId == 'session-current' &&
         taskId != null &&
         taskId.isNotEmpty) {
+      debugPrint('[SessionHistory] syncActiveSession → CASE B (promote session-current→taskId)');
       final entry = VideoSummarySessionHistoryEntry(
         id: taskId,
         title: flowSnapshot.videoAsset?.fileName ?? '视频总结会话',
@@ -417,10 +438,31 @@ class VideoSummarySessionHistoryController
       (item) => item.id == state.activeSessionId,
     );
     if (index == -1) {
+      debugPrint(
+        '[SessionHistory] syncActiveSession MISS — activeSessionId=${state.activeSessionId}'
+        ' NOT FOUND in ${state.sessions.map((s) => s.id).toList()}',
+      );
       return;
     }
 
     final current = state.sessions[index];
+
+    // 保护：若 entry 已有确定的 videoId，而快照携带的是不同的 videoId，
+    // 说明 activeSessionId 指向了上一次上传的残留条目（handleFlowStateChanged
+    // 在新上传触发了 syncActiveSession），跳过更新防止条目被污染。
+    final entryVideoId = current.snapshot.flowSnapshot.videoAsset?.title ?? '';
+    final snapshotVideoId = snapshot.flowSnapshot.videoAsset?.title ?? '';
+    if (entryVideoId.isNotEmpty &&
+        snapshotVideoId.isNotEmpty &&
+        entryVideoId != snapshotVideoId &&
+        entryVideoId != 'vid_default') {
+      debugPrint(
+        '[SessionHistory] syncActiveSession SKIP — videoId mismatch:'
+        ' entry=$entryVideoId snapshot=$snapshotVideoId',
+      );
+      return;
+    }
+
     final updated = current.copyWith(
       detail: _detailForSnapshot(snapshot),
       snapshot: snapshot,
@@ -428,11 +470,22 @@ class VideoSummarySessionHistoryController
     final sessions = List<VideoSummarySessionHistoryEntry>.from(state.sessions)
       ..[index] = updated;
     state = state.copyWith(sessions: sessions);
+
+    debugPrint(
+      '[SessionHistory] syncActiveSession DEFAULT — updated index=$index'
+      ' sessionId=${state.activeSessionId} detail=${_detailForSnapshot(snapshot)}',
+    );
   }
 
   void updateSessionSnapshot(String sessionId, VideoSummarySessionSnapshot snapshot) {
     final index = state.sessions.indexWhere((item) => item.id == sessionId);
-    if (index == -1) return;
+    if (index == -1) {
+      debugPrint(
+        '[SessionHistory] updateSessionSnapshot MISS — sessionId=$sessionId'
+        ' NOT FOUND in ${state.sessions.map((s) => s.id).toList()}',
+      );
+      return;
+    }
     final current = state.sessions[index];
     final updated = current.copyWith(
       detail: _detailForSnapshot(snapshot),
@@ -441,14 +494,16 @@ class VideoSummarySessionHistoryController
     final sessions = List<VideoSummarySessionHistoryEntry>.from(state.sessions)
       ..[index] = updated;
     state = state.copyWith(sessions: sessions);
+
+    debugPrint(
+      '[SessionHistory] updateSessionSnapshot OK — sessionId=$sessionId'
+      ' index=$index isUploading=${snapshot.flowSnapshot.isUploading}'
+      ' detail=${_detailForSnapshot(snapshot)}',
+    );
   }
 
-  /// 当视频上传成功且 Celery 处理完毕时，创建一个仅在内存中生存的临时会话。
-  /// 此临时会话不落盘，允许在应用退出后丢失。
-  ///
-  /// 若快照中已包含 [VideoSummaryFlowSnapshot.taskId]，则直接以 taskId 作为
-  /// 条目主键（而非 `temp-$videoId`），确保与 `_loadFromBackend` 加载的条目
-  /// 可去重。插入时始终将条目置于列表顶部（紧接 session-current 之后）。
+  /// 创建一个仅在内存中生存的临时会话。同 ID 替旧，同 videoId 去重在
+  /// [_loadFromBackend] 刷新后端列表时统一处理。
   void addTempUploadSession(VideoSummarySessionSnapshot snapshot) {
     final flowSnapshot = snapshot.flowSnapshot;
     final videoId = flowSnapshot.videoAsset?.title ?? '';
@@ -466,30 +521,14 @@ class VideoSummarySessionHistoryController
       snapshot: snapshot,
     );
 
-    // 去重：收集需要从列表中移除的所有旧条目 ID
-    final toRemove = <String>{entryId};
-    if (useTaskId) {
-      // 清理可能残留的 temp-$videoId 条目（同一视频的旧临时条目）
-      toRemove.add('temp-$videoId');
-      // 清理任何 snapshot 中 taskId 匹配但 ID 不同的条目
-      // （例如 _loadFromBackend 以 taskId 加载的条目，或同视频的其他 temp 条目）
-      for (final s in state.sessions) {
-        if (s.id == 'session-current') continue;
-        if (s.snapshot.flowSnapshot.taskId == taskId && s.id != entryId) {
-          toRemove.add(s.id);
-        }
-      }
-    }
-
+    // 同 ID 替旧；同 videoId 不同 ID 统一交给 _removeIncompleteDuplicates 清理
     final current = state.sessions.firstWhere(
       (s) => s.id == 'session-current',
       orElse: () => state.sessions.first,
     );
     final others = state.sessions
-        .where((s) => !toRemove.contains(s.id) && s.id != 'session-current')
+        .where((s) => s.id != entryId && s.id != 'session-current')
         .toList();
-
-    // 计算新计数：若条目之前不存在则 +1
     final existed = state.sessions.any((s) => s.id == entryId);
     final nextCount = existed ? state.createdSessionCount : state.createdSessionCount + 1;
 
@@ -497,6 +536,104 @@ class VideoSummarySessionHistoryController
       sessions: [current, entry, ...others],
       activeSessionId: entryId,
       createdSessionCount: nextCount,
+    );
+  }
+
+  /// 按 videoId 去重：同一视频出现多条记录时，仅保留数据最完整的那条。
+  /// 作为 state setter 的透明过滤器，所有写入自动经过此函数。
+  ///
+  /// 完整性排序（逐级比较）：
+  /// 1. 有 taskId 优于无 taskId
+  /// 2. isUploading == false 优于 true
+  /// 3. durationLabel 非占位值优于 "0m 00s"
+  static VideoSummarySessionHistoryState _deduplicate(
+    VideoSummarySessionHistoryState s,
+  ) {
+    final sessions = s.sessions;
+    if (sessions.length <= 2) return s;
+
+    final groups = <String, List<int>>{};
+    for (int i = 0; i < sessions.length; i++) {
+      if (sessions[i].id == 'session-current') continue;
+      final vid = sessions[i].snapshot.flowSnapshot.videoAsset?.title ?? '';
+      if (vid.isEmpty || vid == 'vid_default') continue;
+      groups.putIfAbsent(vid, () => []).add(i);
+    }
+
+    final toRemoveIndices = <int>{};
+    for (final entry in groups.entries) {
+      if (entry.value.length <= 1) continue;
+
+      final sorted = List<int>.from(entry.value)
+        ..sort((a, b) {
+          final sa = sessions[a].snapshot.flowSnapshot;
+          final sb = sessions[b].snapshot.flowSnapshot;
+          final aHasTask = sa.taskId != null && sa.taskId!.isNotEmpty;
+          final bHasTask = sb.taskId != null && sb.taskId!.isNotEmpty;
+          if (aHasTask != bHasTask) return aHasTask ? -1 : 1;
+          if (sa.isUploading != sb.isUploading) return sa.isUploading ? 1 : -1;
+          final aHasDuration = sessions[a].durationLabel != '0m 00s';
+          final bHasDuration = sessions[b].durationLabel != '0m 00s';
+          if (aHasDuration != bHasDuration) return aHasDuration ? -1 : 1;
+          return a.compareTo(b);
+        });
+
+      for (int i = 1; i < sorted.length; i++) {
+        toRemoveIndices.add(sorted[i]);
+        debugPrint(
+          '[SessionHistory] 去重移除 — ${sessions[sorted[i]].id}'
+          ' (videoId=${entry.key})',
+        );
+      }
+    }
+
+    if (toRemoveIndices.isEmpty) return s;
+
+    final keepCurrent = sessions.firstWhere((s) => s.id == 'session-current');
+    final others = <VideoSummarySessionHistoryEntry>[];
+    for (int i = 0; i < sessions.length; i++) {
+      if (sessions[i].id == 'session-current') continue;
+      if (!toRemoveIndices.contains(i)) others.add(sessions[i]);
+    }
+
+    final activeWasRemoved = toRemoveIndices.any(
+      (i) => sessions[i].id == s.activeSessionId,
+    );
+
+    return s.copyWith(
+      sessions: [keepCurrent, ...others],
+      activeSessionId: activeWasRemoved ? 'session-current' : s.activeSessionId,
+    );
+  }
+
+  /// 显式移除指定会话条目（用于去重等场景下清理残留 temp 条目）。
+  void removeSession(String sessionId) {
+    final index = state.sessions.indexWhere((s) => s.id == sessionId);
+    if (index == -1) {
+      debugPrint(
+        '[SessionHistory] removeSession MISS — sessionId=$sessionId'
+        ' NOT FOUND in ${state.sessions.map((s) => s.id).toList()}',
+      );
+      return;
+    }
+    final sessions = List<VideoSummarySessionHistoryEntry>.from(state.sessions)
+      ..removeAt(index);
+    // 如果移除的是当前活跃会话，回退到 session-current
+    String nextActiveId = state.activeSessionId;
+    if (state.activeSessionId == sessionId) {
+      nextActiveId = 'session-current';
+    }
+    state = state.copyWith(
+      sessions: sessions,
+      activeSessionId: nextActiveId,
+      createdSessionCount:
+          state.createdSessionCount > 0 ? state.createdSessionCount - 1 : 0,
+    );
+
+    debugPrint(
+      '[SessionHistory] removeSession OK — sessionId=$sessionId'
+      ' index=$index newActiveId=$nextActiveId'
+      ' remainingIds=${sessions.map((s) => s.id).toList()}',
     );
   }
 
