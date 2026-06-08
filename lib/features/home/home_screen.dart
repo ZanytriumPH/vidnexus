@@ -422,7 +422,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             isActive: session.id == sessionHistory.activeSessionId,
             kbName: session.snapshot.flowSnapshot.videoAsset?.kbName,
             kbid: session.snapshot.flowSnapshot.videoAsset?.sourceLabel,
-          ),
+          );
+          },
         )
         .toList();
 
