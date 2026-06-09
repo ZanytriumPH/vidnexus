@@ -1,7 +1,7 @@
 import 'package:vidnexus/services/models/video_qa_dto.dart';
 
 /// SSE 事件类型枚举（与后端 text/event-stream 对齐）。
-enum SSEEventType { start, delta, done, error }
+enum SSEEventType { start, delta, done, error, progress }
 
 /// 通用 SSE 事件结构。
 class SSEEvent {
@@ -187,5 +187,25 @@ class GlobalQADoneData {
             ?.map((e) => e as Map<String, dynamic>)
             .toList(),
         timestamp: json['timestamp'] as String?,
+      );
+}
+
+/// SSE progress 事件的 data 载荷（global QA，ReAct agent 进度）。
+class GlobalQAProgressData {
+  const GlobalQAProgressData({
+    required this.phase,
+    required this.message,
+  });
+
+  /// Agent 当前阶段：thinking | searching | retrieved | loading | generating
+  final String phase;
+
+  /// 前端直接展示的可读文案
+  final String message;
+
+  factory GlobalQAProgressData.fromJson(Map<String, dynamic> json) =>
+      GlobalQAProgressData(
+        phase: json['phase'] as String? ?? '',
+        message: json['message'] as String? ?? '',
       );
 }

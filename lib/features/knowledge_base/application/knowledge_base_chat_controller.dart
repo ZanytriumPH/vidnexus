@@ -161,6 +161,32 @@ class KnowledgeBaseChatController extends ChangeNotifier {
             }
             return;
           }
+        } else if (event.type == SSEEventType.progress) {
+          final progressData = event.parseData<GlobalQAProgressData>(
+            GlobalQAProgressData.fromJson,
+          );
+          if (progressData != null) {
+            final currentMessages =
+                List<KnowledgeChatMessage>.from(_state.messages);
+            if (currentMessages.isNotEmpty) {
+              final lastMsg = currentMessages.last;
+              final steps = [
+                ...?lastMsg.progressSteps,
+                KnowledgeProgressStep(
+                  phase: progressData.phase,
+                  message: progressData.message,
+                  timestamp: DateTime.now(),
+                ),
+              ];
+              currentMessages[currentMessages.length - 1] =
+                  KnowledgeChatMessage(
+                sender: lastMsg.sender,
+                text: lastMsg.text,
+                progressSteps: steps,
+              );
+              _emit(_state.copyWith(messages: currentMessages));
+            }
+          }
         } else if (event.type == SSEEventType.error) {
           throw Exception(event.data?.toString() ?? 'SSE stream error');
         }

@@ -2,18 +2,38 @@ import '../../services/models/global_chat_dto.dart';
 
 enum KnowledgeChatSender { user, system }
 
+/// ReAct agent 进度步骤，由 SSE progress 事件解析而来。
+class KnowledgeProgressStep {
+  const KnowledgeProgressStep({
+    required this.phase,
+    required this.message,
+    required this.timestamp,
+  });
+
+  /// Agent 当前阶段：thinking | searching | retrieved | loading | generating
+  final String phase;
+
+  /// 前端展示的可读文案
+  final String message;
+
+  /// 本地记录的时间戳（用于计算步骤间相对耗时）
+  final DateTime timestamp;
+}
+
 class KnowledgeChatMessage {
   const KnowledgeChatMessage({
     required this.sender,
     required this.text,
     this.timestampLabel,
     this.citedSources,
+    this.progressSteps,
   });
 
   final KnowledgeChatSender sender;
   final String text;
   final String? timestampLabel;
   final List<CitedSource>? citedSources;
+  final List<KnowledgeProgressStep>? progressSteps;
 }
 
 class KnowledgeConversationPreview {

@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 /// 用于视频总结 QA、知识库 QA、最终稿生成等待态等所有 AI 处理中的等待场景。
 /// 文字在前，三点动画在后，无末尾省略号。
 class AppTypingIndicator extends StatefulWidget {
-  const AppTypingIndicator({super.key});
+  const AppTypingIndicator({this.message, super.key});
+
+  /// 动态状态文案。null 时回退默认"AI 正在思考"。
+  final String? message;
 
   @override
   State<AppTypingIndicator> createState() => _AppTypingIndicatorState();
@@ -47,11 +50,11 @@ class _AppTypingIndicatorState extends State<AppTypingIndicator>
             color: const Color(0xFFF3F5F9),
             borderRadius: BorderRadius.circular(18),
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'AI 正在思考',
+                widget.message ?? 'AI 正在思考',
                 style: TextStyle(
                   fontSize: 13,
                   color: Color(0xFF8E8E93),

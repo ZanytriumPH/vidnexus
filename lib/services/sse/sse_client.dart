@@ -126,6 +126,9 @@ class SseClient {
       case 'error':
         type = SSEEventType.error;
         break;
+      case 'progress':
+        type = SSEEventType.progress;
+        break;
       default:
         // 未知事件类型，跳过
         return null;

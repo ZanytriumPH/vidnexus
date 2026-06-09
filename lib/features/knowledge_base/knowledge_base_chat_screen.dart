@@ -10,6 +10,7 @@ import '../../app/widgets/app_typing_indicator.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_header_add_button.dart';
 import '../../app/widgets/citation_card.dart';
+import '../../app/widgets/thinking_process_section.dart';
 import '../../services/service_providers.dart';
 import 'application/knowledge_base_chat_controller.dart';
 import 'application/knowledge_base_controller.dart';
@@ -104,7 +105,17 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
                 ),
                 itemBuilder: (context, index) {
                   if (isWaiting && index == messages.length) {
-                    return const AppTypingIndicator();
+                    String? progressMessage;
+                    if (messages.isNotEmpty) {
+                      final lastMsg = messages.last;
+                      if (lastMsg.sender == KnowledgeChatSender.system) {
+                        final steps = lastMsg.progressSteps;
+                        if (steps != null && steps.isNotEmpty) {
+                          progressMessage = steps.last.message;
+                        }
+                      }
+                    }
+                    return AppTypingIndicator(message: progressMessage);
                   }
                   final message = messages[index];
                   // 空系统消息不渲染，此时 "AI正在思考..." 的 typing indicator 正在展示
@@ -230,6 +241,11 @@ class _KnowledgeChatBubble extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (message.progressSteps != null &&
+              message.progressSteps!.isNotEmpty) ...[
+            ThinkingProcessSection(steps: message.progressSteps!),
+            const SizedBox(height: 12),
+          ],
           AppMarkdownBody(data: message.text),
           if (message.citedSources != null &&
               message.citedSources!.isNotEmpty) ...[
