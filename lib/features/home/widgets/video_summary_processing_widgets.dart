@@ -550,16 +550,16 @@ class KbNameTag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3CD), // 黄色背景
+        color: const Color(0xFFF3F7FF), // 蓝色背景
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFFFC107), width: 0.5),
+        border: Border.all(color: const Color(0xFFBFD3FF), width: 0.5),
       ),
       child: Text(
         displayText,
         style: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
-          color: Color(0xFF856404), // 深黄色文字
+          color: Color(0xFF2563EB), // 蓝色文字
         ),
       ),
     );
