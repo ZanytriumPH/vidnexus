@@ -167,17 +167,34 @@ class VideoSummarySessionHistoryController
         orElse: () => state.sessions.first,
       );
 
-      // 保留当前内存中已有的临时上传会话，避免异步加载后端列表时将其覆盖
-      final tempSessions =
-          state.sessions.where((s) => s.id.startsWith('temp-')).toList();
+      // 保留当前内存中已有的临时上传会话，并排除那些已经在后端任务中存在的会话，避免重复
+      final taskIds = tasks.map((t) => t.taskId).toSet();
+      final taskVideoIds = tasks.map((t) => t.videoId).toSet();
+      final tempSessions = state.sessions
+          .where((s) => s.id.startsWith('temp-'))
+          .where((s) {
+            final videoId = s.id.replaceFirst('temp-', '');
+            return !taskVideoIds.contains(videoId);
+          })
+          .toList();
+
+      // 保留由 addOrActivateTaskSession 等方法手动添加、但不在后端第 1 页结果中的正式会话
+      // （例如从知识库跳转过来的、超出第 1 页范围的任务）
+      final manuallyAddedSessions = state.sessions
+          .where((s) =>
+              s.id != 'session-current' &&
+              !s.id.startsWith('temp-') &&
+              !taskIds.contains(s.id))
+          .toList();
+
       final historyEntries = tasks
           .map((t) => _mapTaskToEntry(t, videoDetails[t.videoId]))
           .toList();
 
-      final merged = [currentSession, ...tempSessions, ...historyEntries];
+      final merged = [currentSession, ...tempSessions, ...manuallyAddedSessions, ...historyEntries];
       state = state.copyWith(
         sessions: merged,
-        createdSessionCount: 1 + tempSessions.length + historyEntries.length,
+        createdSessionCount: 1 + tempSessions.length + manuallyAddedSessions.length + historyEntries.length,
         isLoadingHistory: false,
         clearError: true,
       );
@@ -318,8 +335,9 @@ class VideoSummarySessionHistoryController
         snapshot: snapshot,
       );
 
+      // 排除旧的临时会话 *和* 可能已存在的同 taskId 的后端会话，防止重复
       final otherSessions = state.sessions
-          .where((s) => s.id != tempId && s.id != 'session-current')
+          .where((s) => s.id != tempId && s.id != 'session-current' && s.id != taskId)
           .toList();
       final current = state.sessions.firstWhere(
         (s) => s.id == 'session-current',
@@ -338,6 +356,23 @@ class VideoSummarySessionHistoryController
     if (state.activeSessionId == 'session-current' &&
         taskId != null &&
         taskId.isNotEmpty) {
+      // 先检查是否已存在该 taskId 的会话（可能由 _loadFromBackend 提前加载）
+      final existingIndex = state.sessions.indexWhere((s) => s.id == taskId);
+      if (existingIndex != -1) {
+        // 已有同 taskId 的后端会话 → 直接更新并激活，不新建
+        final updated = state.sessions[existingIndex].copyWith(
+          snapshot: snapshot,
+          detail: _detailForSnapshot(snapshot),
+        );
+        final sessions = List<VideoSummarySessionHistoryEntry>.from(state.sessions)
+          ..[existingIndex] = updated;
+        state = state.copyWith(
+          sessions: sessions,
+          activeSessionId: taskId,
+        );
+        return;
+      }
+
       final entry = VideoSummarySessionHistoryEntry(
         id: taskId,
         title: flowSnapshot.videoAsset?.fileName ?? '视频总结会话',
@@ -387,6 +422,81 @@ class VideoSummarySessionHistoryController
     final sessions = List<VideoSummarySessionHistoryEntry>.from(state.sessions)
       ..[index] = updated;
     state = state.copyWith(sessions: sessions);
+  }
+
+  /// 激活或添加一个已有的后端任务会话，防止在侧边栏中产生 temp- 前缀的重复项。
+  void addOrActivateTaskSession({
+    required String taskId,
+    required VideoSummarySessionSnapshot snapshot,
+  }) {
+    final flowSnapshot = snapshot.flowSnapshot;
+    final fileName = flowSnapshot.videoAsset?.fileName ?? '视频总结会话';
+    final durationLabel = flowSnapshot.videoAsset?.durationLabel ?? '0m 00s';
+
+    // 1. 检查是否存在该 taskId 的正式会话
+    final existingIndex = state.sessions.indexWhere((s) => s.id == taskId);
+
+    if (existingIndex != -1) {
+      // 如果已存在，更新其快照并将其设为活跃状态
+      final updated = state.sessions[existingIndex].copyWith(
+        snapshot: snapshot,
+        detail: _detailForSnapshot(snapshot),
+      );
+      final videoId = flowSnapshot.videoAsset?.title ?? '';
+      final tempId = 'temp-$videoId';
+      final sessions = List<VideoSummarySessionHistoryEntry>.from(state.sessions)
+        ..[existingIndex] = updated;
+      
+      // 清除对应的临时会话，防止产生重复项
+      sessions.removeWhere((s) => s.id == tempId);
+
+      state = state.copyWith(
+        sessions: sessions,
+        activeSessionId: taskId,
+      );
+      return;
+    }
+
+    // 2. 检查是否存在对应的临时会话（例如从上传刚晋升过来，或者有相同的 videoId）
+    final videoId = flowSnapshot.videoAsset?.title ?? '';
+    final tempId = 'temp-$videoId';
+    final tempIndex = state.sessions.indexWhere((s) => s.id == tempId);
+
+    if (tempIndex != -1) {
+      // 如果存在临时会话，将其就地晋升为以 taskId 为主键的正式会话，避免重复
+      final entry = VideoSummarySessionHistoryEntry(
+        id: taskId,
+        title: fileName,
+        durationLabel: durationLabel,
+        detail: _detailForSnapshot(snapshot),
+        snapshot: snapshot,
+      );
+      final sessions = List<VideoSummarySessionHistoryEntry>.from(state.sessions)
+        ..[tempIndex] = entry;
+      state = state.copyWith(
+        sessions: sessions,
+        activeSessionId: taskId,
+      );
+      return;
+    }
+
+    // 3. 既无正式会话也无临时会话，新建正式会话并插入到 session-current 之后
+    final entry = VideoSummarySessionHistoryEntry(
+      id: taskId,
+      title: fileName,
+      durationLabel: durationLabel,
+      detail: _detailForSnapshot(snapshot),
+      snapshot: snapshot,
+    );
+
+    final current = state.sessions.first;
+    final sessions = [current, entry, ...state.sessions.skip(1)];
+
+    state = state.copyWith(
+      sessions: sessions,
+      activeSessionId: taskId,
+      createdSessionCount: state.createdSessionCount + 1,
+    );
   }
 
   /// 当视频上传成功且 Celery 处理完毕时，创建一个仅在内存中生存的临时会话。

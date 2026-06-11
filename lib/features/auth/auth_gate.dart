@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/routing/app_route_arguments.dart';
 import '../../app/theme/app_colors.dart';
 import '../home/home_screen.dart';
 import 'auth_controller.dart';
@@ -41,7 +42,12 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     }
 
     if (authState.isLoggedIn) {
-      return const HomeScreen();
+      final args = ModalRoute.of(context)?.settings.arguments as HomeRouteArguments?;
+      return HomeScreen(
+        videoId: args?.videoId,
+        taskId: args?.taskId,
+        forceFinal: args?.forceFinal ?? false,
+      );
     }
 
     return const LoginScreen();

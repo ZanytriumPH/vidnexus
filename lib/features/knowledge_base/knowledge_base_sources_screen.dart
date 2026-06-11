@@ -146,6 +146,7 @@ class _KnowledgeSourceCard extends StatelessWidget {
       onTap: () => AppNavigator.goToHomeWithVideo(
         context,
         videoId: source.id,
+        forceFinal: true,
       ),
       borderRadius: BorderRadius.circular(20),
       child: AppCard(

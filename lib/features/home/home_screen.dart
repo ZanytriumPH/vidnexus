@@ -6,6 +6,8 @@ import '../../app/routing/app_router.dart';
 import '../../app/routing/app_route_arguments.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../services/api/api_client.dart';
+import '../../services/models/common_dto.dart';
+import '../../services/models/video_summary_task_dto.dart';
 import '../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../services/service_providers.dart';
 import '../../services/video_service.dart';
@@ -27,7 +29,12 @@ import 'widgets/video_player_page.dart';
 
 /// 首页现在主要承担页面壳和装配职责，复杂状态迁移已下沉到 application 层。
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key, this.videoId, this.taskId});
+  const HomeScreen({
+    super.key,
+    this.videoId,
+    this.taskId,
+    this.forceFinal = false,
+  });
 
   /// 可选：从知识库来源页跳转时携带的视频 ID，
   /// 首页会自动查找对应任务并恢复该视频的最终稿会话。
@@ -36,6 +43,9 @@ class HomeScreen extends ConsumerStatefulWidget {
   /// 可选：从知识库 cited_resources 点击时携带的任务 ID，
   /// 首页会直接按 taskId 获取任务详情并恢复，无需 listTasks 全量匹配。
   final String? taskId;
+
+  /// 是否强制跳转至最终稿阶段 (VideoSummaryStage.finalChat)
+  final bool forceFinal;
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -81,12 +91,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title = dto.title;
         userInitialPreference = dto.userInitialPreference;
       } else {
-        // 兼容旧路径：listTasks + 按 videoId 匹配
-        final resp = await taskService.listTasks();
-        final match = resp.data.where((t) => t.videoId == id).toList();
-        if (match.isEmpty) return;
+        // 兼容旧路径：进行翻页查询，保证能匹配到对应的 videoId
+        VideoSummaryTaskResponseData? matchedTask;
+        int currentPage = 1;
+        bool hasNext = true;
 
-        final task = match.first;
+        while (hasNext) {
+          final resp = await taskService.listTasks(
+            params: PageParams(
+              page: currentPage,
+              pageSize: 50,
+              sort: '-created_at',
+            ),
+          );
+          final match = resp.data.where((t) => t.videoId == id).toList();
+          if (match.isNotEmpty) {
+            matchedTask = match.first;
+            break;
+          }
+          hasNext = resp.pagination?.hasNext ?? false;
+          if (hasNext) {
+            currentPage++;
+          } else {
+            break;
+          }
+          // 安全限制，最多查询 10 页（共 500 个任务）
+          if (currentPage > 10) {
+            break;
+          }
+        }
+
+        if (matchedTask == null) {
+          debugPrint('[HomeScreen] _restoreVideoSession: No matching task found for videoId: $id');
+          return;
+        }
+
+        final task = matchedTask;
         taskId = task.taskId;
         videoId = task.videoId;
         workflowState = task.workflowState;
@@ -97,12 +137,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         userInitialPreference = task.userInitialPreference;
       }
 
-      final stage = switch (workflowState) {
-        'COMPLETED' => VideoSummaryStage.finalChat,
-        'WAITING_USER_APPROVAL' => VideoSummaryStage.draft,
-        'DRAFT_GENERATING' || 'FINAL_GENERATING' => VideoSummaryStage.processing,
-        _ => VideoSummaryStage.ready,
-      };
+      final stage = widget.forceFinal
+          ? VideoSummaryStage.finalChat
+          : (switch (workflowState) {
+              'COMPLETED' => VideoSummaryStage.finalChat,
+              'WAITING_USER_APPROVAL' => VideoSummaryStage.draft,
+              'DRAFT_GENERATING' || 'FINAL_GENERATING' => VideoSummaryStage.processing,
+              _ => VideoSummaryStage.ready,
+            });
 
       final draftParagraphs = draftSummary != null
           ? draftSummary
@@ -136,7 +178,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         finalSummaryData: stage == VideoSummaryStage.finalChat
             ? FinalSummaryData(
                 summaryTitle: '视频总结',
-                summaryBody: finalSummary ?? '',
+                summaryBody: (finalSummary != null && finalSummary.isNotEmpty)
+                    ? finalSummary
+                    : (draftSummary ?? ''),
                 timestampChips: const [],
                 messages: const [],
               )
@@ -147,19 +191,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
 
       if (!mounted) return;
-      final flowCtrl = ref.read(videoSummaryFlowControllerProvider.notifier);
-      flowCtrl.restoreSnapshot(snapshot);
+      // 使用 runWithoutSync 抑制 restoreSnapshot 触发的 syncActiveSession，
+      // 避免在 addOrActivateTaskSession 设置 activeSessionId 之前，
+      // syncActiveSession 以旧的 'session-current' 身份创建重复条目。
+      final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
+      textEditing.runWithoutSync(() {
+        final flowCtrl = ref.read(videoSummaryFlowControllerProvider.notifier);
+        flowCtrl.restoreSnapshot(snapshot);
+      });
 
       final historyCtrl = ref.read(videoSummarySessionHistoryProvider.notifier);
-      historyCtrl.addTempUploadSession(
-        VideoSummarySessionSnapshot(
+      historyCtrl.addOrActivateTaskSession(
+        taskId: taskId,
+        snapshot: VideoSummarySessionSnapshot(
           flowSnapshot: snapshot,
           readyPreferenceText: userInitialPreference ?? '',
           draftGuidanceText: '',
           draftBodyText: draftSummary ?? '',
         ),
       );
-    } catch (_) {
+    } catch (e, stack) {
+      debugPrint('[HomeScreen] _restoreVideoSession failed: $e\n$stack');
       // 查找失败则停留在首页默认状态
     }
   }

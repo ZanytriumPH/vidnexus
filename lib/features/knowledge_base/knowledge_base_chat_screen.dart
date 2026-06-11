@@ -269,9 +269,14 @@ class _KnowledgeChatBubble extends StatelessWidget {
                     context,
                     videoId: videoId ?? '',
                     taskId: taskId,
+                    forceFinal: true,
                   );
                 } else if (videoId != null && videoId.isNotEmpty) {
-                  AppNavigator.goToHomeWithVideo(context, videoId: videoId);
+                  AppNavigator.goToHomeWithVideo(
+                    context,
+                    videoId: videoId,
+                    forceFinal: true,
+                  );
                 }
               },
             ),
