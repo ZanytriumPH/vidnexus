@@ -8,6 +8,7 @@ import '../../../app/widgets/app_bottom_nav.dart';
 import '../../../app/widgets/app_buttons.dart';
 import '../../../app/widgets/composer_attachment_button.dart';
 import '../../../services/attachment_service.dart';
+import '../../../services/api/api_client.dart';
 import '../../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../knowledge_base_models.dart';
 
@@ -315,9 +316,9 @@ class _KbAttachmentPreviewStrip extends StatelessWidget {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: att.presignedUrl != null && att.presignedUrl!.isNotEmpty
+                child: att.ossKey.isNotEmpty
                     ? Image.network(
-                        att.presignedUrl!,
+                        _thumbnailUrl(att.ossKey),
                         width: 56,
                         height: 56,
                         fit: BoxFit.cover,
@@ -346,6 +347,11 @@ class _KbAttachmentPreviewStrip extends StatelessWidget {
         },
       ),
     );
+  }
+
+  static String _thumbnailUrl(String ossKey) {
+    final base = ApiClient.instance.options.baseUrl;
+    return '$base/api/v1/files/stream?object_key=${Uri.encodeComponent(ossKey)}';
   }
 
   Widget _placeholder() {

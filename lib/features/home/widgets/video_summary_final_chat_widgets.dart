@@ -9,6 +9,7 @@ import '../../../app/widgets/app_buttons.dart';
 import '../../../app/widgets/app_typing_indicator.dart';
 import '../../../app/widgets/composer_attachment_button.dart';
 import '../../../services/attachment_service.dart';
+import '../../../services/api/api_client.dart';
 import '../../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../../services/service_providers.dart';
 import '../../knowledge_base/application/knowledge_base_controller.dart';
@@ -221,10 +222,9 @@ class _AttachmentImageGrid extends StatelessWidget {
               child: SizedBox(
                 width: 80,
                 height: 80,
-                child: attachments[i].presignedUrl != null &&
-                        attachments[i].presignedUrl!.isNotEmpty
+                child: attachments[i].ossKey.isNotEmpty
                     ? Image.network(
-                        attachments[i].presignedUrl!,
+                        _thumbnailUrl(attachments[i].ossKey),
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => _thumbPlaceholder(),
                       )
@@ -255,6 +255,11 @@ class _AttachmentImageGrid extends StatelessWidget {
     );
   }
 
+  static String _thumbnailUrl(String ossKey) {
+    final base = ApiClient.instance.options.baseUrl;
+    return '$base/api/v1/files/stream?object_key=${Uri.encodeComponent(ossKey)}';
+  }
+
   Widget _thumbPlaceholder() {
     return Container(
       color: const Color(0xFFF0F2F5),
@@ -265,7 +270,7 @@ class _AttachmentImageGrid extends StatelessWidget {
   }
 
   void _showFullImage(BuildContext context, ChatAttachment attachment) {
-    if (attachment.presignedUrl == null || attachment.presignedUrl!.isEmpty) return;
+    if (attachment.ossKey.isEmpty) return;
     showDialog(
       context: context,
       builder: (_) => Dialog(
@@ -275,7 +280,7 @@ class _AttachmentImageGrid extends StatelessWidget {
           onTap: () => Navigator.pop(context),
           child: InteractiveViewer(
             child: Image.network(
-              attachment.presignedUrl!,
+              _thumbnailUrl(attachment.ossKey),
               fit: BoxFit.contain,
               errorBuilder: (_, _, _) => const SizedBox(
                 height: 200,
@@ -640,9 +645,9 @@ class _AttachmentPreviewStrip extends StatelessWidget {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: att.presignedUrl != null && att.presignedUrl!.isNotEmpty
+                child: att.ossKey.isNotEmpty
                     ? Image.network(
-                        att.presignedUrl!,
+                        _thumbnailUrl(att.ossKey),
                         width: 56,
                         height: 56,
                         fit: BoxFit.cover,
@@ -671,6 +676,11 @@ class _AttachmentPreviewStrip extends StatelessWidget {
         },
       ),
     );
+  }
+
+  static String _thumbnailUrl(String ossKey) {
+    final base = ApiClient.instance.options.baseUrl;
+    return '$base/api/v1/files/stream?object_key=${Uri.encodeComponent(ossKey)}';
   }
 
   Widget _placeholder() {

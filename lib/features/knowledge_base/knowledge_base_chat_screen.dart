@@ -11,6 +11,7 @@ import '../../app/widgets/app_typing_indicator.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_header_add_button.dart';
 import '../../app/widgets/citation_card.dart';
+import '../../services/api/api_client.dart';
 import '../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../services/service_providers.dart';
 import 'application/knowledge_base_chat_controller.dart';
@@ -303,10 +304,9 @@ class _KbAttachmentImageGrid extends StatelessWidget {
               child: SizedBox(
                 width: 80,
                 height: 80,
-                child: attachments[i].presignedUrl != null &&
-                        attachments[i].presignedUrl!.isNotEmpty
+                child: attachments[i].ossKey.isNotEmpty
                     ? Image.network(
-                        attachments[i].presignedUrl!,
+                        _thumbnailUrl(attachments[i].ossKey),
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => _thumbPlaceholder(),
                       )
@@ -337,6 +337,11 @@ class _KbAttachmentImageGrid extends StatelessWidget {
     );
   }
 
+  static String _thumbnailUrl(String ossKey) {
+    final base = ApiClient.instance.options.baseUrl;
+    return '$base/api/v1/files/stream?object_key=${Uri.encodeComponent(ossKey)}';
+  }
+
   Widget _thumbPlaceholder() {
     return Container(
       color: const Color(0xFFF0F2F5),
@@ -347,7 +352,7 @@ class _KbAttachmentImageGrid extends StatelessWidget {
   }
 
   void _showFullImage(BuildContext context, ChatAttachment attachment) {
-    if (attachment.presignedUrl == null || attachment.presignedUrl!.isEmpty) return;
+    if (attachment.ossKey.isEmpty) return;
     showDialog(
       context: context,
       builder: (_) => Dialog(
@@ -357,7 +362,7 @@ class _KbAttachmentImageGrid extends StatelessWidget {
           onTap: () => Navigator.pop(context),
           child: InteractiveViewer(
             child: Image.network(
-              attachment.presignedUrl!,
+              _thumbnailUrl(attachment.ossKey),
               fit: BoxFit.contain,
               errorBuilder: (_, _, _) => const SizedBox(
                 height: 200,
