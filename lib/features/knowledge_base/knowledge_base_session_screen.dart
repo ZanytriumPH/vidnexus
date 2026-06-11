@@ -6,7 +6,9 @@ import '../../app/theme/app_colors.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_header_add_button.dart';
 import '../../app/widgets/app_card.dart';
+import '../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../services/service_providers.dart';
+import '../home/video_summary_presentation_models.dart' show ChatAttachment;
 import 'application/knowledge_base_controller.dart';
 import 'knowledge_base_models.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
@@ -24,6 +26,7 @@ class KnowledgeBaseSessionScreen extends ConsumerStatefulWidget {
 class _KnowledgeBaseSessionScreenState
     extends ConsumerState<KnowledgeBaseSessionScreen> {
   late final TextEditingController _composerController;
+  final List<AttachmentInfo> _pendingAttachments = [];
 
   @override
   void initState() {
@@ -139,6 +142,11 @@ class _KnowledgeBaseSessionScreenState
               child: KnowledgeBaseComposer(
                 controller: _composerController,
                 onSubmit: _startNewConversation,
+                onAttachmentsChanged: (attachments) {
+                  _pendingAttachments
+                    ..clear()
+                    ..addAll(attachments);
+                },
               ),
             ),
           ],
@@ -164,7 +172,20 @@ class _KnowledgeBaseSessionScreenState
 
   void _startNewConversation() {
     final prompt = _composerController.text.trim();
-    if (prompt.isEmpty) return;
+    final attachments = List<AttachmentInfo>.from(_pendingAttachments);
+    _pendingAttachments.clear();
+
+    if (prompt.isEmpty && attachments.isEmpty) return;
+
+    final finalPrompt = prompt.isEmpty ? '请分析上传的图片' : prompt;
+    final chatAttachments = attachments
+        .map((a) => ChatAttachment(
+              name: a.name,
+              ossKey: a.ossKey,
+              mimeType: a.mimeType,
+              presignedUrl: a.presignedUrl,
+            ))
+        .toList();
 
     _composerController.clear();
     final chatService = ref.read(globalChatServiceProvider);
@@ -176,11 +197,15 @@ class _KnowledgeBaseSessionScreenState
     final tempId = 'creating-${DateTime.now().millisecondsSinceEpoch}';
     final tempPreview = KnowledgeConversationPreview(
       id: tempId,
-      title: prompt,
+      title: finalPrompt,
       preview: '正在创建会话…',
       dateLabel: nowLabel,
       messages: [
-        KnowledgeChatMessage(sender: KnowledgeChatSender.user, text: prompt),
+        KnowledgeChatMessage(
+          sender: KnowledgeChatSender.user,
+          text: finalPrompt,
+          attachments: chatAttachments,
+        ),
         const KnowledgeChatMessage(
           sender: KnowledgeChatSender.system,
           text: '正在思考…',
@@ -190,18 +215,22 @@ class _KnowledgeBaseSessionScreenState
     _openConversation(tempPreview);
 
     // 异步创建真实会话（title 限制 255 字符，换行替换为空格）
-    final safeTitle = _sanitizeChatTitle(prompt);
+    final safeTitle = _sanitizeChatTitle(finalPrompt);
     chatService.createChat(kbid: kbid, chatTitle: safeTitle).then((resp) {
       final chatId = resp.data?.chatId;
       if (chatId == null || chatId.isEmpty || !mounted) return;
 
       final realConversation = KnowledgeConversationPreview(
         id: chatId,
-        title: prompt,
+        title: finalPrompt,
         preview: '新对话已创建，正在围绕库中资料进行回答。',
         dateLabel: nowLabel,
         messages: [
-          KnowledgeChatMessage(sender: KnowledgeChatSender.user, text: prompt),
+          KnowledgeChatMessage(
+            sender: KnowledgeChatSender.user,
+            text: finalPrompt,
+            attachments: chatAttachments,
+          ),
         ],
       );
 
