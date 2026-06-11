@@ -151,7 +151,7 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
     final attachments = List<AttachmentInfo>.from(_pendingAttachments);
     _pendingAttachments.clear();
 
-    final finalText = text.isEmpty ? '请分析上传的图片' : text;
+    final finalText = text.isEmpty ? '请分析用户上传的图片' : text;
     _chatController.sendMessage(finalText, attachments: attachments);
   }
 

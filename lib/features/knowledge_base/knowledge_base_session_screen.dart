@@ -177,7 +177,7 @@ class _KnowledgeBaseSessionScreenState
 
     if (prompt.isEmpty && attachments.isEmpty) return;
 
-    final finalPrompt = prompt.isEmpty ? '请分析上传的图片' : prompt;
+    final finalPrompt = prompt.isEmpty ? '请分析用户上传的图片' : prompt;
     final chatAttachments = attachments
         .map((a) => ChatAttachment(
               name: a.name,

@@ -472,7 +472,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _pendingAttachments.clear();
 
     final finalMessage = (message == null || message.trim().isEmpty)
-        ? '请分析上传的图片'
+        ? '请分析用户上传的图片'
         : message;
 
     await ref
@@ -498,15 +498,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final resp = await videoService.getVideo(videoId);
       final data = resp.data;
       var videoUrl = data?.presignedUrl ?? '';
-      final ossKey = data?.ossKey;
 
       if (!mounted) return;
       Navigator.of(context).pop(); // 关闭 loading
 
-      // 本地开发模式 presigned_url 是 file:// 路径，转换为 HTTP 流式端点
-      if (videoUrl.startsWith('file://') && ossKey != null && ossKey.isNotEmpty) {
-        final baseUrl = ApiClient.instance.options.baseUrl;
-        videoUrl = '$baseUrl/api/v1/files/stream?object_key=${Uri.encodeComponent(ossKey)}';
+      // 后端 presigned_url 可能指向 localhost（开发环境默认），
+      // 但 Android 模拟器/真机无法访问宿主机的 localhost。
+      // 仅当 URL 是环回地址时，替换为 ApiClient 的可达地址；
+      // 生产环境 URL（含 OSS/CDN 域名）保持原样。
+      if (videoUrl.isNotEmpty) {
+        final videoUri = Uri.parse(videoUrl);
+        final host = videoUri.host;
+        if (host == 'localhost' || host == '127.0.0.1' || host == '[::1]') {
+          final apiBase = Uri.parse(ApiClient.instance.options.baseUrl);
+          videoUrl = videoUri.replace(
+            scheme: apiBase.scheme,
+            host: apiBase.host,
+            port: apiBase.port,
+          ).toString();
+        }
       }
 
       if (videoUrl.isEmpty) {
