@@ -33,97 +33,103 @@ class ReadyStageWorkspace extends StatelessWidget {
     final isKeyboardVisible = keyboardInset > 0;
 
     if (isKeyboardVisible) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Column(
-              children: [
-                const Spacer(),
-                HeroCard(
-                  stage: VideoSummaryStage.ready,
-                  highlighted: highlighted,
-                  videoAsset: videoAsset,
-                  processingSnapshot: null,
-                  processingExpanded: false,
-                  isUploading: isUploading,
-                  uploadProgress: uploadProgress,
-                  onTap: onUploadCardPressed,
-                ),
-              ],
+      return GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Column(
+                children: [
+                  const Spacer(),
+                  HeroCard(
+                    stage: VideoSummaryStage.ready,
+                    highlighted: highlighted,
+                    videoAsset: videoAsset,
+                    processingSnapshot: null,
+                    processingExpanded: false,
+                    isUploading: isUploading,
+                    uploadProgress: uploadProgress,
+                    onTap: onUploadCardPressed,
+                  ),
+                ],
+              ),
             ),
-          ),
-          SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 12),
-                Text(
-                  '总结偏好（可选）',
-                  textAlign: TextAlign.center,
-                  style: context.appTextStyles.summarySectionTitle,
-                ),
-                const SizedBox(height: 12),
-                PreferenceCard(
-                  controller: preferenceController,
-                  hintText: '例如：重点分析行业趋势，提取关键结论和可执行的行动建议。',
-                  prominent: true,
-                ),
-                const SizedBox(height: 12),
-                ReadyPrimaryButton(
-                  label: isUploading
-                      ? (uploadProgress >= 1.0 ? '正在处理视频...' : '正在上传视频...')
-                      : (isGenerating
-                          ? '正在生成中...'
-                          : (highlighted ? '开始生成初稿' : '请先上传视频')),
-                  onPressed: (isUploading || isGenerating || !highlighted) ? null : onStartPressed,
-                ),
-              ],
+            SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 12),
+                  Text(
+                    '总结偏好（可选）',
+                    textAlign: TextAlign.center,
+                    style: context.appTextStyles.summarySectionTitle,
+                  ),
+                  const SizedBox(height: 12),
+                  PreferenceCard(
+                    controller: preferenceController,
+                    hintText: '例如：重点分析行业趋势，提取关键结论和可执行的行动建议。',
+                    prominent: true,
+                  ),
+                  const SizedBox(height: 12),
+                  ReadyPrimaryButton(
+                    label: isUploading
+                        ? (uploadProgress >= 1.0 ? '正在处理视频...' : '正在上传视频...')
+                        : (isGenerating
+                            ? '正在生成中...'
+                            : (highlighted ? '开始生成初稿' : '请先上传视频')),
+                    onPressed: (isUploading || isGenerating || !highlighted) ? null : onStartPressed,
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Spacer(flex: 5),
-        HeroCard(
-          stage: VideoSummaryStage.ready,
-          highlighted: highlighted,
-          videoAsset: videoAsset,
-          processingSnapshot: null,
-          processingExpanded: false,
-          isUploading: isUploading,
-          uploadProgress: uploadProgress,
-          onTap: onUploadCardPressed,
-        ),
-        const SizedBox(height: 24),
-        Text(
-          '总结偏好（可选）',
-          textAlign: TextAlign.center,
-          style: context.appTextStyles.summarySectionTitle,
-        ),
-        const SizedBox(height: 14),
-        PreferenceCard(
-          controller: preferenceController,
-          hintText: '例如：重点分析行业趋势，提取关键结论和可执行的行动建议。',
-          prominent: true,
-        ),
-        const SizedBox(height: 24),
-        ReadyPrimaryButton(
-          label: isUploading
-              ? (uploadProgress >= 1.0 ? '正在处理视频...' : '正在上传视频...')
-              : (isGenerating
-                  ? '正在生成中...'
-                  : (highlighted ? '开始生成初稿' : '请先上传视频')),
-          onPressed: (isUploading || isGenerating || !highlighted) ? null : onStartPressed,
-        ),
-        const Spacer(flex: 4),
-      ],
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Spacer(flex: 5),
+          HeroCard(
+            stage: VideoSummaryStage.ready,
+            highlighted: highlighted,
+            videoAsset: videoAsset,
+            processingSnapshot: null,
+            processingExpanded: false,
+            isUploading: isUploading,
+            uploadProgress: uploadProgress,
+            onTap: onUploadCardPressed,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            '总结偏好（可选）',
+            textAlign: TextAlign.center,
+            style: context.appTextStyles.summarySectionTitle,
+          ),
+          const SizedBox(height: 14),
+          PreferenceCard(
+            controller: preferenceController,
+            hintText: '例如：重点分析行业趋势，提取关键结论和可执行的行动建议。',
+            prominent: true,
+          ),
+          const SizedBox(height: 24),
+          ReadyPrimaryButton(
+            label: isUploading
+                ? (uploadProgress >= 1.0 ? '正在处理视频...' : '正在上传视频...')
+                : (isGenerating
+                    ? '正在生成中...'
+                    : (highlighted ? '开始生成初稿' : '请先上传视频')),
+            onPressed: (isUploading || isGenerating || !highlighted) ? null : onStartPressed,
+          ),
+          const Spacer(flex: 4),
+        ],
+      ),
     );
   }
 }
