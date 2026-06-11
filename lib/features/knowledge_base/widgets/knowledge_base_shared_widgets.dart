@@ -4,7 +4,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_bottom_nav.dart';
 import '../../../app/widgets/app_buttons.dart';
-import '../../../app/widgets/composer_attachment_button.dart';
+// import '../../../app/widgets/composer_attachment_button.dart';
 import '../knowledge_base_models.dart';
 
 class KnowledgeBaseTopBar extends StatelessWidget {
@@ -196,7 +196,7 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
                       maxLines: expanded ? 4 : 1,
                     ),
                   ),
-                  if (!expanded) const ComposerAttachmentButton(),
+                  // if (!expanded) const ComposerAttachmentButton(),
                 ],
               ),
               if (expanded) ...[
@@ -205,7 +205,7 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     const Spacer(),
-                    const ComposerAttachmentButton(),
+                    // const ComposerAttachmentButton(),
                     if (hasInput) ...[
                       const SizedBox(width: 8),
                       AppInlineSubmitButton(

@@ -5,7 +5,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_buttons.dart';
 import '../../../app/widgets/app_typing_indicator.dart';
-import '../../../app/widgets/composer_attachment_button.dart';
+// import '../../../app/widgets/composer_attachment_button.dart';
 import '../../../services/service_providers.dart';
 import '../../knowledge_base/application/knowledge_base_controller.dart';
 import '../video_summary_models.dart';
@@ -433,8 +433,8 @@ class ChatComposer extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  const ComposerAttachmentButton(),
+                  // const SizedBox(width: 8),
+                  // const ComposerAttachmentButton(),
                   if (hasInput) ...[
                     const SizedBox(width: 8),
                     AppInlineSubmitButton(
