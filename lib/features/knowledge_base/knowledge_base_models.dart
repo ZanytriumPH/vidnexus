@@ -1,3 +1,4 @@
+import '../home/video_summary_presentation_models.dart' show ChatAttachment;
 import '../../services/models/global_chat_dto.dart';
 
 enum KnowledgeChatSender { user, system }
@@ -8,12 +9,16 @@ class KnowledgeChatMessage {
     required this.text,
     this.timestampLabel,
     this.citedSources,
+    this.attachments = const [],
   });
 
   final KnowledgeChatSender sender;
   final String text;
   final String? timestampLabel;
   final List<CitedSource>? citedSources;
+
+  /// 用户消息附带的图片列表。
+  final List<ChatAttachment> attachments;
 }
 
 class KnowledgeConversationPreview {

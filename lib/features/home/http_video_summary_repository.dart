@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../services/models/common_dto.dart';
+import '../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../services/task_service.dart';
 import '../../services/video_qa_service.dart';
 import '../../services/websocket/ws_client.dart';
@@ -760,6 +761,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     String message, {
     required String timestamp,
     int? windowSeconds,
+    List<AttachmentInfo> attachments = const [],
   }) {
     final taskId = _taskId;
     if (taskId == null) {
@@ -774,6 +776,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       timestamp: timestamp,
       questionContent: message,
       windowSeconds: windowSeconds,
+      attachments: attachments,
     );
 
     final stream = qaSvc.createTimeTravelQAStream(taskId, request);

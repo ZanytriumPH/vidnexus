@@ -1,10 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_bottom_nav.dart';
 import '../../../app/widgets/app_buttons.dart';
-// import '../../../app/widgets/composer_attachment_button.dart';
+import '../../../app/widgets/composer_attachment_button.dart';
+import '../../../services/attachment_service.dart';
+import '../../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../knowledge_base_models.dart';
 
 class KnowledgeBaseTopBar extends StatelessWidget {
@@ -101,6 +105,7 @@ class KnowledgeBaseComposer extends StatefulWidget {
   const KnowledgeBaseComposer({
     required this.controller,
     required this.onSubmit,
+    this.onAttachmentsChanged,
     this.hintText = '继续追问资料，或让它输出结构化结论',
     this.enabled = true,
     super.key,
@@ -108,6 +113,7 @@ class KnowledgeBaseComposer extends StatefulWidget {
 
   final TextEditingController controller;
   final VoidCallback onSubmit;
+  final ValueChanged<List<AttachmentInfo>>? onAttachmentsChanged;
   final String hintText;
   final bool enabled;
 
@@ -118,7 +124,10 @@ class KnowledgeBaseComposer extends StatefulWidget {
 class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
     with WidgetsBindingObserver {
   final FocusNode _focusNode = FocusNode();
+  final List<AttachmentInfo> _pendingAttachments = [];
+  final _attachmentService = const AttachmentService();
   bool _keyboardVisible = false;
+  bool _uploading = false;
 
   @override
   void initState() {
@@ -146,6 +155,46 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
     super.dispose();
   }
 
+  void _notifyAttachmentsChanged() {
+    widget.onAttachmentsChanged?.call(List.from(_pendingAttachments));
+  }
+
+  Future<void> _onImagePicked(File file) async {
+    setState(() => _uploading = true);
+    try {
+      final resp = await _attachmentService.uploadAttachment(
+        filePath: file.path,
+        fileName: file.path.split('/').last.split('\\').last,
+      );
+      final data = resp.data;
+      if (data != null) {
+        setState(() {
+          _pendingAttachments.add(AttachmentInfo(
+            name: data.name,
+            ossKey: data.ossKey,
+            mimeType: data.mimeType,
+            sizeBytes: data.sizeBytes,
+            presignedUrl: data.presignedUrl,
+          ));
+        });
+        _notifyAttachmentsChanged();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('图片上传失败：$e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  void _removeAttachment(int index) {
+    setState(() => _pendingAttachments.removeAt(index));
+    _notifyAttachmentsChanged();
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<TextEditingValue>(
@@ -164,6 +213,12 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // 附件预览条
+              if (_pendingAttachments.isNotEmpty)
+                _KbAttachmentPreviewStrip(
+                  attachments: _pendingAttachments,
+                  onRemove: _removeAttachment,
+                ),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -196,7 +251,14 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
                       maxLines: expanded ? 4 : 1,
                     ),
                   ),
-                  // if (!expanded) const ComposerAttachmentButton(),
+                  if (!expanded)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: ComposerAttachmentButton(
+                        onImagePicked: _onImagePicked,
+                        enabled: !_uploading,
+                      ),
+                    ),
                 ],
               ),
               if (expanded) ...[
@@ -205,11 +267,14 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     const Spacer(),
-                    // const ComposerAttachmentButton(),
-                    if (hasInput) ...[
+                    ComposerAttachmentButton(
+                      onImagePicked: _onImagePicked,
+                      enabled: !_uploading,
+                    ),
+                    if (hasInput || _pendingAttachments.isNotEmpty) ...[
                       const SizedBox(width: 8),
                       AppInlineSubmitButton(
-                        isLoading: !widget.enabled,
+                        isLoading: !widget.enabled || _uploading,
                         onPressed: widget.enabled ? widget.onSubmit : null,
                       ),
                     ],
@@ -220,6 +285,78 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
           ),
         );
       },
+    );
+  }
+}
+
+/// 知识库输入框附件缩略图预览条。
+class _KbAttachmentPreviewStrip extends StatelessWidget {
+  const _KbAttachmentPreviewStrip({
+    required this.attachments,
+    required this.onRemove,
+  });
+
+  final List<AttachmentInfo> attachments;
+  final void Function(int index) onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 72,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+        itemCount: attachments.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        itemBuilder: (context, index) {
+          final att = attachments[index];
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: att.presignedUrl != null && att.presignedUrl!.isNotEmpty
+                    ? Image.network(
+                        att.presignedUrl!,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _placeholder(),
+                      )
+                    : _placeholder(),
+              ),
+              Positioned(
+                top: -6,
+                right: -6,
+                child: GestureDetector(
+                  onTap: () => onRemove(index),
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF999999),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, size: 12, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F2F5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Icon(Icons.image_outlined, size: 24, color: AppColors.textHint),
     );
   }
 }

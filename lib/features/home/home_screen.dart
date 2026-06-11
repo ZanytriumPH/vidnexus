@@ -6,6 +6,7 @@ import '../../app/routing/app_router.dart';
 import '../../app/routing/app_route_arguments.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../services/api/api_client.dart';
+import '../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../services/service_providers.dart';
 import '../../services/video_service.dart';
 import '../auth/auth_controller.dart';
@@ -42,6 +43,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final List<AttachmentInfo> _pendingAttachments = [];
 
   @override
   void initState() {
@@ -462,13 +464,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _sendChatMessage() async {
     final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
     final message = textEditing.consumeChatMessage();
-    if (message == null) {
+    if (message == null && _pendingAttachments.isEmpty) {
       return;
     }
 
+    final attachments = List<AttachmentInfo>.from(_pendingAttachments);
+    _pendingAttachments.clear();
+
     await ref
         .read(videoSummaryFlowControllerProvider.notifier)
-        .sendChatMessage(message);
+        .sendChatMessage(message ?? '', attachments: attachments);
   }
 
   Future<void> _openVideoPlayback() async {
@@ -581,6 +586,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ? null
           : _generateFinalSummary,
       onSendChatPressed: flowState.isSendingChat ? null : _sendChatMessage,
+      onAttachmentsChanged: (attachments) {
+        _pendingAttachments
+          ..clear()
+          ..addAll(attachments);
+      },
       onTimestampScopeChanged: ref
           .read(videoSummaryFlowControllerProvider.notifier)
           .setTimestampScope,

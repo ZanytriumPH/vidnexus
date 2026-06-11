@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/widgets/app_typing_indicator.dart';
+import '../../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
 import 'video_summary_final_chat_widgets.dart';
@@ -21,6 +22,7 @@ class FinalChatStageWorkspace extends StatefulWidget {
     required this.selectedTimestampEndSeconds,
     required this.onUploadCardPressed,
     required this.onSendChatPressed,
+    this.onAttachmentsChanged,
     required this.onTimestampScopeChanged,
     required this.onTimestampRangeChanged,
     this.onAddToKbPressed,
@@ -43,6 +45,7 @@ class FinalChatStageWorkspace extends StatefulWidget {
   final int selectedTimestampEndSeconds;
   final VoidCallback onUploadCardPressed;
   final VoidCallback? onSendChatPressed;
+  final ValueChanged<List<AttachmentInfo>>? onAttachmentsChanged;
   final ValueChanged<bool> onTimestampScopeChanged;
   final ValueChanged<TimestampRangeSelection> onTimestampRangeChanged;
   final VoidCallback? onAddToKbPressed;
@@ -165,6 +168,7 @@ class _FinalChatStageWorkspaceState extends State<FinalChatStageWorkspace>
         ChatComposer(
           controller: widget.chatController,
           isSending: widget.isSendingChat,
+          onAttachmentsChanged: widget.onAttachmentsChanged,
           isTimestampScoped: widget.isTimestampScoped,
           selectedTimestampLabel: widget.selectedTimestampLabel,
           totalDurationSeconds: widget.totalDurationSeconds,

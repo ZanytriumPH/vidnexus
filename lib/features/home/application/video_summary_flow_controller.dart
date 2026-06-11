@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 
+import '../../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../../services/service_providers.dart';
 import '../../../services/upload_service.dart';
 import '../../../services/models/common_dto.dart';
@@ -925,9 +926,9 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
-  Future<void> sendChatMessage(String rawMessage) async {
+  Future<void> sendChatMessage(String rawMessage, {List<AttachmentInfo> attachments = const []}) async {
     final message = rawMessage.trim();
-    if (state.isSendingChat || message.isEmpty) {
+    if (state.isSendingChat || (message.isEmpty && attachments.isEmpty)) {
       return;
     }
 
@@ -945,6 +946,14 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       sender: SummaryChatSender.user,
       text: message,
       timestampLabel: timestampLabel,
+      attachments: attachments
+          .map((a) => ChatAttachment(
+                name: a.name,
+                ossKey: a.ossKey,
+                mimeType: a.mimeType,
+                presignedUrl: a.presignedUrl,
+              ))
+          .toList(),
     );
 
     // 追加一条空系统回复，用于 SSE 流式追加
@@ -969,6 +978,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         message,
         timestamp: timestamp,
         windowSeconds: windowSeconds,
+        attachments: attachments,
       );
 
       await for (final reply in sseStream) {
@@ -1197,6 +1207,14 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
             sender: SummaryChatSender.user,
             text: qa.questionContent,
             timestampLabel: timestampLabel,
+            attachments: qa.attachments
+                .map((a) => ChatAttachment(
+                      name: a.name,
+                      ossKey: a.ossKey,
+                      mimeType: a.mimeType,
+                      presignedUrl: a.presignedUrl,
+                    ))
+                .toList(),
           ));
         }
 

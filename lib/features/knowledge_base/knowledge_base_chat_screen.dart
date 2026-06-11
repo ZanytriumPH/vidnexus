@@ -4,15 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/routing/app_router.dart';
+import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_theme.dart';
 import '../../app/widgets/app_markdown_body.dart';
 import '../../app/widgets/app_typing_indicator.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_header_add_button.dart';
 import '../../app/widgets/citation_card.dart';
+import '../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../services/service_providers.dart';
 import 'application/knowledge_base_chat_controller.dart';
 import 'application/knowledge_base_controller.dart';
+import '../home/video_summary_presentation_models.dart' show ChatAttachment;
 import 'knowledge_base_models.dart';
 import 'widgets/knowledge_base_shared_widgets.dart';
 
@@ -35,6 +38,7 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
   late final KnowledgeBaseChatController _chatController;
   late final TextEditingController _composerController;
   final ScrollController _scrollController = ScrollController();
+  final List<AttachmentInfo> _pendingAttachments = [];
 
   @override
   void initState() {
@@ -122,6 +126,11 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
               child: KnowledgeBaseComposer(
                 controller: _composerController,
                 onSubmit: _sendMessage,
+                onAttachmentsChanged: (attachments) {
+                  _pendingAttachments
+                    ..clear()
+                    ..addAll(attachments);
+                },
                 enabled: !isWaiting,
               ),
             ),
@@ -133,11 +142,15 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
 
   void _sendMessage() {
     final text = _composerController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty && _pendingAttachments.isEmpty) return;
 
     FocusScope.of(context).unfocus();
     _composerController.clear();
-    _chatController.sendMessage(text);
+
+    final attachments = List<AttachmentInfo>.from(_pendingAttachments);
+    _pendingAttachments.clear();
+
+    _chatController.sendMessage(text, attachments: attachments);
   }
 
   void _scrollToBottom() {
@@ -212,9 +225,18 @@ class _KnowledgeChatBubble extends StatelessWidget {
             color: messageStyles.userSurface,
             borderRadius: BorderRadius.circular(messageStyles.chatBubbleRadius),
           ),
-          child: Text(
-            message.text,
-            style: context.appTextStyles.summaryContentBody,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (message.attachments.isNotEmpty) ...[
+                _KbAttachmentImageGrid(attachments: message.attachments),
+                const SizedBox(height: 8),
+              ],
+              Text(
+                message.text,
+                style: context.appTextStyles.summaryContentBody,
+              ),
+            ],
           ),
         ),
       );
@@ -253,6 +275,99 @@ class _KnowledgeChatBubble extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// 知识库聊天气泡中的附件图片网格。
+class _KbAttachmentImageGrid extends StatelessWidget {
+  const _KbAttachmentImageGrid({required this.attachments});
+
+  final List<ChatAttachment> attachments;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayCount = attachments.length > 4 ? 4 : attachments.length;
+    final overflow = attachments.length - displayCount;
+
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        for (var i = 0; i < displayCount; i++)
+          GestureDetector(
+            onTap: () => _showFullImage(context, attachments[i]),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 80,
+                height: 80,
+                child: attachments[i].presignedUrl != null &&
+                        attachments[i].presignedUrl!.isNotEmpty
+                    ? Image.network(
+                        attachments[i].presignedUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _thumbPlaceholder(),
+                      )
+                    : _thumbPlaceholder(),
+              ),
+            ),
+          ),
+        if (overflow > 0)
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8EDF3),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Text(
+                '+$overflow',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _thumbPlaceholder() {
+    return Container(
+      color: const Color(0xFFF0F2F5),
+      child: const Center(
+        child: Icon(Icons.image_outlined, size: 24, color: AppColors.textHint),
+      ),
+    );
+  }
+
+  void _showFullImage(BuildContext context, ChatAttachment attachment) {
+    if (attachment.presignedUrl == null || attachment.presignedUrl!.isEmpty) return;
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(16),
+        child: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: InteractiveViewer(
+            child: Image.network(
+              attachment.presignedUrl!,
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const SizedBox(
+                height: 200,
+                child: Center(
+                  child: Icon(Icons.broken_image, size: 48, color: Colors.white54),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

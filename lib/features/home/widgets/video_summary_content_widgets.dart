@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
+import '../../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import 'video_summary_draft_stage_workspace.dart';
 import 'video_summary_final_chat_stage_workspace.dart';
 import 'video_summary_processing_stage_workspace.dart';
@@ -36,6 +37,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
     required this.onStartPressed,
     required this.onGenerateFinalPressed,
     required this.onSendChatPressed,
+    required this.onAttachmentsChanged,
     required this.onTimestampScopeChanged,
     required this.onTimestampRangeChanged,
     required this.isUploading,
@@ -73,6 +75,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
   final VoidCallback? onStartPressed;
   final VoidCallback? onGenerateFinalPressed;
   final VoidCallback? onSendChatPressed;
+  final ValueChanged<List<AttachmentInfo>>? onAttachmentsChanged;
   final ValueChanged<bool> onTimestampScopeChanged;
   final ValueChanged<TimestampRangeSelection> onTimestampRangeChanged;
   final bool isUploading;
@@ -132,6 +135,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
           selectedTimestampEndSeconds: selectedTimestampEndSeconds,
           onUploadCardPressed: onUploadCardPressed,
           onSendChatPressed: onSendChatPressed,
+          onAttachmentsChanged: onAttachmentsChanged,
           onTimestampScopeChanged: onTimestampScopeChanged,
           onTimestampRangeChanged: onTimestampRangeChanged,
           onAddToKbPressed: onAddToKbPressed,

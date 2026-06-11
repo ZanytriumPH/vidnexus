@@ -1,6 +1,23 @@
 /// 这些模型专门服务 UI 展示，通常由 application 层 mapper 产出。
 enum SummaryChatSender { system, user }
 
+/// 聊天消息中的图片附件（轻量 UI 模型）。
+class ChatAttachment {
+  const ChatAttachment({
+    required this.name,
+    required this.ossKey,
+    required this.mimeType,
+    this.presignedUrl,
+  });
+
+  final String name;
+  final String ossKey;
+  final String mimeType;
+
+  /// HTTP 可访问的图片地址，用于 Image.network。
+  final String? presignedUrl;
+}
+
 /// 单轨分片进度条数据。
 class ChunkProgressBar {
   const ChunkProgressBar({
@@ -89,12 +106,16 @@ class ChatMessage {
     required this.text,
     this.timestampLabel,
     this.citations,
+    this.attachments = const [],
   });
 
   final SummaryChatSender sender;
   final String text;
   final String? timestampLabel;
   final List<ChatMessageCitation>? citations;
+
+  /// 用户消息附带的图片列表。
+  final List<ChatAttachment> attachments;
 }
 
 class FinalSummaryData {
