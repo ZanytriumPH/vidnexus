@@ -471,9 +471,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final attachments = List<AttachmentInfo>.from(_pendingAttachments);
     _pendingAttachments.clear();
 
+    final finalMessage = (message == null || message.trim().isEmpty)
+        ? '请分析上传的图片'
+        : message;
+
     await ref
         .read(videoSummaryFlowControllerProvider.notifier)
-        .sendChatMessage(message ?? '', attachments: attachments);
+        .sendChatMessage(finalMessage, attachments: attachments);
   }
 
   Future<void> _openVideoPlayback() async {
