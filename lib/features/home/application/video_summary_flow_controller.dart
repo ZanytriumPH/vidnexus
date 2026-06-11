@@ -13,6 +13,7 @@ import '../../../services/websocket/ws_models.dart';
 import '../../../services/websocket/ws_provider.dart';
 import 'video_summary_result_mapper.dart';
 import '../domain/video_summary_domain_models.dart';
+import '../domain/simulated_progress_estimator.dart';
 import '../domain/video_summary_time_utils.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
@@ -209,6 +210,13 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   /// 最终稿生成期间的 WS 进度日志订阅。
   StreamSubscription<WSEventEnvelope>? _finalDraftProgressSub;
 
+  /// 虚假模拟进度估算器，用于在后端真实进度到达前驱动主进度条。
+  final SimulatedProgressEstimator _simProgressEstimator =
+      SimulatedProgressEstimator();
+
+  /// 模拟进度的定时 tick 定时器。
+  Timer? _simProgressTimer;
+
   @override
   VideoSummaryFlowState build() {
     final videoAsset = _repository.getVideoAsset();
@@ -238,6 +246,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     // 切换会话标识，使所有正在执行的旧异步生成流程的守卫失效
     _activeSessionKey = Object();
     _cancelAllPolling();
+    _simProgressEstimator.reset();
 
     _repository.updateTaskId(null);
     _repository.updateVideoId(defaultVideoId);
@@ -766,6 +775,10 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
     final settings = ref.read(videoSummarySettingsProvider);
 
+    // 重置模拟进度估算器
+    _simProgressEstimator.reset();
+    _cancelSimProgressTimer();
+
     // 每次重新生成草稿，都要清掉后续阶段结果，并立即切换为 processing 阶段以提供用户反馈
     state = state.copyWith(
       isGenerating: true,
@@ -775,6 +788,26 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       draftResult: null,
       finalSummaryData: null,
       chatMessages: const [],
+    );
+
+    // 启动模拟进度定时器：在后端真实事件到达前，缓慢推进进度条
+    _simProgressTimer = Timer.periodic(
+      const Duration(milliseconds: 800),
+      (_) {
+        _simProgressEstimator.tick();
+        final current = state.processingSnapshot;
+        if (current != null && _simProgressEstimator.currentPercent / 100.0 > current.progress) {
+          state = state.copyWith(
+            processingSnapshot: ProcessingSnapshot(
+              progress: _simProgressEstimator.currentPercent / 100.0,
+              statusLabel: current.statusLabel,
+              etaLabel: current.etaLabel,
+              chunkProgress: current.chunkProgress,
+              statusLog: current.statusLog,
+            ),
+          );
+        }
+      },
     );
 
     // 捕获当前会话标识，后续所有异步回调都以此校验所有权。
@@ -804,9 +837,26 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         if (state.taskId == null && _repository.activeTaskId != null) {
           state = state.copyWith(taskId: _repository.activeTaskId);
         }
-        state = state.copyWith(
-          processingSnapshot: mapProcessingDataToSnapshot(processingData),
+
+        // 使用模拟进度驱动主进度条
+        final realPercent = (processingData.progress * 100).round();
+        final isCompleted = processingData.progress >= 1.0;
+        final simulatedPercent = _simProgressEstimator.feedRealProgress(
+          realPercent,
+          isCompleted: isCompleted,
         );
+
+        final snapshot = mapProcessingDataToSnapshot(processingData);
+        // 用模拟进度覆盖真实进度，驱动 HeroCard 主进度条
+        final overriddenSnapshot = ProcessingSnapshot(
+          progress: simulatedPercent / 100.0,
+          statusLabel: snapshot.statusLabel,
+          etaLabel: _buildSimulatedEtaLabel(processingData, simulatedPercent),
+          chunkProgress: snapshot.chunkProgress,
+          statusLog: snapshot.statusLog,
+        );
+
+        state = state.copyWith(processingSnapshot: overriddenSnapshot);
       }
 
       // 若在 await for 期间发生了会话切换，不再继续
@@ -851,6 +901,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         errorMessage: errorMsg,
       );
     } finally {
+      _cancelSimProgressTimer();
       // 仅当本此生成未被取消时才重置标志位
       if (_activeSessionKey == owningSessionKey) {
         state = state.copyWith(isGenerating: false);
@@ -1305,11 +1356,18 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     _draftPollTimer = null;
   }
 
+  /// 取消模拟进度定时器。
+  void _cancelSimProgressTimer() {
+    _simProgressTimer?.cancel();
+    _simProgressTimer = null;
+  }
+
   /// 取消所有轮询定时器（processing + draft）和 WS 进度订阅。
   void _cancelAllPolling() {
     _cancelProcessingPoll();
     _cancelDraftStatusPoll();
     _cancelFinalDraftProgress();
+    _cancelSimProgressTimer();
   }
 
   /// 恢复 processing 阶段的会话时，查询后端确认任务的实际进度。
@@ -1776,6 +1834,23 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
     debugPrint('[FlowCtrl] 开始终稿状态轮询 — taskId=$taskId');
     _draftPollTimer = Timer(const Duration(seconds: 10), poll);
+  }
+
+  /// 构建模拟进度模式下的 eta 标签。
+  ///
+  /// 在预处理阶段（未收到真实分片事件）显示阶段提示；
+  /// 收到分片事件后显示 "分片 X/Y 完成 (模拟 XX%)"。
+  String _buildSimulatedEtaLabel(
+    VideoSummaryProcessingData data,
+    int simulatedPercent,
+  ) {
+    final cp = data.chunkProgress;
+    if (cp == null || !_simProgressEstimator.hasReceivedRealProgress) {
+      return data.currentMessage.isNotEmpty
+          ? data.currentMessage
+          : '正在准备处理内容。';
+    }
+    return '分片 ${cp.doneCount}/${cp.totalChunks} 完成';
   }
 
   TimestampRangeSelection _buildDefaultTimestampRange(String durationLabel) {

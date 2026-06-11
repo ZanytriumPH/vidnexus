@@ -50,9 +50,6 @@ class StreamlitProgressCard extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // ── 单轨分片分析进度 ──
-            ChunkProgressBarTile(bar: chunk.chunkBar),
-
             // ── 状态日志 ──
             if (statusLog.isNotEmpty) ...[
               const SizedBox(height: 14),
