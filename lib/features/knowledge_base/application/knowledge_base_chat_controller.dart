@@ -81,7 +81,18 @@ class KnowledgeBaseChatController extends ChangeNotifier {
           .where((m) => m.sender == KnowledgeChatSender.user)
           .toList();
       _emit(_state.copyWith(messages: userMessages));
-      _sendChatMessage(lastMessage.text);
+      _sendChatMessage(
+        lastMessage.text,
+        attachments: lastMessage.attachments
+            .map((a) => AttachmentInfo(
+                  name: a.name,
+                  ossKey: a.ossKey,
+                  mimeType: a.mimeType,
+                  sizeBytes: 0,
+                  presignedUrl: a.presignedUrl,
+                ))
+            .toList(),
+      );
     }
   }
 
