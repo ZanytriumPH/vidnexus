@@ -1783,7 +1783,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       label: durationLabel,
       minimumSeconds: minimumTimestampRangeSeconds,
     );
-    final defaultLength = total >= 30 ? 30 : total;
+    final defaultLength = total >= 60 ? 60 : total;
     final safeLength = defaultLength >= minimumTimestampRangeSeconds
         ? defaultLength
         : minimumTimestampRangeSeconds;
