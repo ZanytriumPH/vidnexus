@@ -276,7 +276,12 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
                       const SizedBox(width: 8),
                       AppInlineSubmitButton(
                         isLoading: !widget.enabled || _uploading,
-                        onPressed: widget.enabled ? widget.onSubmit : null,
+                        onPressed: widget.enabled
+                            ? () {
+                                widget.onSubmit();
+                                setState(() => _pendingAttachments.clear());
+                              }
+                            : null,
                       ),
                     ],
                   ],

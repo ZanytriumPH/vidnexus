@@ -606,7 +606,12 @@ class _ChatComposerState extends State<ChatComposer> {
                     const SizedBox(width: 8),
                     AppInlineSubmitButton(
                       isLoading: widget.isSending || _uploading,
-                      onPressed: widget.onSendPressed,
+                      onPressed: widget.onSendPressed != null
+                          ? () {
+                              widget.onSendPressed!();
+                              setState(() => _pendingAttachments.clear());
+                            }
+                          : null,
                     ),
                   ],
                 ],
