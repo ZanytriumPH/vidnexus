@@ -1073,29 +1073,28 @@ class _AddToKnowledgeBaseSheetState
                         title: library.title,
                         meta: library.meta,
                         onTap: () async {
-                          Navigator.of(context).pop();
+                          final navigator = Navigator.of(context);
+                          final messenger = ScaffoldMessenger.of(context);
                           try {
                             await kbService.bindVideo(
                               kbid: library.id,
                               videoId: widget.videoId,
                             );
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(l10n.success(library.title)),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
+                            navigator.pop();
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(l10n.success(library.title)),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
                           } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(l10n.failure(e.toString())),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
+                            navigator.pop();
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(l10n.failure(e.toString())),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
                           }
                         },
                       ),
