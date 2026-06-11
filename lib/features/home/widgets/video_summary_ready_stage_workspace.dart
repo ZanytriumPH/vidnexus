@@ -68,7 +68,7 @@ class ReadyStageWorkspace extends StatelessWidget {
                 const SizedBox(height: 12),
                 PreferenceCard(
                   controller: preferenceController,
-                  hintText: '例如：请先给我按行业、声线和行动建议展开。',
+                  hintText: '例如：重点分析行业趋势，提取关键结论和可执行的行动建议。',
                   prominent: true,
                 ),
                 const SizedBox(height: 12),
@@ -110,7 +110,7 @@ class ReadyStageWorkspace extends StatelessWidget {
         const SizedBox(height: 14),
         PreferenceCard(
           controller: preferenceController,
-          hintText: '例如：请先给我按行业、声线和行动建议展开。',
+          hintText: '例如：重点分析行业趋势，提取关键结论和可执行的行动建议。',
           prominent: true,
         ),
         const SizedBox(height: 24),
