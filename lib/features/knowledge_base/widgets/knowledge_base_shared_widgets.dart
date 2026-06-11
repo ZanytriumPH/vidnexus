@@ -122,39 +122,10 @@ class KnowledgeBaseComposer extends StatefulWidget {
   State<KnowledgeBaseComposer> createState() => _KnowledgeBaseComposerState();
 }
 
-class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
-    with WidgetsBindingObserver {
-  final FocusNode _focusNode = FocusNode();
+class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer> {
   final List<AttachmentInfo> _pendingAttachments = [];
   final _attachmentService = const AttachmentService();
-  bool _keyboardVisible = false;
   bool _uploading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void didChangeMetrics() {
-    if (!mounted) return;
-    final isKeyboardVisible = View.of(context).viewInsets.bottom > 0;
-    if (isKeyboardVisible == _keyboardVisible) return;
-    setState(() {
-      _keyboardVisible = isKeyboardVisible;
-    });
-    if (!isKeyboardVisible) {
-      _focusNode.unfocus();
-    }
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _focusNode.dispose();
-    super.dispose();
-  }
 
   void _notifyAttachmentsChanged() {
     widget.onAttachmentsChanged?.call(List.from(_pendingAttachments));
@@ -198,99 +169,84 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<TextEditingValue>(
-      valueListenable: widget.controller,
-      builder: (context, value, child) {
-        final hasInput = value.text.trim().isNotEmpty;
-        final expanded = _keyboardVisible || hasInput;
-
-        return Container(
-          padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: const Color(0xFFD7DFE7)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 附件预览条
-              if (_pendingAttachments.isNotEmpty)
-                _KbAttachmentPreviewStrip(
-                  attachments: _pendingAttachments,
-                  onRemove: _removeAttachment,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: const Color(0xFFD7DFE7)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 附件预览条
+          if (_pendingAttachments.isNotEmpty)
+            _KbAttachmentPreviewStrip(
+              attachments: _pendingAttachments,
+              onRemove: _removeAttachment,
+            ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 20),
+            child: SizedBox(
+              width: double.infinity,
+              child: TextField(
+                controller: widget.controller,
+                enabled: widget.enabled,
+                decoration: InputDecoration(
+                  hintText: widget.hintText,
+                  filled: false,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.fromLTRB(6, 3, 6, 10),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  isCollapsed: true,
                 ),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: widget.controller,
-                      focusNode: _focusNode,
-                      enabled: widget.enabled,
-                      decoration: InputDecoration(
-                        hintText: widget.hintText,
-                        filled: false,
-                        isDense: true,
-                        contentPadding: expanded
-                            ? const EdgeInsets.fromLTRB(6, 3, 6, 10)
-                            : const EdgeInsets.fromLTRB(6, 7, 6, 11),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        isCollapsed: true,
-                      ),
-                      style: context.appTextStyles.summaryContentBody
-                          .copyWith(height: 1.2),
-                      strutStyle: const StrutStyle(
-                        height: 1.2,
-                        leading: 0,
-                        forceStrutHeight: true,
-                      ),
-                      textAlignVertical: TextAlignVertical.top,
-                      minLines: 1,
-                      maxLines: expanded ? 4 : 1,
-                    ),
-                  ),
-                  if (!expanded)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4),
-                      child: ComposerAttachmentButton(
-                        onImagePicked: _onImagePicked,
-                        enabled: !_uploading,
-                      ),
-                    ),
-                ],
+                style: context.appTextStyles.summaryContentBody
+                    .copyWith(height: 1.2),
+                strutStyle: const StrutStyle(
+                  height: 1.2,
+                  leading: 0,
+                  forceStrutHeight: true,
+                ),
+                textAlignVertical: TextAlignVertical.top,
+                minLines: 1,
+                maxLines: 4,
               ),
-              if (expanded) ...[
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    const Spacer(),
-                    ComposerAttachmentButton(
-                      onImagePicked: _onImagePicked,
-                      enabled: !_uploading,
-                    ),
-                    if (hasInput || _pendingAttachments.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      AppInlineSubmitButton(
-                        isLoading: !widget.enabled || _uploading,
-                        onPressed: widget.enabled
-                            ? () {
-                                widget.onSubmit();
-                                setState(() => _pendingAttachments.clear());
-                              }
-                            : null,
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ],
+            ),
           ),
-        );
-      },
+          const SizedBox(height: 8),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: widget.controller,
+            builder: (context, value, child) {
+              final hasInput = value.text.trim().isNotEmpty;
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Spacer(),
+                  ComposerAttachmentButton(
+                    onImagePicked: _onImagePicked,
+                    enabled: !_uploading,
+                  ),
+                  if (hasInput || _pendingAttachments.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    AppInlineSubmitButton(
+                      isLoading: !widget.enabled || _uploading,
+                      onPressed: widget.enabled
+                          ? () {
+                              widget.onSubmit();
+                              setState(() => _pendingAttachments.clear());
+                            }
+                          : null,
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }
