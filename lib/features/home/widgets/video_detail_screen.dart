@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,11 +35,18 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
   int _taskTotalCount = 0;
   bool _isLoading = true;
   String? _error;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _cancelPreprocessingPoll();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -63,6 +72,7 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
         _taskTotalCount = tasksResp.pagination?.total ?? tasksResp.data.length;
         _isLoading = false;
       });
+      _startPreprocessingPollIfNeeded();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -70,6 +80,50 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
         _error = e.toString();
       });
     }
+  }
+
+  /// 视频预处理是否已完成（转录 + 关键帧提取均已结束）。条件来自 API 规范 new.md:298。
+  bool _isVideoReady(VideoResourceResponseData? video) {
+    if (video == null) return false;
+    return video.transcribeStatus == 'COMPLETED' &&
+        video.frameExtractionStatus == 'COMPLETED' &&
+        video.extractCompletedAt != null;
+  }
+
+  /// 视频预处理是否已失败。
+  bool _isPreprocessingFailed(VideoResourceResponseData? video) {
+    if (video == null) return false;
+    return video.transcribeStatus == 'FAILED' ||
+        video.frameExtractionStatus == 'FAILED';
+  }
+
+  /// 若视频预处理未完成且无已有任务，启动 5 秒间隔轮询。
+  void _startPreprocessingPollIfNeeded() {
+    _cancelPreprocessingPoll();
+    // 已有任务或已完成/已失败 → 无需轮询
+    if (_tasks.isNotEmpty || _isVideoReady(_video) || _isPreprocessingFailed(_video)) {
+      return;
+    }
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (!mounted) return;
+      try {
+        final resp = await _videoService.getVideo(widget.videoId);
+        if (!mounted) return;
+        final video = resp.data;
+        setState(() => _video = video);
+        if (_isVideoReady(video) || _isPreprocessingFailed(video)) {
+          _cancelPreprocessingPoll();
+        }
+      } catch (_) {
+        // 单次轮询失败静默跳过，下次继续
+      }
+    });
+  }
+
+  /// 取消预处理状态轮询。
+  void _cancelPreprocessingPoll() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
   }
 
   Future<void> _deleteVideo() async {
@@ -180,18 +234,7 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   height: 48,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showCreateTaskSheet(context),
-                    icon: const Icon(Icons.add, size: 20),
-                    label: const Text('发起新任务', style: TextStyle(fontSize: 15)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2F69E8),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                  ),
+                  child: _buildBottomButton(context),
                 ),
               ),
             ),
@@ -243,6 +286,98 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 底部按钮：根据视频预处理状态和已有任务切换形态。
+  Widget _buildBottomButton(BuildContext context) {
+    // 已有任务 → 始终正常可用
+    if (_tasks.isNotEmpty) {
+      return _buildNormalButton(context);
+    }
+
+    // 预处理失败 → 红色禁用
+    if (_isPreprocessingFailed(_video)) {
+      return _buildFailedButton();
+    }
+
+    // 预处理完成 → 正常可用
+    if (_isVideoReady(_video)) {
+      return _buildNormalButton(context);
+    }
+
+    // 预处理进行中 → 灰色加载中
+    return _buildProcessingButton();
+  }
+
+  /// 正常蓝色按钮：发起新任务。
+  Widget _buildNormalButton(BuildContext context) {
+    return ElevatedButton.icon(
+      onPressed: () => _showCreateTaskSheet(context),
+      icon: const Icon(Icons.add, size: 20),
+      label: const Text('发起新任务', style: TextStyle(fontSize: 15)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF2F69E8),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+    );
+  }
+
+  /// 灰色禁用按钮：预处理进行中。
+  Widget _buildProcessingButton() {
+    return ElevatedButton(
+      onPressed: null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFD1D5DB),
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: const Color(0xFFD1D5DB),
+        disabledForegroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(width: 8),
+          Text('视频正在预处理中...', style: TextStyle(fontSize: 15)),
+        ],
+      ),
+    );
+  }
+
+  /// 红色禁用按钮：预处理失败。
+  Widget _buildFailedButton() {
+    return ElevatedButton(
+      onPressed: null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFEF4444),
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: const Color(0xFFEF4444),
+        disabledForegroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline, size: 18),
+          SizedBox(width: 8),
+          Text('预处理失败', style: TextStyle(fontSize: 15)),
+        ],
       ),
     );
   }
