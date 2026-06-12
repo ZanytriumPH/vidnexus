@@ -8,7 +8,6 @@ import '../video_summary_presentation_models.dart';
 class HeroCard extends StatelessWidget {
   const HeroCard({
     required this.stage,
-    required this.highlighted,
     required this.videoAsset,
     required this.processingSnapshot,
     required this.processingExpanded,
@@ -22,7 +21,6 @@ class HeroCard extends StatelessWidget {
   });
 
   final VideoSummaryStage stage;
-  final bool highlighted;
   final VideoAssetInfo videoAsset;
   final ProcessingSnapshot? processingSnapshot;
   final bool processingExpanded;
@@ -38,7 +36,6 @@ class HeroCard extends StatelessWidget {
     final bool isReady = stage == VideoSummaryStage.ready;
     if (isReady) {
       return _ReadyUploadHeroCard(
-        highlighted: highlighted,
         videoAsset: videoAsset,
         isUploading: isUploading,
         uploadProgress: uploadProgress,
@@ -179,14 +176,12 @@ class HeroCard extends StatelessWidget {
 
 class _ReadyUploadHeroCard extends StatelessWidget {
   const _ReadyUploadHeroCard({
-    required this.highlighted,
     required this.videoAsset,
     this.isUploading = false,
     this.uploadProgress = 0.0,
     this.onTap,
   });
 
-  final bool highlighted;
   final VideoAssetInfo videoAsset;
   final bool isUploading;
   final double uploadProgress;
@@ -228,7 +223,6 @@ class _ReadyUploadHeroCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 18),
                 _ReadyUploadCallout(
-                  highlighted: highlighted,
                   videoAsset: videoAsset,
                   isUploading: isUploading,
                   uploadProgress: uploadProgress,
@@ -244,13 +238,11 @@ class _ReadyUploadHeroCard extends StatelessWidget {
 
 class _ReadyUploadCallout extends StatelessWidget {
   const _ReadyUploadCallout({
-    required this.highlighted,
     required this.videoAsset,
     this.isUploading = false,
     this.uploadProgress = 0.0,
   });
 
-  final bool highlighted;
   final VideoAssetInfo videoAsset;
   final bool isUploading;
   final double uploadProgress;
@@ -293,20 +285,9 @@ class _ReadyUploadCallout extends StatelessWidget {
               ),
             ),
           ] else ...[
-            if (highlighted) ...[
-              Text(
-                '✓',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(width: 4),
-            ],
             Expanded(
               child: Text(
-                highlighted ? '已选择 ${videoAsset.fileName}' : '点击从设备选择文件',
+                '点击从设备选择文件',
                 textAlign: TextAlign.center,
                 softWrap: true,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(

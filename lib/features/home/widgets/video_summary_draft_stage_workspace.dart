@@ -46,7 +46,6 @@ class DraftStageWorkspace extends StatelessWidget {
         children: [
           HeroCard(
             stage: VideoSummaryStage.draft,
-            highlighted: highlighted,
             videoAsset: videoAsset,
             processingSnapshot: null,
             processingExpanded: false,

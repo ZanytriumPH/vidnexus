@@ -31,7 +31,6 @@ class ProcessingStageWorkspace extends StatelessWidget {
       children: [
         HeroCard(
           stage: VideoSummaryStage.processing,
-          highlighted: highlighted,
           videoAsset: videoAsset,
           processingSnapshot: processingSnapshot,
           processingExpanded: processingExpanded,

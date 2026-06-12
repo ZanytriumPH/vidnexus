@@ -115,7 +115,6 @@ class _FinalChatStageWorkspaceState extends State<FinalChatStageWorkspace>
           children: [
             HeroCard(
               stage: VideoSummaryStage.finalChat,
-              highlighted: widget.highlighted,
               videoAsset: widget.videoAsset,
               processingSnapshot: null,
               processingExpanded: false,
@@ -142,7 +141,6 @@ class _FinalChatStageWorkspaceState extends State<FinalChatStageWorkspace>
               children: [
                 HeroCard(
                   stage: VideoSummaryStage.finalChat,
-                  highlighted: widget.highlighted,
                   videoAsset: widget.videoAsset,
                   processingSnapshot: null,
                   processingExpanded: false,

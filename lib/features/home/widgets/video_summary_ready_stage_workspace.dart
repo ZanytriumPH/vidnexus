@@ -82,7 +82,6 @@ class _ReadyStageWorkspaceState extends State<ReadyStageWorkspace> {
       children: [
         HeroCard(
           stage: VideoSummaryStage.ready,
-          highlighted: widget.highlighted,
           videoAsset: widget.videoAsset,
           processingSnapshot: null,
           processingExpanded: false,
