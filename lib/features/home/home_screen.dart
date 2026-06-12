@@ -417,24 +417,49 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             flowState.videoAsset.title.isEmpty);
   }
 
-  /// 侧边栏条目标题：若已完成最终稿则提取 markdown # 标题，否则显示原始会话标题。
+  /// 侧边栏条目标题：
+  /// 优先从 finalSummary 提取 # 标题，其次从 draftResult 提取，否则回退原始标题。
+  /// 提取后过滤 [xx:xx-yy:yy] 时间戳。
   String _drawerTitle(VideoSummarySessionHistoryEntry session) {
+    // 1. 最终稿
     final body = session.snapshot.flowSnapshot.finalSummaryData?.summaryBody;
     if (body != null && body.isNotEmpty) {
-      final match = RegExp(r'^#\s+(.+)$', multiLine: true).firstMatch(body);
-      if (match != null) {
-        final title = match.group(1)?.trim();
-        if (title != null && title.isNotEmpty) return title;
-      }
+      final title = _extractMarkdownTitle(body);
+      if (title != null) return title;
+    }
+    // 2. 初稿
+    final draftParagraphs =
+        session.snapshot.flowSnapshot.draftResult?.paragraphs;
+    if (draftParagraphs != null && draftParagraphs.isNotEmpty) {
+      final title = _extractMarkdownTitle(draftParagraphs.first);
+      if (title != null) return title;
     }
     return session.title;
   }
 
-  /// 该会话是否已生成最终稿（可从 markdown 提取标题）。
+  /// 从 markdown 文本提取第一个 # 标题，并过滤 [xx:xx-yy:yy] 时间戳。
+  String? _extractMarkdownTitle(String text) {
+    final match = RegExp(r'^#\s+(.+)$', multiLine: true).firstMatch(text);
+    if (match == null) return null;
+    final raw = match.group(1)?.trim();
+    if (raw == null || raw.isEmpty) return null;
+    return raw.replaceAll(RegExp(r'\s*\[\d{2}:\d{2}-\d{2}:\d{2}\]'), '').trim();
+  }
+
+  /// 该会话是否已有可从 markdown 提取的标题（终稿或初稿）。
   bool _hasFinalDraftTitle(VideoSummarySessionHistoryEntry session) {
     final body = session.snapshot.flowSnapshot.finalSummaryData?.summaryBody;
-    if (body == null || body.isEmpty) return false;
-    return RegExp(r'^#\s+.+$', multiLine: true).hasMatch(body);
+    if (body != null && body.isNotEmpty) {
+      if (RegExp(r'^#\s+.+$', multiLine: true).hasMatch(body)) return true;
+    }
+    final draftParagraphs =
+        session.snapshot.flowSnapshot.draftResult?.paragraphs;
+    if (draftParagraphs != null && draftParagraphs.isNotEmpty) {
+      if (RegExp(r'^#\s+.+$', multiLine: true).hasMatch(draftParagraphs.first)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // 新建会话：重置流程状态和文本状态。

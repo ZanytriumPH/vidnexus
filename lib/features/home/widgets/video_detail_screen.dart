@@ -409,20 +409,30 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
     );
   }
 
-  /// 任务条目标题：最终稿阶段提取 # 标题，否则用视频名称。
+  /// 任务条目标题：
+  /// 优先从 finalSummary 提取 # 标题，其次从 draftSummary 提取，否则回退原始标题。
+  /// 提取后过滤 [xx:xx-yy:yy] 时间戳。
   String _taskTitle(VideoSummaryTaskResponseData task) {
+    // 1. 最终稿
     if (task.workflowState == 'COMPLETED') {
-      final body = task.finalSummary;
-      if (body != null && body.isNotEmpty) {
-        final match =
-            RegExp(r'^#\s+(.+)$', multiLine: true).firstMatch(body);
-        if (match != null) {
-          final title = match.group(1)?.trim();
-          if (title != null && title.isNotEmpty) return title;
-        }
-      }
+      final title = _extractMarkdownTitle(task.finalSummary);
+      if (title != null) return title;
     }
+    // 2. 初稿
+    final draftTitle = _extractMarkdownTitle(task.draftSummary);
+    if (draftTitle != null) return draftTitle;
+    // 3. 回退
     return task.title ?? task.videoId;
+  }
+
+  /// 从 markdown 文本提取第一个 # 标题，并过滤 [xx:xx-yy:yy] 时间戳。
+  String? _extractMarkdownTitle(String? text) {
+    if (text == null || text.isEmpty) return null;
+    final match = RegExp(r'^#\s+(.+)$', multiLine: true).firstMatch(text);
+    if (match == null) return null;
+    final raw = match.group(1)?.trim();
+    if (raw == null || raw.isEmpty) return null;
+    return raw.replaceAll(RegExp(r'\s*\[\d{2}:\d{2}-\d{2}:\d{2}\]'), '').trim();
   }
 
   String _workflowStateLabel(String state) {
