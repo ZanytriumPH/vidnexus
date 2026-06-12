@@ -1,3 +1,4 @@
+import '../home/video_summary_presentation_models.dart' show ChatAttachment;
 import '../../services/models/global_chat_dto.dart';
 
 enum KnowledgeChatSender { user, system }

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../services/service_providers.dart';
 import '../../services/websocket/ws_provider.dart';
 import '../auth/auth_controller.dart';
@@ -84,6 +85,7 @@ abstract class VideoSummaryRepository {
     String message, {
     required String timestamp,
     int? windowSeconds,
+    List<AttachmentInfo> attachments = const [],
   });
 
   /// 查询单个任务的状态，用于会话恢复时判断后台任务是否已完成。

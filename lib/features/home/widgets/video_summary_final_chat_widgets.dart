@@ -165,6 +165,11 @@ class _SummaryChatBubbleBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 附件图片（用户消息气泡，显示在文字上方）
+        if (!isSystemMessage && message.attachments.isNotEmpty) ...[
+          _AttachmentImageGrid(attachments: message.attachments),
+          const SizedBox(height: 8),
+        ],
         if (isSystemMessage)
           VideoSummaryMarkdownBody(data: message.text)
         else
@@ -184,6 +189,103 @@ class _SummaryChatBubbleBody extends StatelessWidget {
           _VideoCitationSection(citations: message.citations!),
         ],
       ],
+    );
+  }
+}
+
+/// 附件图片网格，最多显示 4 张，超出显示 "+N"。
+class _AttachmentImageGrid extends StatelessWidget {
+  const _AttachmentImageGrid({required this.attachments});
+
+  final List<ChatAttachment> attachments;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayCount = attachments.length > 4 ? 4 : attachments.length;
+    final overflow = attachments.length - displayCount;
+
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        for (var i = 0; i < displayCount; i++)
+          GestureDetector(
+            onTap: () => _showFullImage(context, attachments[i]),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 80,
+                height: 80,
+                child: attachments[i].ossKey.isNotEmpty
+                    ? Image.network(
+                        _thumbnailUrl(attachments[i].ossKey),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _thumbPlaceholder(),
+                      )
+                    : _thumbPlaceholder(),
+              ),
+            ),
+          ),
+        if (overflow > 0)
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8EDF3),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Text(
+                '+$overflow',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  static String _thumbnailUrl(String ossKey) {
+    final base = ApiClient.instance.options.baseUrl;
+    return '$base/api/v1/files/stream?object_key=${Uri.encodeComponent(ossKey)}';
+  }
+
+  Widget _thumbPlaceholder() {
+    return Container(
+      color: const Color(0xFFF0F2F5),
+      child: const Center(
+        child: Icon(Icons.image_outlined, size: 24, color: AppColors.textHint),
+      ),
+    );
+  }
+
+  void _showFullImage(BuildContext context, ChatAttachment attachment) {
+    if (attachment.ossKey.isEmpty) return;
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(16),
+        child: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: InteractiveViewer(
+            child: Image.network(
+              _thumbnailUrl(attachment.ossKey),
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const SizedBox(
+                height: 200,
+                child: Center(
+                  child: Icon(Icons.broken_image, size: 48, color: Colors.white54),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -337,7 +439,7 @@ class _AddToOtherKbButton extends StatelessWidget {
   }
 }
 
-class ChatComposer extends StatelessWidget {
+class ChatComposer extends StatefulWidget {
   const ChatComposer({
     required this.controller,
     required this.isSending,
@@ -349,6 +451,7 @@ class ChatComposer extends StatelessWidget {
     required this.onTimestampScopeChanged,
     required this.onTimestampRangeChanged,
     required this.onSendPressed,
+    this.onAttachmentsChanged,
     super.key,
   });
 
@@ -362,6 +465,56 @@ class ChatComposer extends StatelessWidget {
   final ValueChanged<bool> onTimestampScopeChanged;
   final ValueChanged<TimestampRangeSelection> onTimestampRangeChanged;
   final VoidCallback? onSendPressed;
+  final ValueChanged<List<AttachmentInfo>>? onAttachmentsChanged;
+
+  @override
+  State<ChatComposer> createState() => _ChatComposerState();
+}
+
+class _ChatComposerState extends State<ChatComposer> {
+  final List<AttachmentInfo> _pendingAttachments = [];
+  final _attachmentService = const AttachmentService();
+  bool _uploading = false;
+
+  void _notifyAttachmentsChanged() {
+    widget.onAttachmentsChanged?.call(List.from(_pendingAttachments));
+  }
+
+  Future<void> _onImagePicked(File file) async {
+    setState(() => _uploading = true);
+    try {
+      final resp = await _attachmentService.uploadAttachment(
+        filePath: file.path,
+        fileName: file.path.split('/').last.split('\\').last,
+      );
+      final data = resp.data;
+      if (data != null) {
+        setState(() {
+          _pendingAttachments.add(AttachmentInfo(
+            name: data.name,
+            ossKey: data.ossKey,
+            mimeType: data.mimeType,
+            sizeBytes: data.sizeBytes,
+            presignedUrl: data.presignedUrl,
+          ));
+        });
+        _notifyAttachmentsChanged();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('图片上传失败：$e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  void _removeAttachment(int index) {
+    setState(() => _pendingAttachments.removeAt(index));
+    _notifyAttachmentsChanged();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -375,12 +528,18 @@ class ChatComposer extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // 附件预览条
+          if (_pendingAttachments.isNotEmpty)
+            _AttachmentPreviewStrip(
+              attachments: _pendingAttachments,
+              onRemove: _removeAttachment,
+            ),
           ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 20),
             child: SizedBox(
               width: double.infinity,
               child: TextField(
-                controller: controller,
+                controller: widget.controller,
                 decoration: const InputDecoration(
                   hintText: '继续追问这段总结...',
                   filled: false,
@@ -407,7 +566,7 @@ class ChatComposer extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
+            valueListenable: widget.controller,
             builder: (context, value, child) {
               final hasInput = value.text.trim().isNotEmpty;
 
@@ -418,23 +577,31 @@ class ChatComposer extends StatelessWidget {
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: _TimestampScopeActionButton(
-                        enabled: isTimestampScoped,
-                        selectedLabel: selectedTimestampLabel,
-                        totalDurationSeconds: totalDurationSeconds,
-                        selectedStartSeconds: selectedTimestampStartSeconds,
-                        selectedEndSeconds: selectedTimestampEndSeconds,
-                        onEnabledChanged: onTimestampScopeChanged,
-                        onRangeChanged: onTimestampRangeChanged,
+                        enabled: widget.isTimestampScoped,
+                        selectedLabel: widget.selectedTimestampLabel,
+                        totalDurationSeconds: widget.totalDurationSeconds,
+                        selectedStartSeconds: widget.selectedTimestampStartSeconds,
+                        selectedEndSeconds: widget.selectedTimestampEndSeconds,
+                        onEnabledChanged: widget.onTimestampScopeChanged,
+                        onRangeChanged: widget.onTimestampRangeChanged,
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const ComposerAttachmentButton(),
-                  if (hasInput) ...[
+                  ComposerAttachmentButton(
+                    onImagePicked: _onImagePicked,
+                    enabled: !_uploading,
+                  ),
+                  if (hasInput || _pendingAttachments.isNotEmpty) ...[
                     const SizedBox(width: 8),
                     AppInlineSubmitButton(
-                      isLoading: isSending,
-                      onPressed: onSendPressed,
+                      isLoading: widget.isSending || _uploading,
+                      onPressed: widget.onSendPressed != null
+                          ? () {
+                              widget.onSendPressed!();
+                              setState(() => _pendingAttachments.clear());
+                            }
+                          : null,
                     ),
                   ],
                 ],

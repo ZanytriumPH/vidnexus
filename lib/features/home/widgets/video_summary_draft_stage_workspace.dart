@@ -40,8 +40,10 @@ class DraftStageWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: SingleChildScrollView(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           HeroCard(
@@ -73,6 +75,7 @@ class DraftStageWorkspace extends StatelessWidget {
             onPressed: onGenerateFinalPressed,
           ),
         ],
+        ),
       ),
     );
   }

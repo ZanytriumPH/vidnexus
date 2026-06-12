@@ -63,7 +63,7 @@ String _buildEtaLabel(VideoSummaryProcessingData data) {
 DraftResult mapDraftDataToResult(VideoSummaryDraftData data) {
   return DraftResult(
     paragraphs: data.paragraphs,
-    suggestionHint: '例如：请先给我按行业、声线和行动建议展开，重点扩充已结构化结论。',
+    suggestionHint: '例如：重点分析行业趋势，提取关键结论和可执行的行动建议。',
   );
 }
 

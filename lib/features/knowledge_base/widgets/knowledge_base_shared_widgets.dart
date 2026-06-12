@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
@@ -5,6 +7,9 @@ import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_bottom_nav.dart';
 import '../../../app/widgets/app_buttons.dart';
 import '../../../app/widgets/composer_attachment_button.dart';
+import '../../../services/attachment_service.dart';
+import '../../../services/api/api_client.dart';
+import '../../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../knowledge_base_models.dart';
 
 class KnowledgeBaseTopBar extends StatelessWidget {
@@ -101,6 +106,7 @@ class KnowledgeBaseComposer extends StatefulWidget {
   const KnowledgeBaseComposer({
     required this.controller,
     required this.onSubmit,
+    this.onAttachmentsChanged,
     this.hintText = '继续追问资料，或让它输出结构化结论',
     this.enabled = true,
     super.key,
@@ -108,6 +114,7 @@ class KnowledgeBaseComposer extends StatefulWidget {
 
   final TextEditingController controller;
   final VoidCallback onSubmit;
+  final ValueChanged<List<AttachmentInfo>>? onAttachmentsChanged;
   final String hintText;
   final bool enabled;
 
@@ -115,111 +122,208 @@ class KnowledgeBaseComposer extends StatefulWidget {
   State<KnowledgeBaseComposer> createState() => _KnowledgeBaseComposerState();
 }
 
-class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer>
-    with WidgetsBindingObserver {
-  final FocusNode _focusNode = FocusNode();
-  bool _keyboardVisible = false;
+class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer> {
+  final List<AttachmentInfo> _pendingAttachments = [];
+  final _attachmentService = const AttachmentService();
+  bool _uploading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
+  void _notifyAttachmentsChanged() {
+    widget.onAttachmentsChanged?.call(List.from(_pendingAttachments));
   }
 
-  @override
-  void didChangeMetrics() {
-    if (!mounted) return;
-    final isKeyboardVisible = View.of(context).viewInsets.bottom > 0;
-    if (isKeyboardVisible == _keyboardVisible) return;
-    setState(() {
-      _keyboardVisible = isKeyboardVisible;
-    });
-    if (!isKeyboardVisible) {
-      _focusNode.unfocus();
+  Future<void> _onImagePicked(File file) async {
+    setState(() => _uploading = true);
+    try {
+      final resp = await _attachmentService.uploadAttachment(
+        filePath: file.path,
+        fileName: file.path.split('/').last.split('\\').last,
+      );
+      final data = resp.data;
+      if (data != null) {
+        setState(() {
+          _pendingAttachments.add(AttachmentInfo(
+            name: data.name,
+            ossKey: data.ossKey,
+            mimeType: data.mimeType,
+            sizeBytes: data.sizeBytes,
+            presignedUrl: data.presignedUrl,
+          ));
+        });
+        _notifyAttachmentsChanged();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('图片上传失败：$e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
     }
   }
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _focusNode.dispose();
-    super.dispose();
+  void _removeAttachment(int index) {
+    setState(() => _pendingAttachments.removeAt(index));
+    _notifyAttachmentsChanged();
   }
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<TextEditingValue>(
-      valueListenable: widget.controller,
-      builder: (context, value, child) {
-        final hasInput = value.text.trim().isNotEmpty;
-        final expanded = _keyboardVisible || hasInput;
-
-        return Container(
-          padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: const Color(0xFFD7DFE7)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: widget.controller,
-                      focusNode: _focusNode,
-                      enabled: widget.enabled,
-                      decoration: InputDecoration(
-                        hintText: widget.hintText,
-                        filled: false,
-                        isDense: true,
-                        contentPadding: expanded
-                            ? const EdgeInsets.fromLTRB(6, 3, 6, 10)
-                            : const EdgeInsets.fromLTRB(6, 7, 6, 11),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        isCollapsed: true,
-                      ),
-                      style: context.appTextStyles.summaryContentBody
-                          .copyWith(height: 1.2),
-                      strutStyle: const StrutStyle(
-                        height: 1.2,
-                        leading: 0,
-                        forceStrutHeight: true,
-                      ),
-                      textAlignVertical: TextAlignVertical.top,
-                      minLines: 1,
-                      maxLines: expanded ? 4 : 1,
-                    ),
-                  ),
-                  if (!expanded) const ComposerAttachmentButton(),
-                ],
-              ),
-              if (expanded) ...[
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    const Spacer(),
-                    const ComposerAttachmentButton(),
-                    if (hasInput) ...[
-                      const SizedBox(width: 8),
-                      AppInlineSubmitButton(
-                        isLoading: !widget.enabled,
-                        onPressed: widget.enabled ? widget.onSubmit : null,
-                      ),
-                    ],
-                  ],
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: const Color(0xFFD7DFE7)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 附件预览条
+          if (_pendingAttachments.isNotEmpty)
+            _KbAttachmentPreviewStrip(
+              attachments: _pendingAttachments,
+              onRemove: _removeAttachment,
+            ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 20),
+            child: SizedBox(
+              width: double.infinity,
+              child: TextField(
+                controller: widget.controller,
+                enabled: widget.enabled,
+                decoration: InputDecoration(
+                  hintText: widget.hintText,
+                  filled: false,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.fromLTRB(6, 3, 6, 10),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  isCollapsed: true,
                 ),
-              ],
-            ],
+                style: context.appTextStyles.summaryContentBody
+                    .copyWith(height: 1.2),
+                strutStyle: const StrutStyle(
+                  height: 1.2,
+                  leading: 0,
+                  forceStrutHeight: true,
+                ),
+                textAlignVertical: TextAlignVertical.top,
+                minLines: 1,
+                maxLines: 4,
+              ),
+            ),
           ),
-        );
-      },
+          const SizedBox(height: 8),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: widget.controller,
+            builder: (context, value, child) {
+              final hasInput = value.text.trim().isNotEmpty;
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Spacer(),
+                  ComposerAttachmentButton(
+                    onImagePicked: _onImagePicked,
+                    enabled: !_uploading,
+                  ),
+                  if (hasInput || _pendingAttachments.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    AppInlineSubmitButton(
+                      isLoading: !widget.enabled || _uploading,
+                      onPressed: widget.enabled
+                          ? () {
+                              widget.onSubmit();
+                              setState(() => _pendingAttachments.clear());
+                            }
+                          : null,
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 知识库输入框附件缩略图预览条。
+class _KbAttachmentPreviewStrip extends StatelessWidget {
+  const _KbAttachmentPreviewStrip({
+    required this.attachments,
+    required this.onRemove,
+  });
+
+  final List<AttachmentInfo> attachments;
+  final void Function(int index) onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 72,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+        itemCount: attachments.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        itemBuilder: (context, index) {
+          final att = attachments[index];
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: att.ossKey.isNotEmpty
+                    ? Image.network(
+                        _thumbnailUrl(att.ossKey),
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _placeholder(),
+                      )
+                    : _placeholder(),
+              ),
+              Positioned(
+                top: -6,
+                right: -6,
+                child: GestureDetector(
+                  onTap: () => onRemove(index),
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF999999),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, size: 12, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  static String _thumbnailUrl(String ossKey) {
+    final base = ApiClient.instance.options.baseUrl;
+    return '$base/api/v1/files/stream?object_key=${Uri.encodeComponent(ossKey)}';
+  }
+
+  Widget _placeholder() {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F2F5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Icon(Icons.image_outlined, size: 24, color: AppColors.textHint),
     );
   }
 }

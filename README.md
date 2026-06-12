@@ -19,6 +19,8 @@ flutter run
 
 # 在模拟器上运行（指定后端地址）
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
+
+--dart-define=API_BASE_URL=http://10.0.2.2:8000
 ```
 
 ---
@@ -74,6 +76,8 @@ adb reverse tcp:8000 tcp:8000
 
 # 2. 编译并部署到真机（首次会自动持久化后端地址）
 flutter run -d e8f2a035 --dart-define=API_BASE_URL=http://localhost:8000
+
+flutter run -d 79b8226c --dart-define=API_BASE_URL=http://localhost:8000
 ```
 
 > 运行成功后，后端地址 `http://localhost:8000` 会被自动保存到手机本地存储，**此步骤仅首次需要**。

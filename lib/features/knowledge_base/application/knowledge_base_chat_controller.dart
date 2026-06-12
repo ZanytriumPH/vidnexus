@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 
 import '../../../services/global_qa_service.dart';
 import '../../../services/models/global_chat_dto.dart';
+import '../../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../../services/sse/sse_models.dart';
+import '../../home/video_summary_presentation_models.dart' show ChatAttachment;
 import '../knowledge_base_models.dart';
 
 /// 知识库会话控制器的状态快照。
@@ -124,22 +126,44 @@ class KnowledgeBaseChatController extends ChangeNotifier {
           .where((m) => m.sender == KnowledgeChatSender.user)
           .toList();
       _emit(_state.copyWith(messages: userMessages));
-      _sendChatMessage(lastMessage.text);
+      _sendChatMessage(
+        lastMessage.text,
+        attachments: lastMessage.attachments
+            .map((a) => AttachmentInfo(
+                  name: a.name,
+                  ossKey: a.ossKey,
+                  mimeType: a.mimeType,
+                  sizeBytes: 0,
+                  presignedUrl: a.presignedUrl,
+                ))
+            .toList(),
+      );
     }
   }
 
   /// 用户发送新消息。
-  void sendMessage(String text) {
+  void sendMessage(String text, {List<AttachmentInfo> attachments = const []}) {
     if (text.isEmpty || _state.isWaitingForAnswer) return;
 
     _emit(_state.copyWith(
       messages: [
         ..._state.messages,
-        KnowledgeChatMessage(sender: KnowledgeChatSender.user, text: text),
+        KnowledgeChatMessage(
+          sender: KnowledgeChatSender.user,
+          text: text,
+          attachments: attachments
+              .map((a) => ChatAttachment(
+                    name: a.name,
+                    ossKey: a.ossKey,
+                    mimeType: a.mimeType,
+                    presignedUrl: a.presignedUrl,
+                  ))
+              .toList(),
+        ),
       ],
     ));
 
-    _sendChatMessage(text);
+    _sendChatMessage(text, attachments: attachments);
   }
 
   /// 发起真实 QA 请求并通过 SSE 流消费回答。
@@ -318,6 +342,14 @@ class KnowledgeBaseChatController extends ChangeNotifier {
           messages.add(KnowledgeChatMessage(
             sender: KnowledgeChatSender.user,
             text: dto.questionContent,
+            attachments: dto.attachments
+                .map((a) => ChatAttachment(
+                      name: a.name,
+                      ossKey: a.ossKey,
+                      mimeType: a.mimeType,
+                      presignedUrl: a.presignedUrl,
+                    ))
+                .toList(),
           ));
         }
         if (dto.answerContent != null && dto.answerContent!.isNotEmpty) {

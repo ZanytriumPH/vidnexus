@@ -6,6 +6,9 @@ import '../../app/routing/app_router.dart';
 import '../../app/routing/app_route_arguments.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../services/api/api_client.dart';
+import '../../services/models/common_dto.dart';
+import '../../services/models/video_summary_task_dto.dart';
+import '../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../services/service_providers.dart';
 import '../../services/video_service.dart';
 import '../auth/auth_controller.dart';
@@ -27,7 +30,12 @@ import 'widgets/video_player_page.dart';
 
 /// 首页现在主要承担页面壳和装配职责，复杂状态迁移已下沉到 application 层。
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key, this.videoId, this.taskId});
+  const HomeScreen({
+    super.key,
+    this.videoId,
+    this.taskId,
+    this.forceFinal = false,
+  });
 
   /// 可选：从知识库来源页跳转时携带的视频 ID，
   /// 首页会自动查找对应任务并恢复该视频的最终稿会话。
@@ -37,12 +45,16 @@ class HomeScreen extends ConsumerStatefulWidget {
   /// 首页会直接按 taskId 获取任务详情并恢复，无需 listTasks 全量匹配。
   final String? taskId;
 
+  /// 是否强制跳转至最终稿阶段 (VideoSummaryStage.finalChat)
+  final bool forceFinal;
+
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final List<AttachmentInfo> _pendingAttachments = [];
 
   @override
   void initState() {
@@ -107,7 +119,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           return;
         }
 
-        final task = match.first;
+        while (hasNext) {
+          final resp = await taskService.listTasks(
+            params: PageParams(
+              page: currentPage,
+              pageSize: 50,
+              sort: '-created_at',
+            ),
+          );
+          final match = resp.data.where((t) => t.videoId == id).toList();
+          if (match.isNotEmpty) {
+            matchedTask = match.first;
+            break;
+          }
+          hasNext = resp.pagination?.hasNext ?? false;
+          if (hasNext) {
+            currentPage++;
+          } else {
+            break;
+          }
+          // 安全限制，最多查询 10 页（共 500 个任务）
+          if (currentPage > 10) {
+            break;
+          }
+        }
+
+        if (matchedTask == null) {
+          debugPrint('[HomeScreen] _restoreVideoSession: No matching task found for videoId: $id');
+          return;
+        }
+
+        final task = matchedTask;
         taskId = task.taskId;
         videoId = task.videoId;
         workflowState = task.workflowState;
@@ -164,7 +206,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         finalSummaryData: stage == VideoSummaryStage.finalChat
             ? FinalSummaryData(
                 summaryTitle: '视频总结',
-                summaryBody: finalSummary ?? '',
+                summaryBody: (finalSummary != null && finalSummary.isNotEmpty)
+                    ? finalSummary
+                    : (draftSummary ?? ''),
                 timestampChips: const [],
                 messages: const [],
               )
@@ -197,8 +241,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       debugPrint('[HomeScreen] restoreSnapshot completed');
 
       final historyCtrl = ref.read(videoSummarySessionHistoryProvider.notifier);
-      historyCtrl.addTempUploadSession(
-        VideoSummarySessionSnapshot(
+      historyCtrl.addOrActivateTaskSession(
+        taskId: taskId,
+        snapshot: VideoSummarySessionSnapshot(
           flowSnapshot: snapshot,
           readyPreferenceText: userInitialPreference ?? '',
           draftGuidanceText: '',
@@ -519,13 +564,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _sendChatMessage() async {
     final textEditing = ref.read(videoSummaryTextEditingControllerProvider);
     final message = textEditing.consumeChatMessage();
-    if (message == null) {
+    if (message == null && _pendingAttachments.isEmpty) {
       return;
     }
 
+    final attachments = List<AttachmentInfo>.from(_pendingAttachments);
+    _pendingAttachments.clear();
+
+    final finalMessage = (message == null || message.trim().isEmpty)
+        ? '请分析用户上传的图片'
+        : message;
+
     await ref
         .read(videoSummaryFlowControllerProvider.notifier)
-        .sendChatMessage(message);
+        .sendChatMessage(finalMessage, attachments: attachments);
   }
 
   Future<void> _handleUploadCardPressed() async {
@@ -557,7 +609,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final resp = await videoService.getVideo(videoId);
       final data = resp.data;
       var videoUrl = data?.presignedUrl ?? '';
-      final ossKey = data?.ossKey;
 
       if (!mounted) return;
       Navigator.of(context).pop(); // 关闭 loading
@@ -638,6 +689,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ? null
           : _generateFinalSummary,
       onSendChatPressed: flowState.isSendingChat ? null : _sendChatMessage,
+      onAttachmentsChanged: (attachments) {
+        _pendingAttachments
+          ..clear()
+          ..addAll(attachments);
+      },
       onTimestampScopeChanged: ref
           .read(videoSummaryFlowControllerProvider.notifier)
           .setTimestampScope,

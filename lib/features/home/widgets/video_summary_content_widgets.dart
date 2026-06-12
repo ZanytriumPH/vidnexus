@@ -35,6 +35,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
     required this.onDraftEditModeChanged,
     required this.onGenerateFinalPressed,
     required this.onSendChatPressed,
+    required this.onAttachmentsChanged,
     required this.onTimestampScopeChanged,
     required this.onTimestampRangeChanged,
     required this.isUploading,
@@ -70,6 +71,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
   final ValueChanged<bool> onDraftEditModeChanged;
   final VoidCallback? onGenerateFinalPressed;
   final VoidCallback? onSendChatPressed;
+  final ValueChanged<List<AttachmentInfo>>? onAttachmentsChanged;
   final ValueChanged<bool> onTimestampScopeChanged;
   final ValueChanged<TimestampRangeSelection> onTimestampRangeChanged;
   final bool isUploading;
@@ -128,6 +130,7 @@ class VideoSummaryWorkspace extends StatelessWidget {
           selectedTimestampEndSeconds: selectedTimestampEndSeconds,
           onUploadCardPressed: onUploadCardPressed,
           onSendChatPressed: onSendChatPressed,
+          onAttachmentsChanged: onAttachmentsChanged,
           onTimestampScopeChanged: onTimestampScopeChanged,
           onTimestampRangeChanged: onTimestampRangeChanged,
           onCloneToKbPressed: onCloneToKbPressed,

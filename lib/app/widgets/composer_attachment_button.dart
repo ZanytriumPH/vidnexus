@@ -1,17 +1,38 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../theme/app_colors.dart';
 import 'app_header_add_button.dart';
 
-/// 输入框附件按钮，点击后弹出拍照/相册/文件选项。
+/// 输入框附件按钮，点击后弹出拍照/相册选项。
 /// 在视频总结最终稿与知识库问答中共用。
-class ComposerAttachmentButton extends StatelessWidget {
-  const ComposerAttachmentButton({super.key});
+class ComposerAttachmentButton extends StatefulWidget {
+  const ComposerAttachmentButton({
+    super.key,
+    required this.onImagePicked,
+    this.enabled = true,
+  });
+
+  /// 选取图片成功后的回调，返回本地文件。
+  final void Function(File imageFile) onImagePicked;
+
+  /// 是否可用（上传中时禁用）。
+  final bool enabled;
+
+  @override
+  State<ComposerAttachmentButton> createState() => _ComposerAttachmentButtonState();
+}
+
+class _ComposerAttachmentButtonState extends State<ComposerAttachmentButton> {
+  final _picker = ImagePicker();
+  bool _picking = false;
 
   @override
   Widget build(BuildContext context) {
     return AppHeaderAddButton(
-      onPressed: () => _showAttachmentSheet(context),
+      onPressed: (!widget.enabled || _picking) ? () {} : () => _showAttachmentSheet(context),
     );
   }
 
@@ -33,7 +54,7 @@ class ComposerAttachmentButton extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '添加内容',
+                  '添加图片',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
@@ -54,13 +75,6 @@ class ComposerAttachmentButton extends StatelessWidget {
                   onTap: () =>
                       Navigator.of(context).pop(_AttachmentAction.gallery),
                 ),
-                const SizedBox(height: 8),
-                _AttachmentActionTile(
-                  icon: Icons.insert_drive_file_outlined,
-                  label: '文件',
-                  onTap: () =>
-                      Navigator.of(context).pop(_AttachmentAction.file),
-                ),
               ],
             ),
           ),
@@ -68,21 +82,55 @@ class ComposerAttachmentButton extends StatelessWidget {
       },
     );
 
-    if (!context.mounted || action == null) {
-      return;
+    if (!context.mounted || action == null) return;
+
+    switch (action) {
+      case _AttachmentAction.camera:
+        await _pickImage(ImageSource.camera);
+      case _AttachmentAction.gallery:
+        await _pickImage(ImageSource.gallery);
     }
+  }
 
-    final message = switch (action) {
-      _AttachmentAction.camera => '拍照功能将在下一阶段接入。',
-      _AttachmentAction.gallery => '相册功能将在下一阶段接入。',
-      _AttachmentAction.file => '文件功能将在下一阶段接入。',
-    };
+  Future<void> _pickImage(ImageSource source) async {
+    if (_picking) return;
+    setState(() => _picking = true);
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    try {
+      final xFile = await _picker.pickImage(
+        source: source,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 85,
+      );
+      if (xFile == null) return;
+
+      final file = File(xFile.path);
+      final sizeBytes = await file.length();
+      const maxSize = 10 * 1024 * 1024; // 10 MB
+      if (sizeBytes > maxSize) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('图片大小不能超过 10MB')),
+          );
+        }
+        return;
+      }
+
+      widget.onImagePicked(file);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('选取图片失败：$e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
   }
 }
 
-enum _AttachmentAction { camera, gallery, file }
+enum _AttachmentAction { camera, gallery }
 
 class _AttachmentActionTile extends StatelessWidget {
   const _AttachmentActionTile({

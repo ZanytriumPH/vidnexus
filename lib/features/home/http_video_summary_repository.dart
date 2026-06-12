@@ -878,6 +878,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     String message, {
     required String timestamp,
     int? windowSeconds,
+    List<AttachmentInfo> attachments = const [],
   }) {
     final taskId = _taskId;
     if (taskId == null) {
@@ -894,6 +895,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       timestamp: timestamp,
       questionContent: message,
       windowSeconds: windowSeconds,
+      attachments: attachments,
     );
 
     final stream = qaSvc.createTimeTravelQAStream(taskId, request);

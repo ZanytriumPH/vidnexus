@@ -33,6 +33,7 @@ class AppRouter {
             builder: (_) => HomeScreen(
               videoId: args?.videoId,
               taskId: args?.taskId,
+              forceFinal: args?.forceFinal ?? false,
             ),
           );
         case AppRoutes.videoSummarySearch:
@@ -169,6 +170,7 @@ class AppNavigator {
     BuildContext context, {
     required String videoId,
     String? taskId,
+    bool forceFinal = false,
   }) {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
