@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_colors.dart';
-import 'video_summary_processing_widgets.dart';
 
 class VideoSummaryDrawerSessionItem {
   const VideoSummaryDrawerSessionItem({
@@ -91,24 +90,13 @@ class VideoSummaryDrawerSessionCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
-            Row(
-              children: [
-                KbNameTag(
-                  kbName: session.kbName ?? '',
-                  kbid: session.kbid,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    session.detail,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
+            Text(
+              session.detail,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
