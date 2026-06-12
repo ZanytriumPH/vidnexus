@@ -61,7 +61,7 @@ class VideoSummaryTextEditingController {
     runWithoutSync(() {
       readyPreferenceController.text = snapshot.readyPreferenceText;
       draftGuidanceController.text = snapshot.draftGuidanceText;
-      draftBodyController.text = _stripTimestampTags(snapshot.draftBodyText);
+      draftBodyController.text = snapshot.draftBodyText;
       chatController.clear();
     });
   }
@@ -94,8 +94,7 @@ class VideoSummaryTextEditingController {
     // 草稿第一次生成出来时，把结果注入可编辑文本框，后续用户就编辑这份文本。
     if (previous?.draftResult == null && next.draftResult != null) {
       runWithoutSync(() {
-        draftBodyController.text =
-            _stripTimestampTags(next.draftResult!.paragraphs.join('\n\n'));
+        draftBodyController.text = next.draftResult!.paragraphs.join('\n\n');
       });
     }
 
@@ -120,11 +119,6 @@ class VideoSummaryTextEditingController {
     _ref
         .read(videoSummarySessionHistoryProvider.notifier)
         .syncActiveSession(captureSnapshot());
-  }
-
-  /// 过滤掉 [xx:xx-yy:yy] 格式的时间戳标签（含前导空格）。
-  static String _stripTimestampTags(String text) {
-    return text.replaceAll(RegExp(r'\s*\[\d{2}:\d{2}-\d{2}:\d{2}\]'), '');
   }
 
   void dispose() {
