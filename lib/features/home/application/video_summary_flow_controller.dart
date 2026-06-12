@@ -307,7 +307,6 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     }
 
     final owningSessionKey = _activeSessionKey;
-    String? newVideoId;
 
     try {
       final result = await FilePicker.platform.pickFiles(type: FileType.video);
@@ -323,30 +322,25 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       final fileName = result.files.single.name;
       final fileSize = result.files.single.size;
 
-      // 1. 预先注册视频资源记录（best-effort，仅用于上传中 UI 占位）。
-      //    导航用的 canonical video_id 由 _waitForCeleryProcessing 轮询
-      //    GET /api/v1/uploads/{uploadId} 返回，不依赖此处返回值。
-      //    即使 createVideo 失败也不阻断上传流程。
-      try {
-        final createVideoResp = await ref
-            .read(videoServiceProvider)
-            .createVideo(fileName: fileName);
-        newVideoId = createVideoResp.data?.videoId;
-      } catch (_) {
-        // 预注册失败不阻断上传，newVideoId 保持 null
-        debugPrint('[FlowCtrl] createVideo 预注册失败，继续上传');
-      }
-      // 预注册失败时用 fileName 作为占位 ID
-      newVideoId ??= fileName;
+      final uploadService = ref.read(uploadServiceProvider);
+
+      // 1. 初始化 TUS 上传（不再调用 createVideo 预注册，video_id 由 Celery
+      //    async_finalize_upload 统一创建，前端上传期间用 upload_id 追踪）。
+      final initResp = await uploadService.initUpload(
+        fileName: fileName,
+        totalSize: fileSize,
+      );
       if (_activeSessionKey != owningSessionKey) return null;
 
+      final uploadId = initResp.uploadId;
+      if (uploadId.isEmpty) {
+        throw Exception('Failed to initialize upload: empty upload_id');
+      }
+
       debugPrint(
-        '[FlowCtrl] pickAndUploadVideo START — newVideoId=$newVideoId'
+        '[FlowCtrl] pickAndUploadVideo START — uploadId=$uploadId'
         ' fileName=$fileName stateTaskId=${state.taskId}',
       );
-
-      _repository.updateVideoId(newVideoId);
-      ref.read(currentVideoIdProvider.notifier).state = newVideoId;
 
       // 避免 handleFlowStateChanged → syncActiveSession 污染上一次上传的条目
       ref
@@ -354,11 +348,11 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           .activateSession('session-current');
 
       state = state.copyWith(
-        taskId: null, // 清除残留 taskId，避免条目以 taskId 而非 temp-$videoId 为主键
+        taskId: null, // 清除残留 taskId，避免条目以 taskId 而非 temp-upload 为主键
         isUploading: true,
         uploadProgress: 0.0,
         videoAsset: VideoAssetInfo(
-          title: newVideoId,
+          title: '', // 尚无 video_id，Celery 完成后由 _applyCeleryReadyState 填入
           durationLabel: '0m 00s',
           sourceLabel: state.videoAsset.sourceLabel,
           fileName: fileName,
@@ -375,23 +369,10 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
               draftGuidanceText: '',
               draftBodyText: '',
             ),
+            uploadId: uploadId,
           );
 
-      final uploadService = ref.read(uploadServiceProvider);
-
-      // 3. 初始化 TUS 上传
-      final initResp = await uploadService.initUpload(
-        fileName: fileName,
-        totalSize: fileSize,
-      );
-      if (_activeSessionKey != owningSessionKey) return null;
-
-      final uploadId = initResp.uploadId;
-      if (uploadId.isEmpty) {
-        throw Exception('Failed to initialize upload: empty upload_id');
-      }
-
-      // 4. 分片上传 (每片 10 MiB)
+      // 2. 分片上传 (每片 10 MiB)
       final file = File(filePath);
       final raf = await file.open(mode: FileMode.read);
       int offset = 0;
@@ -425,7 +406,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
                 );
           } else {
             _updateBackgroundTempSession(
-              newVideoId: newVideoId,
+              uploadId: uploadId,
               isUploading: true,
               uploadProgress: progress,
             );
@@ -435,40 +416,31 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         await raf.close();
       }
 
-      // 5. TUS 上传已完成，但 Celery async_finalize_upload 仍在后台异步处理。
+      // 3. TUS 上传已完成，但 Celery async_finalize_upload 仍在后台异步处理。
       //    保持 uploading 状态并轮询 upload 状态，直到后端处理完毕再标记为"上传完成"。
       if (_activeSessionKey == owningSessionKey) {
         state = state.copyWith(isUploading: true, uploadProgress: 1.0);
       } else {
         _updateBackgroundTempSession(
-          newVideoId: newVideoId,
+          uploadId: uploadId,
           isUploading: true,
           uploadProgress: 1.0,
         );
       }
 
       // 轮询 GET /api/v1/uploads/{uploadId}，等待 async_finalize_upload 完成。
-      // 返回正确的 video_id（去重时是已有视频 ID，非 createVideo 返回的预注册 ID）。
+      // 返回 Celery 创建的 canonical video_id（去重时是已有视频的 ID）。
       final resolvedVideoId = await _waitForCeleryProcessing(
-        newVideoId,
         uploadId,
         owningSessionKey,
         fileName,
       );
 
-      // 去重后 videoId 可能变化，同步更新 state 和 provider。
-      // 同时清理旧 videoId 对应的临时会话条目，避免侧边栏出现同一视频的多份记录。
-      final bool didDedupChangeId = resolvedVideoId != newVideoId;
-      if (didDedupChangeId) {
-        ref
-            .read(videoSummarySessionHistoryProvider.notifier)
-            .removeSession('temp-$newVideoId');
-        newVideoId = resolvedVideoId;
-        _repository.updateVideoId(resolvedVideoId);
-        ref.read(currentVideoIdProvider.notifier).state = resolvedVideoId;
-      }
+      // Celery 完成后同步更新 state、repository 和 provider 中的 videoId
+      _repository.updateVideoId(resolvedVideoId);
+      ref.read(currentVideoIdProvider.notifier).state = resolvedVideoId;
 
-      // 6. 上传完成：以完成态快照更新侧边栏。
+      // 4. 上传完成：以完成态快照更新侧边栏。
       final completedSnapshot = VideoSummarySessionSnapshot(
         flowSnapshot: captureSnapshot(),
         readyPreferenceText: '',
@@ -479,45 +451,24 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       if (_activeSessionKey == owningSessionKey) {
         ref
             .read(videoSummarySessionHistoryProvider.notifier)
-            .addTempUploadSession(completedSnapshot);
+            .addTempUploadSession(completedSnapshot, uploadId: uploadId);
       } else {
-        // 后台会话：若去重改变了 videoId，旧条目已被 removeSession 清理，
-        // 需用 addTempUploadSession 创建新条目（再恢复原活跃会话）；
-        // 若 videoId 未变，直接更新已有条目的上传状态即可。
-        if (didDedupChangeId) {
-          final originalActiveId = ref
-              .read(videoSummarySessionHistoryProvider)
-              .activeSessionId;
-          ref
-              .read(videoSummarySessionHistoryProvider.notifier)
-              .addTempUploadSession(completedSnapshot);
-          ref
-              .read(videoSummarySessionHistoryProvider.notifier)
-              .activateSession(originalActiveId);
-        } else {
-          _updateBackgroundTempSession(
-            newVideoId: newVideoId,
-            isUploading: false,
-            uploadProgress: 0.0,
-            stage: VideoSummaryStage.ready,
-          );
-        }
+        _updateBackgroundTempSession(
+          uploadId: uploadId,
+          isUploading: false,
+          uploadProgress: 0.0,
+          stage: VideoSummaryStage.ready,
+        );
       }
 
       // 返回 videoId 供调用方决定是否跳转到视频详情页。
       // 仅当发起上传的会话仍是当前活跃会话时才返回有效 ID，
       // 避免在上传期间用户切换会话后被意外跳转。
-      return (_activeSessionKey == owningSessionKey) ? newVideoId : null;
+      return (_activeSessionKey == owningSessionKey) ? resolvedVideoId : null;
     } catch (e) {
       // 错误展示给发起上传的会话（活跃或后台）
       if (_activeSessionKey == owningSessionKey) {
         state = state.copyWith(isUploading: false, uploadProgress: 0.0);
-      } else if (newVideoId != null) {
-        _updateBackgroundTempSession(
-          newVideoId: newVideoId,
-          isUploading: false,
-          uploadProgress: 0.0,
-        );
       }
       debugPrint('Upload failed: $e');
       return null;
@@ -525,7 +476,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   }
 
   void _updateBackgroundTempSession({
-    required String newVideoId,
+    required String uploadId,
     required bool isUploading,
     required double uploadProgress,
     VideoAssetInfo? videoAsset,
@@ -535,7 +486,8 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     final historyNotifier = ref.read(
       videoSummarySessionHistoryProvider.notifier,
     );
-    final existingEntry = historyNotifier.getSessionById('temp-$newVideoId');
+    final existingEntry =
+        historyNotifier.getSessionById('temp-upload-$uploadId');
     if (existingEntry != null) {
       final oldSnapshot = existingEntry.snapshot;
       final updatedFlowSnapshot = VideoSummaryFlowSnapshot(
@@ -559,7 +511,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         uploadProgress: uploadProgress,
       );
       historyNotifier.updateSessionSnapshot(
-        'temp-$newVideoId',
+        'temp-upload-$uploadId',
         VideoSummarySessionSnapshot(
           flowSnapshot: updatedFlowSnapshot,
           readyPreferenceText: oldSnapshot.readyPreferenceText,
@@ -638,11 +590,13 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   /// - HTTP 轮询：每 2 秒调用 GET /api/v1/uploads/{uploadId} 检查 finalize 状态
   /// - 最长等待 5 分钟，任一通道收到就绪信号即标记上传完成
   ///
+  /// 轮询 GET /api/v1/uploads/{uploadId}，等待 Celery async_finalize_upload
+  /// 创建 VideoResource 并返回 canonical video_id。
+  ///
   /// 返回最终解析的 video_id：
-  /// - 正常上传 → 返回 [videoId]（createVideo 预注册的 ID）
+  /// - 正常上传 → Celery 创建的 video_id
   /// - 去重上传 → 返回已有视频的 ID（后端 async_finalize_upload 写入 upload 记录）
   Future<String> _waitForCeleryProcessing(
-    String videoId,
     String uploadId,
     Object owningSessionKey,
     String fileName,
@@ -651,130 +605,95 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     const pollInterval = Duration(seconds: 2);
 
     final uploadService = ref.read(uploadServiceProvider);
-    final wsClient = ref.read(wsClientProvider);
 
-    // WS 通道标记：由 listener 在收到 completed 事件时置 true
-    bool wsSignalled = false;
+    // HTTP 轮询 upload 状态（唯一通道；上传期间无 video_id 故 WS 不可用）
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
+      // 先等待间隔，再检查（让后端有时间处理）
+      await Future.delayed(pollInterval);
 
-    // ── 通道 1：WebSocket 实时监听 video_resource 作用域的 completed 事件 ──
-    final wsSubscription = wsClient.eventStream
-        .where(
-          (env) =>
-              env.scope == WSScope.videoResource &&
-              env.scopeId == videoId &&
-              env.eventType == WSEventType.completed,
-        )
-        .listen(
-          (_) {
-            wsSignalled = true;
-            if (kDebugMode) {
-              debugPrint(
-                '[FlowCtrl] WS 通道收到 video_resource completed — videoId=$videoId',
+      try {
+        final data = await uploadService.getStatus(uploadId);
+
+        final state = data.state;
+        if (state == null) continue; // Celery 尚未完成，继续轮询
+
+        switch (state) {
+          case 'done':
+            // 正常上传完成。优先使用 upload 记录中的 video_id（后端
+            // async_finalize_upload 写入，是唯一的 canonical ID）。
+            final resolvedId = data.videoId;
+            if (resolvedId == null || resolvedId.isEmpty) {
+              throw Exception(
+                'async_finalize_upload completed but no video_id'
+                ' — uploadId=$uploadId',
               );
             }
-          },
-          onError: (e) {
-            debugPrint('[FlowCtrl] WS video_resource 监听错误: $e');
-          },
-        );
+            await _applyCeleryReadyState(
+              videoId: resolvedId,
+              uploadId: uploadId,
+              owningSessionKey: owningSessionKey,
+              fileName: fileName,
+              durationSeconds: 0,
+              channel: 'HTTP polling',
+              attempt: attempt + 1,
+            );
+            return resolvedId;
 
-    // ── 通道 2：HTTP 轮询 upload 状态（兜底，同时是去重检测的主要通道）──
-    try {
-      for (int attempt = 0; attempt < maxAttempts; attempt++) {
-        // 先等待间隔，再检查（让后端有时间处理）
-        await Future.delayed(pollInterval);
-
-        // 检查 WS 是否已收到完成信号
-        if (wsSignalled) {
-          await _applyCeleryReadyState(
-            videoId: videoId,
-            owningSessionKey: owningSessionKey,
-            fileName: fileName,
-            durationSeconds: 0,
-            channel: 'WebSocket',
-            attempt: null,
-          );
-          return videoId;
-        }
-
-        try {
-          final data = await uploadService.getStatus(uploadId);
-
-          final state = data.state;
-          if (state == null) continue; // Celery 尚未完成，继续轮询
-
-          switch (state) {
-            case 'done':
-              // 正常上传完成。后端可能在 async_finalize_upload 中写入
-              // 与 createVideo 预注册不同的 video_id（例如后端内部合并了记录），
-              // 因此优先使用 GET /api/v1/uploads 返回的 video_id。
-              final resolvedId = data.videoId ?? videoId;
-              await _applyCeleryReadyState(
-                videoId: resolvedId,
-                owningSessionKey: owningSessionKey,
-                fileName: fileName,
-                durationSeconds: 0,
-                channel: 'HTTP polling',
-                attempt: attempt + 1,
-              );
-              return resolvedId;
-
-            case 'dedup_reused':
-              // 去重复用已有视频，使用 upload 记录中的 video_id
-              final resolvedId = data.videoId ?? videoId;
-              if (kDebugMode) {
-                debugPrint(
-                  '[FlowCtrl] 检测到去重上传 — 原 videoId=$videoId'
-                  ' → 复用 videoId=$resolvedId',
-                );
-              }
-              await _applyCeleryReadyState(
-                videoId: resolvedId,
-                owningSessionKey: owningSessionKey,
-                fileName: fileName,
-                durationSeconds: 0,
-                channel: 'HTTP polling (dedup)',
-                attempt: attempt + 1,
-              );
-              return resolvedId;
-
-            case 'rejected':
-              throw Exception('文件格式不支持，请检查文件后重试');
-
-            case 'failed':
+          case 'dedup_reused':
+            // 去重复用已有视频
+            final resolvedId = data.videoId;
+            if (resolvedId == null || resolvedId.isEmpty) {
               throw Exception(
-                'async_finalize_upload failed — uploadId=$uploadId',
+                'async_finalize_upload dedup_reused but no video_id'
+                ' — uploadId=$uploadId',
               );
+            }
+            if (kDebugMode) {
+              debugPrint(
+                '[FlowCtrl] 检测到去重上传'
+                ' → 复用 videoId=$resolvedId',
+              );
+            }
+            await _applyCeleryReadyState(
+              videoId: resolvedId,
+              uploadId: uploadId,
+              owningSessionKey: owningSessionKey,
+              fileName: fileName,
+              durationSeconds: 0,
+              channel: 'HTTP polling (dedup)',
+              attempt: attempt + 1,
+            );
+            return resolvedId;
 
-            default:
-              // 非终态（created / uploading / uploading_complete / finalizing）
-              // 或未知状态，继续轮询
-          }
-        } catch (e) {
-          // 单次轮询失败不中断，继续重试
-          debugPrint('[FlowCtrl] Celery 轮询失败 (第 ${attempt + 1} 次): $e');
+          case 'rejected':
+            throw Exception('文件格式不支持，请检查文件后重试');
+
+          case 'failed':
+            throw Exception(
+              'async_finalize_upload failed — uploadId=$uploadId',
+            );
+
+          default:
+            // 非终态（created / uploading / uploading_complete / finalizing）
+            // 或未知状态，继续轮询
         }
+      } catch (e) {
+        // 单次轮询失败不中断，继续重试
+        debugPrint('[FlowCtrl] Celery 轮询失败 (第 ${attempt + 1} 次): $e');
       }
-
-      // 超时：仍然标记为完成，用户可以继续使用
-      debugPrint('[FlowCtrl] Celery 处理超时 — videoId=$videoId，强制标记为完成');
-      await _applyCeleryReadyState(
-        videoId: videoId,
-        owningSessionKey: owningSessionKey,
-        fileName: fileName,
-        durationSeconds: 0,
-        channel: 'timeout fallback',
-        attempt: null,
-      );
-      return videoId;
-    } finally {
-      wsSubscription.cancel();
     }
+
+    // 超时
+    throw Exception(
+      '文件处理超时，请稍后在视频列表中查看或重试'
+      ' — uploadId=$uploadId',
+    );
   }
 
   /// 将 Celery 就绪状态应用到当前 state 或后台临时会话。
   Future<void> _applyCeleryReadyState({
     required String videoId,
+    required String uploadId,
     required Object owningSessionKey,
     required String fileName,
     required int durationSeconds,
@@ -808,7 +727,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       );
     } else {
       _updateBackgroundTempSession(
-        newVideoId: videoId,
+        uploadId: uploadId,
         isUploading: false,
         uploadProgress: 0.0,
         videoAsset: VideoAssetInfo(

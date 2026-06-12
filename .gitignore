@@ -46,3 +46,10 @@ app.*.map.json
 
 # CodeGraph (machine-local index, should not be committed)
 .codegraph/
+
+# Claude Code (machine-local, should not be committed)
+.claude/
+
+# OpenSpec (local change management)
+openspec/changes/
+openspec/specs/

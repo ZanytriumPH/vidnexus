@@ -43,13 +43,18 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
     _composerController = TextEditingController();
 
     final qaService = ref.read(globalQAServiceProvider);
-    _chatController = KnowledgeBaseChatController(
+    _chatController = getOrCreateKbChatController(
       qaService: qaService,
       kbid: widget.kbid,
       chatId: widget.initialConversation.id,
       initialMessages: widget.initialConversation.messages,
-    )..addListener(_onChatStateChanged)
-     ..triggerInitialQA();
+    )..addListener(_onChatStateChanged);
+
+    // 仅当 controller 未在等待回答时触发初始 QA 流程，
+    // 避免在 SSE 流进行中重发请求。
+    if (!_chatController.isWaitingForAnswer) {
+      _chatController.triggerInitialQA();
+    }
   }
 
   void _onChatStateChanged() {
@@ -60,9 +65,9 @@ class _KnowledgeBaseChatScreenState extends ConsumerState<KnowledgeBaseChatScree
 
   @override
   void dispose() {
-    _chatController
-      ..removeListener(_onChatStateChanged)
-      ..dispose();
+    _chatController.removeListener(_onChatStateChanged);
+    // 不 dispose controller：实例由 _activeControllers 缓存管理，
+    // 保留以便 SSE 流跨页面导航继续消费。
     _composerController.dispose();
     _scrollController.dispose();
     super.dispose();

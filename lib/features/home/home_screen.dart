@@ -179,6 +179,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
       if (!mounted) return;
       final flowCtrl = ref.read(videoSummaryFlowControllerProvider.notifier);
+
+      // 若当前 controller 已经在同一个 finalChat 会话中且正在发送追问（SSE 流进行中），
+      // 跳过 restoreSnapshot 以保留打字指示器和已收到的部分回复。
+      final currentState = ref.read(videoSummaryFlowControllerProvider);
+      if (currentState.taskId == taskId &&
+          currentState.stage == VideoSummaryStage.finalChat &&
+          currentState.isSendingChat) {
+        debugPrint(
+          '[HomeScreen] 跳过 restoreSnapshot — SSE 流仍在进行中'
+          ' (taskId=$taskId)',
+        );
+        return;
+      }
+
       flowCtrl.restoreSnapshot(snapshot);
       debugPrint('[HomeScreen] restoreSnapshot completed');
 

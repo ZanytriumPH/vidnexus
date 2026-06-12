@@ -545,14 +545,28 @@ class VideoSummarySessionHistoryController
 
   /// 创建一个仅在内存中生存的临时会话。同 ID 替旧，同 videoId 去重在
   /// [_loadFromBackend] 刷新后端列表时统一处理。
-  void addTempUploadSession(VideoSummarySessionSnapshot snapshot) {
+  ///
+  /// [uploadId] 在上传流程中使用；提供时条目 key 为 `temp-upload-$uploadId`，
+  /// 不提供时回退到旧版 `temp-$videoId` 逻辑。
+  void addTempUploadSession(
+    VideoSummarySessionSnapshot snapshot, {
+    String? uploadId,
+  }) {
     final flowSnapshot = snapshot.flowSnapshot;
     final videoId = flowSnapshot.videoAsset?.title ?? '';
-    if (videoId.isEmpty || videoId == 'vid_default') return;
-
     final taskId = flowSnapshot.taskId;
     final useTaskId = taskId != null && taskId.isNotEmpty;
-    final entryId = useTaskId ? taskId! : 'temp-$videoId';
+
+    final String entryId;
+    if (useTaskId) {
+      entryId = taskId;
+    } else if (uploadId != null && uploadId.isNotEmpty) {
+      entryId = 'temp-upload-$uploadId';
+    } else if (videoId.isNotEmpty && videoId != 'vid_default') {
+      entryId = 'temp-$videoId';
+    } else {
+      return; // 无有效标识，跳过
+    }
 
     final entry = VideoSummarySessionHistoryEntry(
       id: entryId,
