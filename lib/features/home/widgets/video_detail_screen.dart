@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/routing/app_router.dart';
+import '../../../services/api/api_client.dart';
 import '../../../services/models/common_dto.dart';
 import '../../../services/models/video_resource_dto.dart';
 import '../../../services/models/video_summary_task_dto.dart';
@@ -10,6 +11,7 @@ import '../../../services/service_providers.dart';
 import '../../../services/task_service.dart';
 import '../../../services/video_service.dart';
 import '../../knowledge_base/application/knowledge_base_controller.dart';
+import 'video_player_page.dart';
 import 'video_summary_processing_widgets.dart';
 
 /// 视频详情页：展示视频信息 + 关联任务列表 + 发起新任务。
@@ -200,14 +202,6 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
     final v = _video;
     if (v == null) return const SizedBox.shrink();
 
-    final hashDisplay = (v.fileHash != null && v.fileHash!.isNotEmpty)
-        ? '${v.fileHash!.substring(0, 12)}...${v.fileHash!.substring(v.fileHash!.length - 8)}'
-        : '—';
-
-    final durationLabel = (v.duration != null && v.duration! > 0)
-        ? _formatDuration(v.duration!)
-        : '—';
-
     return Card(
       elevation: 0,
       color: const Color(0xFFF7F9FC),
@@ -220,21 +214,32 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _infoRow('文件名', v.fileName),
-            const SizedBox(height: 10),
-            _infoRow(
-              'SHA256',
-              hashDisplay,
-              copyable: true,
-              copyText: v.fileHash,
-            ),
-            const SizedBox(height: 10),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: _infoRow('时长', durationLabel)),
-                const SizedBox(width: 16),
-                Expanded(child: _infoRow('关联任务', '${v.taskRefCount ?? 0} 个')),
+                SizedBox(
+                  width: 60,
+                  child: Text(
+                    '文件名',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    v.fileName,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
               ],
+            ),
+            const SizedBox(height: 14),
+            WhiteButtonBar(
+              label: '视频回放',
+              leadingIcon: Icons.play_arrow_rounded,
+              onTap: _openPlayback,
             ),
           ],
         ),
@@ -242,43 +247,58 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
     );
   }
 
-  Widget _infoRow(
-    String label,
-    String value, {
-    bool copyable = false,
-    String? copyText,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 60,
-          child: Text(
-            label,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-          ),
-        ),
-        if (copyable && copyText != null && copyText.isNotEmpty)
-          GestureDetector(
-            onTap: () {
-              // Copy to clipboard
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('已复制到剪贴板'),
-                  duration: Duration(seconds: 1),
-                ),
-              );
-            },
-            child: Icon(Icons.copy, size: 14, color: Colors.grey.shade400),
-          ),
-      ],
+  Future<void> _openPlayback() async {
+    final v = _video;
+    if (v == null) return;
+
+    // Show loading
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
     );
+
+    try {
+      var videoUrl = v.presignedUrl ?? '';
+      final ossKey = v.ossKey;
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // dismiss loading
+
+      // Local dev mode: presigned_url is file:// → convert to HTTP stream endpoint
+      if (videoUrl.startsWith('file://') &&
+          ossKey != null &&
+          ossKey.isNotEmpty) {
+        final baseUrl = ApiClient.instance.options.baseUrl;
+        videoUrl =
+            '$baseUrl/api/v1/files/stream?object_key=${Uri.encodeComponent(ossKey)}';
+      }
+
+      if (videoUrl.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('视频地址暂不可用，请稍后重试')),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => VideoPlayerPage(
+            videoUrl: videoUrl,
+            title: v.fileName,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // dismiss loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('获取视频播放地址失败: $e')),
+      );
+    }
   }
 
   Widget _buildTasksSection() {
@@ -407,16 +427,6 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
       'FAILED' => const Color(0xFFEF4444),
       _ => const Color(0xFF2F69E8),
     };
-  }
-
-  static String _formatDuration(int totalSeconds) {
-    final hours = totalSeconds ~/ 3600;
-    final minutes = (totalSeconds % 3600) ~/ 60;
-    final seconds = totalSeconds % 60;
-    if (hours > 0) {
-      return '${hours}h ${minutes.toString().padLeft(2, '0')}m ${seconds.toString().padLeft(2, '0')}s';
-    }
-    return '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
   }
 
   /// 将 ISO 8601 时间字符串转为 "yyyy-MM-dd HH:mm" 格式。
