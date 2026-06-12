@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../services/models/common_dto.dart';
+import '../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../services/models/video_summary_task_dto.dart';
 import '../../services/task_service.dart';
 import '../../services/video_qa_service.dart';

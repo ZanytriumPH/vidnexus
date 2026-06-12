@@ -28,6 +28,7 @@ class KnowledgeChatMessage {
     this.timestampLabel,
     this.citedSources,
     this.progressSteps,
+    this.attachments = const [],
   });
 
   final KnowledgeChatSender sender;
@@ -35,6 +36,9 @@ class KnowledgeChatMessage {
   final String? timestampLabel;
   final List<CitedSource>? citedSources;
   final List<KnowledgeProgressStep>? progressSteps;
+
+  /// 用户消息附带的图片列表。
+  final List<ChatAttachment> attachments;
 }
 
 class KnowledgeConversationPreview {

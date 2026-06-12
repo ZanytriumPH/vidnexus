@@ -692,6 +692,81 @@ class VideoSummarySessionHistoryController
     );
   }
 
+  /// 激活或添加一个已有的后端任务会话，防止在侧边栏中产生 temp- 前缀的重复项。
+  void addOrActivateTaskSession({
+    required String taskId,
+    required VideoSummarySessionSnapshot snapshot,
+  }) {
+    final flowSnapshot = snapshot.flowSnapshot;
+    final fileName = flowSnapshot.videoAsset?.fileName ?? '视频总结会话';
+    final durationLabel = flowSnapshot.videoAsset?.durationLabel ?? '0m 00s';
+
+    // 1. 检查是否存在该 taskId 的正式会话
+    final existingIndex = state.sessions.indexWhere((s) => s.id == taskId);
+
+    if (existingIndex != -1) {
+      // 如果已存在，更新其快照并将其设为活跃状态
+      final updated = state.sessions[existingIndex].copyWith(
+        snapshot: snapshot,
+        detail: _detailForSnapshot(snapshot),
+      );
+      final videoId = flowSnapshot.videoAsset?.title ?? '';
+      final tempId = 'temp-$videoId';
+      final sessions = List<VideoSummarySessionHistoryEntry>.from(state.sessions)
+        ..[existingIndex] = updated;
+
+      // 清除对应的临时会话，防止产生重复项
+      sessions.removeWhere((s) => s.id == tempId);
+
+      state = state.copyWith(
+        sessions: sessions,
+        activeSessionId: taskId,
+      );
+      return;
+    }
+
+    // 2. 检查是否存在对应的临时会话（例如从上传刚晋升过来，或者有相同的 videoId）
+    final videoId = flowSnapshot.videoAsset?.title ?? '';
+    final tempId = 'temp-$videoId';
+    final tempIndex = state.sessions.indexWhere((s) => s.id == tempId);
+
+    if (tempIndex != -1) {
+      // 如果存在临时会话，将其就地晋升为以 taskId 为主键的正式会话，避免重复
+      final entry = VideoSummarySessionHistoryEntry(
+        id: taskId,
+        title: fileName,
+        durationLabel: durationLabel,
+        detail: _detailForSnapshot(snapshot),
+        snapshot: snapshot,
+      );
+      final sessions = List<VideoSummarySessionHistoryEntry>.from(state.sessions)
+        ..[tempIndex] = entry;
+      state = state.copyWith(
+        sessions: sessions,
+        activeSessionId: taskId,
+      );
+      return;
+    }
+
+    // 3. 既无正式会话也无临时会话，新建正式会话并插入到 session-current 之后
+    final entry = VideoSummarySessionHistoryEntry(
+      id: taskId,
+      title: fileName,
+      durationLabel: durationLabel,
+      detail: _detailForSnapshot(snapshot),
+      snapshot: snapshot,
+    );
+
+    final current = state.sessions.first;
+    final sessions = [current, entry, ...state.sessions.skip(1)];
+
+    state = state.copyWith(
+      sessions: sessions,
+      activeSessionId: taskId,
+      createdSessionCount: state.createdSessionCount + 1,
+    );
+  }
+
   // 抽屉里展示的说明文案由当前阶段推导出来，而不是额外保存一份平行状态。
   String _detailForSnapshot(VideoSummarySessionSnapshot snapshot) {
     if (snapshot.flowSnapshot.isUploading) {

@@ -12,6 +12,8 @@ import '../../app/widgets/app_bottom_nav.dart';
 import '../../app/widgets/app_header_add_button.dart';
 import '../../app/widgets/citation_card.dart';
 import '../../app/widgets/thinking_process_section.dart';
+import '../../services/api/api_client.dart';
+import '../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../services/service_providers.dart';
 import 'application/knowledge_base_chat_controller.dart';
 import 'application/knowledge_base_controller.dart';

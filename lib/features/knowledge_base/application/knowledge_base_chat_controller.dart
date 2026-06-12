@@ -167,7 +167,7 @@ class KnowledgeBaseChatController extends ChangeNotifier {
   }
 
   /// 发起真实 QA 请求并通过 SSE 流消费回答。
-  Future<void> _sendChatMessage(String text) async {
+  Future<void> _sendChatMessage(String text, {List<AttachmentInfo> attachments = const []}) async {
     // 取消已有的 SSE 流（防御性：sendMessage 已有 isWaitingForAnswer 守卫，
     // 但 triggerInitialQA 的重发场景下旧流可能仍在）
     _cancelSSE();
@@ -195,6 +195,7 @@ class KnowledgeBaseChatController extends ChangeNotifier {
         kbid: _kbid,
         chatId: _chatId,
         questionContent: text,
+        attachments: attachments,
       );
 
       _currentSSESub = sseStream.listen(

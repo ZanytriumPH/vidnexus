@@ -119,6 +119,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           return;
         }
 
+        VideoSummaryTaskResponseData? matchedTask;
+        int currentPage = 1;
+        bool hasNext = true;
+
         while (hasNext) {
           final resp = await taskService.listTasks(
             params: PageParams(
@@ -609,6 +613,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final resp = await videoService.getVideo(videoId);
       final data = resp.data;
       var videoUrl = data?.presignedUrl ?? '';
+      final ossKey = data?.ossKey;
 
       if (!mounted) return;
       Navigator.of(context).pop(); // 关闭 loading

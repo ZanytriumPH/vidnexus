@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,8 +9,11 @@ import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_buttons.dart';
 import '../../../app/widgets/app_typing_indicator.dart';
 import '../../../app/widgets/composer_attachment_button.dart';
+import '../../../services/api/api_client.dart';
+import '../../../services/attachment_service.dart';
 import '../../../services/models/common_dto.dart';
 import '../../../services/models/video_summary_task_dto.dart';
+import '../../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../../../services/service_providers.dart';
 import '../../knowledge_base/application/knowledge_base_controller.dart';
 import '../video_summary_models.dart';
@@ -1293,4 +1298,81 @@ class _KbSheetStrings {
   String get emptyHint => '暂无知识库，请先创建';
   String success(String kbName) => '已添加到「$kbName」';
   String failure(String error) => '添加失败：$error';
+}
+
+/// 附件缩略图预览条，水平滚动，支持点击删除。
+class _AttachmentPreviewStrip extends StatelessWidget {
+  const _AttachmentPreviewStrip({
+    required this.attachments,
+    required this.onRemove,
+  });
+
+  final List<AttachmentInfo> attachments;
+  final void Function(int index) onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 72,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+        itemCount: attachments.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        itemBuilder: (context, index) {
+          final att = attachments[index];
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: att.ossKey.isNotEmpty
+                    ? Image.network(
+                        _thumbnailUrl(att.ossKey),
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _placeholder(),
+                      )
+                    : _placeholder(),
+              ),
+              Positioned(
+                top: -6,
+                right: -6,
+                child: GestureDetector(
+                  onTap: () => onRemove(index),
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF999999),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, size: 12, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  static String _thumbnailUrl(String ossKey) {
+    final base = ApiClient.instance.options.baseUrl;
+    return '$base/api/v1/files/stream?object_key=${Uri.encodeComponent(ossKey)}';
+  }
+
+  Widget _placeholder() {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F2F5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Icon(Icons.image_outlined, size: 24, color: AppColors.textHint),
+    );
+  }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/models/video_qa_dto.dart' show AttachmentInfo;
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
 import '../application/video_summary_result_mapper.dart';
