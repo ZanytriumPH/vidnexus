@@ -156,7 +156,7 @@ class VideoSummaryHistoryDrawer extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '新建视频总结会话',
+                        '从本地上传视频',
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
                               fontSize: 13,

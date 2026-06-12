@@ -320,10 +320,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     session.id != 'session-current',
               )
               .map(
-                (session) => VideoSummaryDrawerSessionItem(
+                (session) {
+                  final hasFinal = _hasFinalDraftTitle(session);
+                  return VideoSummaryDrawerSessionItem(
                   id: session.id,
-                  title: session.title,
-                  durationLabel: session.durationLabel,
+                  title: _drawerTitle(session),
+                  durationLabel: hasFinal ? '' : session.durationLabel,
                   detail: session.detail,
                   isActive:
                       !_isCurrentSessionEmpty(flowState) &&
@@ -332,7 +334,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       session.snapshot.flowSnapshot.videoAsset?.kbName,
                   kbid:
                       session.snapshot.flowSnapshot.videoAsset?.sourceLabel,
-                ),
+                );
+                },
               )
               .toList(),
           isLoadingHistory: sessionHistory.isLoadingHistory,

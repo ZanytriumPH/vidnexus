@@ -357,7 +357,7 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      task.title ?? task.taskId,
+                      _taskTitle(task),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -407,6 +407,22 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
         ),
       ),
     );
+  }
+
+  /// 任务条目标题：最终稿阶段提取 # 标题，否则用视频名称。
+  String _taskTitle(VideoSummaryTaskResponseData task) {
+    if (task.workflowState == 'COMPLETED') {
+      final body = task.finalSummary;
+      if (body != null && body.isNotEmpty) {
+        final match =
+            RegExp(r'^#\s+(.+)$', multiLine: true).firstMatch(body);
+        if (match != null) {
+          final title = match.group(1)?.trim();
+          if (title != null && title.isNotEmpty) return title;
+        }
+      }
+    }
+    return task.title ?? task.videoId;
   }
 
   String _workflowStateLabel(String state) {
