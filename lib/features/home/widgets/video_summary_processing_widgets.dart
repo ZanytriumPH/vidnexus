@@ -99,11 +99,10 @@ class HeroCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  StatusPill(label: pillLabel),
-                  const SizedBox(width: 8),
-                  KbNameTag(
-                    kbName: videoAsset.kbName ?? '',
-                    kbid: videoAsset.sourceLabel,
+                  StatusPill(
+                    label: videoAsset.kbName?.isNotEmpty == true
+                        ? videoAsset.kbName!
+                        : pillLabel,
                   ),
                 ],
               ),
