@@ -42,6 +42,16 @@ class WsClient {
   int _reconnectAttempts = 0;
   int _lastSequence = 0;
 
+  /// 最后一次收到 pong 响应（或任何有效后端消息）的时间。
+  /// 初始化为当前时间，避免首次 ping 因未初始化而立即判定超时。
+  DateTime _lastPongTime = DateTime.now();
+
+  /// 连续未收到 pong 响应的次数。
+  int _pongMissCount = 0;
+
+  /// pong 响应超时检测 Timer。
+  Timer? _pongTimeoutTimer;
+
   /// 连接就绪 Completer，connect() 成功后 resolve，断开后重置。
   Completer<void>? _connectedCompleter;
 
@@ -53,11 +63,25 @@ class WsClient {
 
   final _eventController = StreamController<WSEventEnvelope>.broadcast();
 
-  /// 暴露 WS 事件流。
+  /// 暴露 WS 事件流（后端推送的业务事件）。
   Stream<WSEventEnvelope> get eventStream => _eventController.stream;
+
+  final _connectionStateController =
+      StreamController<WsConnectionState>.broadcast();
+
+  /// 连接状态变更流（客户端生成的内部事件）。
+  /// 在 [connected]、[disconnected]、[reconnecting] 时 emit，
+  /// [connecting] 不 emit（它是瞬时过渡态）。
+  Stream<WsConnectionState> get connectionStateStream =>
+      _connectionStateController.stream;
+
+  /// 上次 emit 的连接状态，用于去重。
+  WsConnectionState? _lastEmittedState;
 
   static const _maxReconnectDelaySeconds = 30;
   static const _heartbeatIntervalSeconds = 30;
+  static const _pongTimeoutSeconds = 10;
+  static const _maxPongMissCount = 3;
 
   /// 确保 WebSocket 已连接，可选超时。
   ///
@@ -126,6 +150,8 @@ class WsClient {
       _channel = WebSocketChannel.connect(uri);
       _state = WsConnectionState.connected;
       _reconnectAttempts = 0;
+      _lastPongTime = DateTime.now();
+      _pongMissCount = 0;
 
       // 通知等待者连接已就绪
       if (_connectedCompleter != null && !_connectedCompleter!.isCompleted) {
@@ -140,11 +166,19 @@ class WsClient {
       );
 
       _startHeartbeat();
+      _emitConnectionState(WsConnectionState.connected);
     } catch (e) {
       debugPrint('[WS] Connection failed: $e');
       _state = WsConnectionState.disconnected;
       _scheduleReconnect();
     }
+  }
+
+  /// 发送连接状态变更事件，自动去重。
+  void _emitConnectionState(WsConnectionState newState) {
+    if (_lastEmittedState == newState) return;
+    _lastEmittedState = newState;
+    _connectionStateController.add(newState);
   }
 
   /// 断开连接。
@@ -162,15 +196,21 @@ class WsClient {
     try {
       final text = message as String;
 
-      // 服务端心跳 pong 是纯文本，非 JSON，直接忽略
+      // 服务端心跳 pong 是纯文本，非 JSON
       if (text == 'pong') {
         debugPrint('[WS] Received pong');
+        _lastPongTime = DateTime.now();
+        _pongMissCount = 0;
         return;
       }
 
       final json = jsonDecode(text) as Map<String, dynamic>;
       final event = WSEventEnvelope.fromJson(json);
       _lastSequence = event.sequence;
+
+      // 收到任何有效的后端消息都视为连接存活
+      _lastPongTime = DateTime.now();
+      _pongMissCount = 0;
 
       if (event.eventType == WSEventType.reconnectAck) {
         debugPrint('[WS] Reconnect acknowledged, seq=${event.sequence}');
@@ -217,6 +257,7 @@ class WsClient {
     if (_connectedCompleter != null && !_connectedCompleter!.isCompleted) {
       _connectedCompleter = null;
     }
+    _emitConnectionState(WsConnectionState.disconnected);
   }
 
   void _startHeartbeat() {
@@ -230,6 +271,8 @@ class WsClient {
   void _stopHeartbeat() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
+    _pongTimeoutTimer?.cancel();
+    _pongTimeoutTimer = null;
   }
 
   void _sendPing() {
@@ -237,7 +280,25 @@ class WsClient {
       _channel?.sink.add('ping');
     } catch (_) {
       // 连接已断开，忽略
+      return;
     }
+
+    // 记录 ping 发送时间，用于 pong 超时检测
+    final pingSentTime = DateTime.now();
+    _pongTimeoutTimer?.cancel();
+    _pongTimeoutTimer = Timer(const Duration(seconds: _pongTimeoutSeconds), () {
+      if (_lastPongTime.isBefore(pingSentTime)) {
+        _pongMissCount++;
+        debugPrint(
+          '[WS] Pong timeout (miss $_pongMissCount/$_maxPongMissCount)',
+        );
+        if (_pongMissCount >= _maxPongMissCount) {
+          debugPrint('[WS] Connection declared dead — triggering reconnect');
+          _disconnectInternal();
+          _scheduleReconnect();
+        }
+      }
+    });
   }
 
   void _scheduleReconnect() {
@@ -249,6 +310,7 @@ class WsClient {
     );
     debugPrint('[WS] Reconnecting in ${delay}s (attempt $_reconnectAttempts)');
     _state = WsConnectionState.reconnecting;
+    _emitConnectionState(WsConnectionState.reconnecting);
 
     _reconnectTimer = Timer(Duration(seconds: delay), () {
       connect();
@@ -269,5 +331,21 @@ class WsClient {
       return match != null ? int.tryParse(match.group(1)!) : null;
     }
     return null;
+  }
+
+  /// 释放资源。
+  ///
+  /// 关闭所有流控制器和定时器。调用后此实例不应再使用。
+  void dispose() {
+    _cancelReconnect();
+    _stopHeartbeat();
+    _subscription?.cancel();
+    _subscription = null;
+    _channel?.sink.close();
+    _channel = null;
+    _state = WsConnectionState.disconnected;
+    _connectedCompleter = null;
+    _eventController.close();
+    _connectionStateController.close();
   }
 }

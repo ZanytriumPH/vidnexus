@@ -35,7 +35,7 @@ final wsEventProvider = StreamProvider<WSEventEnvelope?>((ref) {
   ref.onDispose(() {
     subscription.cancel();
     controller.close();
-    wsClient.disconnect();
+    wsClient.dispose();
   });
 
   return controller.stream;
