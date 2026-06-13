@@ -29,11 +29,13 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     required this.videoId,
   }) : _taskService = taskService,
        _videoQAService = videoQAService,
-       _wsClient = wsClient;
+       _wsClient = wsClient,
+       _connectionStateStream = wsClient.connectionStateStream;
 
   final TaskService _taskService;
   final VideoQAService? _videoQAService;
   final WsClient _wsClient;
+  final Stream<WsConnectionState> _connectionStateStream;
 
   /// 当前知识库 ID。
   @override
@@ -334,10 +336,23 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       },
     );
 
+    // 监听 WS 连接状态，断连时记录日志（恢复由 FlowController 并行轮询保证）
+    StreamSubscription<WsConnectionState>? connStateSub;
+    connStateSub = _connectionStateStream.listen((state) {
+      if (state == WsConnectionState.disconnected ||
+          state == WsConnectionState.reconnecting) {
+        debugPrint(
+          '[HttpRepo] resumeTaskProgress — WS connection $state '
+          'taskId=$taskId',
+        );
+      }
+    });
+
     controller.onCancel = () {
       firstEventTimeout?.cancel();
       totalTimeout?.cancel();
       wsSubscription?.cancel();
+      connStateSub?.cancel();
     };
 
     // 竞态窗口守护：WS 订阅已就绪，再次检查后端是否在订阅建立间隙已完成。
@@ -656,10 +671,23 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       },
     );
 
+    // 监听 WS 连接状态，断连时记录日志（恢复由 FlowController 并行轮询保证）
+    StreamSubscription<WsConnectionState>? connStateSub;
+    connStateSub = _connectionStateStream.listen((state) {
+      if (state == WsConnectionState.disconnected ||
+          state == WsConnectionState.reconnecting) {
+        debugPrint(
+          '[HttpRepo] WS connection $state — taskId=$taskId, '
+          'progress=$_lastProgress',
+        );
+      }
+    });
+
     controller.onCancel = () {
       firstEventTimeout?.cancel();
       totalTimeout?.cancel();
       wsSubscription?.cancel();
+      connStateSub?.cancel();
     };
 
     yield* controller.stream;

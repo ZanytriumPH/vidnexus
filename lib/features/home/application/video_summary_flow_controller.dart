@@ -890,6 +890,10 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
                   ),
                 );
           }
+
+          // ★ 启动并行 HTTP 轮询，作为 WS 静默失效的兜底
+          _startProcessingPoll(_repository.activeTaskId!, owningSessionKey,
+              intervalSeconds: 10);
         }
         state = state.copyWith(
           processingSnapshot: mapProcessingDataToSnapshot(processingData),
@@ -900,6 +904,14 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       if (_activeSessionKey != owningSessionKey) {
         if (kDebugMode) {
           debugPrint('[FlowCtrl] 跳过草稿获取 — 会话已切换');
+        }
+        return;
+      }
+
+      // 若轮询已检测到完成并过渡了阶段，跳过重复获取
+      if (state.stage != VideoSummaryStage.processing) {
+        if (kDebugMode) {
+          debugPrint('[FlowCtrl] 跳过草稿获取 — 轮询已过渡阶段');
         }
         return;
       }
@@ -922,6 +934,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         isDraftEditMode: false,
       );
     } catch (e) {
+      _cancelProcessingPoll();
       // 只有当前会话未改变时才展示错误
       if (_activeSessionKey != owningSessionKey) {
         if (kDebugMode) {
@@ -943,6 +956,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         errorMessage: errorMsg,
       );
     } finally {
+      _cancelProcessingPoll();
       // 仅当本此生成未被取消时才重置标志位
       if (_activeSessionKey == owningSessionKey) {
         state = state.copyWith(isGenerating: false);
@@ -987,13 +1001,24 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     try {
       _listenFinalDraftProgress();
 
+      // ★ 启动并行 HTTP 轮询，作为 WS 静默失效的兜底
+      final taskId = state.taskId;
+      if (taskId != null) {
+        _startDraftStatusPoll(taskId, owningSessionKey);
+      }
+
       final summary = await _repository.generateFinalSummary(
         guidance: guidance,
         draftParagraphs: effectiveDraft.paragraphs,
       );
 
+      _cancelDraftStatusPoll();
+
       // 异步等待期间可能发生会话切换
       if (_activeSessionKey != owningSessionKey) return null;
+
+      // 若轮询已过渡阶段，跳过重复操作
+      if (state.finalSummaryData != null) return;
 
       final summaryData = mapFinalResultDataToSummary(summary);
       // 进入 finalChat 时，会用总结中的首个时间片段给时间旅行功能提供默认范围。
@@ -1006,6 +1031,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         selectedTimestampEndSeconds: seededRange.endSeconds,
       );
     } finally {
+      _cancelDraftStatusPoll();
       if (_activeSessionKey == owningSessionKey) {
         _cancelFinalDraftProgress();
         state = state.copyWith(isGenerating: false);
