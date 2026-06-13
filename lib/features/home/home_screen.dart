@@ -181,13 +181,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 .toList()
           : <String>[];
 
+      // 尝试获取视频的真实文件名
+      String displayName = title ?? videoId;
+      try {
+        final videoService = ref.read(videoServiceProvider);
+        final videoResp = await videoService.getVideo(videoId);
+        final videoFileName = videoResp.data?.fileName;
+        if (videoFileName != null && videoFileName.isNotEmpty) {
+          displayName = videoFileName;
+        }
+      } catch (_) {
+        // 获取失败时回退到 title / videoId
+      }
+
       final snapshot = VideoSummaryFlowSnapshot(
         taskId: taskId,
         videoAsset: VideoAssetInfo(
           title: videoId,
           durationLabel: '0m 00s',
           sourceLabel: kbid,
-          fileName: title ?? videoId,
+          fileName: displayName,
           kbName: kbName,
         ),
         kbid: kbid,
