@@ -764,7 +764,7 @@ class _CreateTaskBottomSheetState
             controller: _preferenceController,
             maxLines: 2,
             decoration: InputDecoration(
-              hintText: '例如：请按行业、声线和行动建议展开',
+              hintText: '例如：请按行业趋势、关键结论和行动建议展开',
               hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
