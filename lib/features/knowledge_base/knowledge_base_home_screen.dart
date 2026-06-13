@@ -44,9 +44,8 @@ class _KnowledgeBaseHomeScreenState
     final isSelectionMode = state.isSelectionMode;
     final selectedIds = state.selectedIds;
 
-    // 过滤掉系统默认知识库 + 搜索关键词
+    // 过滤搜索关键词
     final displayLibraries = state.libraries.where((l) {
-      if (l.title == '默认知识库') return false;
       if (_searchQuery.isEmpty) return true;
       return l.title.contains(_searchQuery);
     }).toList();
