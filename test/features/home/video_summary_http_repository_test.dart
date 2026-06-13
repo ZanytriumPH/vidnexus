@@ -88,6 +88,8 @@ void main() {
     when(() => mockWsClient.ensureConnected(timeout: any(named: 'timeout')))
         .thenAnswer((_) async {});
     when(() => mockWsClient.eventStream).thenAnswer((_) => wsTestController.stream);
+    when(() => mockWsClient.connectionStateStream)
+        .thenAnswer((_) => const Stream.empty());
 
     qaPoller = QAPoller(
       videoQAService: mockVideoQAService,
