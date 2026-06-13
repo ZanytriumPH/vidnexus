@@ -44,48 +44,20 @@ class _AppTypingIndicatorState extends State<AppTypingIndicator>
       child: Align(
         alignment: Alignment.centerLeft,
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 280),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: const Color(0xFFF3F5F9),
             borderRadius: BorderRadius.circular(18),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                widget.message ?? 'AI 正在思考',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF8E8E93),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              SizedBox(width: 10),
-              _TypingDot(),
-              SizedBox(width: 6),
-              _TypingDot(),
-              SizedBox(width: 6),
-              _TypingDot(),
-            ],
+          child: Text(
+            widget.message ?? 'AI 正在思考',
+            style: TextStyle(
+              fontSize: 13,
+              color: Color(0xFF8E8E93),
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _TypingDot extends StatelessWidget {
-  const _TypingDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: const BoxDecoration(
-        color: Color(0xFF8E8E93),
-        shape: BoxShape.circle,
       ),
     );
   }
