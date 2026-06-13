@@ -50,7 +50,7 @@ class _AppTypingIndicatorState extends State<AppTypingIndicator>
             borderRadius: BorderRadius.circular(18),
           ),
           child: Text(
-            widget.message ?? 'AI 正在思考',
+            widget.message ?? 'AI 正在思考...',
             style: TextStyle(
               fontSize: 13,
               color: Color(0xFF8E8E93),
