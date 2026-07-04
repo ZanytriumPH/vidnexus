@@ -688,16 +688,6 @@ class _CreateTaskBottomSheetState
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(child: CircularProgressIndicator()),
             )
-          else if (libraries.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: Text(
-                  '暂无知识库，请先创建',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-                ),
-              ),
-            )
           else
             Container(
               constraints: const BoxConstraints(maxHeight: 200),
