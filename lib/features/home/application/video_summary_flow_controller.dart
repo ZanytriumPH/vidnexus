@@ -785,13 +785,22 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       chatMessages: const [],
     );
 
+    // 获取 taskId 用于轮询兜底
+    final taskId = state.taskId;
+    if (taskId == null || taskId.isEmpty) return;
+
     try {
       _listenFinalDraftProgress();
+
+      // 启动并行轮询，作为 WS 静默失效的兜底（10s 间隔）
+      _startDraftStatusPoll(taskId, owningSessionKey);
 
       final summary = await _repository.generateFinalSummary(
         guidance: guidance,
         draftParagraphs: effectiveDraft.paragraphs,
       );
+
+      _cancelDraftStatusPoll();
 
       // 异步等待期间可能发生会话切换
       if (_activeSessionKey != owningSessionKey) return;
@@ -807,6 +816,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         selectedTimestampEndSeconds: seededRange.endSeconds,
       );
     } finally {
+      _cancelDraftStatusPoll();
       if (_activeSessionKey == owningSessionKey) {
         _cancelFinalDraftProgress();
         state = state.copyWith(isGenerating: false);
