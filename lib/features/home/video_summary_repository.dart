@@ -15,7 +15,7 @@ const String defaultVideoId = 'vid_default';
 /// repository 重建导致 videoId 被重置为 [defaultVideoId]。
 final currentVideoIdProvider = StateProvider<String>((ref) => defaultVideoId);
 
-/// 获取当前用户的默认知识库 ID（不存在则自动创建）。
+/// 获取当前用户的默认知识库 ID。
 final defaultKbidProvider = FutureProvider<String>((ref) async {
   // 监听 authControllerProvider 的变化。当 authState 变化时，这个 FutureProvider 会自动重新计算并重新获取数据
   ref.watch(authControllerProvider);
@@ -26,12 +26,8 @@ final defaultKbidProvider = FutureProvider<String>((ref) async {
   if (kbs.isNotEmpty) {
     return kbs.first.kbid;
   }
-  // 没有知识库则自动创建默认知识库
-  final createResp = await kbService.createKB(name: '默认知识库');
-  if (createResp.data == null) {
-    throw Exception('创建默认知识库失败，请稍后重试');
-  }
-  return createResp.data!.kbid;
+  // 没有知识库时返回空字符串，由调用方自行处理
+  return '';
 });
 
 final videoSummaryRepositoryProvider = Provider<VideoSummaryRepository>((ref) {
