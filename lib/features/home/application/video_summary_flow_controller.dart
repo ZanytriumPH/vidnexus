@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,7 +14,6 @@ import '../../../services/websocket/ws_models.dart';
 import '../../../services/websocket/ws_provider.dart';
 import 'video_summary_result_mapper.dart';
 import '../domain/video_summary_domain_models.dart';
-import '../domain/simulated_progress_estimator.dart';
 import '../domain/video_summary_time_utils.dart';
 import '../video_summary_models.dart';
 import '../video_summary_presentation_models.dart';
@@ -219,11 +219,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
   /// 最终稿生成期间的 WS 进度日志订阅。
   StreamSubscription<WSEventEnvelope>? _finalDraftProgressSub;
 
-  /// 虚假模拟进度估算器，用于在后端真实进度到达前驱动主进度条。
-  final SimulatedProgressEstimator _simProgressEstimator =
-      SimulatedProgressEstimator();
-
-  /// 模拟进度的定时 tick 定时器。
+  /// 模拟进度定时器：在收到后端第一条真实进度前，驱动进度条缓慢前行。
   Timer? _simProgressTimer;
 
   @override
@@ -254,7 +250,6 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     // 切换会话标识，使所有正在执行的旧异步生成流程的守卫失效
     _activeSessionKey = Object();
     _cancelAllPolling();
-    _simProgressEstimator.reset();
 
     _repository.updateTaskId(null);
     _repository.updateVideoId(defaultVideoId);
@@ -532,26 +527,6 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     }
   }
 
-  Future<void> _ensureKbidResolved() async {
-    // 如果 kbid 已经是有效值（非空且非占位符），无需等待
-    if (_repository.kbid.isNotEmpty && _repository.kbid != 'kb_default') {
-      return;
-    }
-    try {
-      // 等待 defaultKbidProvider 解析完成
-      final kbid = await ref.read(defaultKbidProvider.future);
-      _repository.updateKbid(kbid);
-    } catch (e) {
-      // 如果之前网络超时导致 Riverpod 缓存了 Error 状态，在此处进行重置并重试
-      debugPrint(
-        '[FlowCtrl] defaultKbidProvider resolved with error: $e, invalidating and retrying...',
-      );
-      ref.invalidate(defaultKbidProvider);
-      final kbid = await ref.read(defaultKbidProvider.future);
-      _repository.updateKbid(kbid);
-    }
-  }
-
   /// 将后端返回的视频时长（秒）同步到本地 videoAsset 和默认时间区间。
   void _updateVideoDuration(int? durationSeconds) {
     if (durationSeconds == null || durationSeconds <= 0) return;
@@ -774,221 +749,6 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       selectedTimestampStartSeconds: range.startSeconds,
       selectedTimestampEndSeconds: range.endSeconds,
     );
-  }
-
-  /// 从视频详情页发起新任务。
-  /// 设置视频信息和 KB，然后启动任务创建 + 进度监控流程。
-  Future<void> startTaskFromVideo({
-    required String videoId,
-    required String kbid,
-    String? userInitialPreference,
-    String? fileName,
-  }) async {
-    if (state.isGenerating) return;
-
-    // 设置 repository 的 videoId 和 kbid
-    _repository.updateVideoId(videoId);
-    _repository.updateKbid(kbid);
-    ref.read(currentVideoIdProvider.notifier).state = videoId;
-
-    // 更新 state 的视频资产信息
-    state = state.copyWith(
-      videoAsset: VideoAssetInfo(
-        title: videoId,
-        durationLabel: '0m 00s',
-        sourceLabel: kbid,
-        fileName: fileName ?? videoId,
-      ),
-      uploadHighlighted: true,
-    );
-
-    // 调用统一的生成流程
-    await _runDraftGeneration(
-      kbid: kbid,
-      userInitialPreference: userInitialPreference,
-    );
-  }
-
-  Future<void> startDraftGeneration({String? userInitialPreference}) async {
-    if (state.isGenerating) return;
-
-    // 确保 kbid 已解析（保留兼容：从主页 UI 触发时）
-    await _ensureKbidResolved();
-    final kbid = _repository.kbid;
-
-    await _runDraftGeneration(
-      kbid: kbid,
-      userInitialPreference: userInitialPreference,
-    );
-  }
-
-  /// 核心任务创建 + WebSocket 进度监控流程。
-  Future<void> _runDraftGeneration({
-    required String kbid,
-    String? userInitialPreference,
-  }) async {
-    final settings = ref.read(videoSummarySettingsProvider);
-
-    // 重置模拟进度估算器
-    _simProgressEstimator.reset();
-    _cancelSimProgressTimer();
-
-    // 每次重新生成草稿，都要清掉后续阶段结果，并立即切换为 processing 阶段以提供用户反馈
-    state = state.copyWith(
-      isGenerating: true,
-      stage: VideoSummaryStage.processing,
-      processingExpanded: settings.defaultProcessingExpanded,
-      processingSnapshot: buildInitialProcessingSnapshot(),
-      draftResult: null,
-      finalSummaryData: null,
-      chatMessages: const [],
-    );
-
-    // 启动模拟进度定时器：在后端真实事件到达前，缓慢推进进度条
-    _simProgressTimer = Timer.periodic(
-      const Duration(milliseconds: 800),
-      (_) {
-        _simProgressEstimator.tick();
-        final current = state.processingSnapshot;
-        if (current != null && _simProgressEstimator.currentPercent / 100.0 > current.progress) {
-          state = state.copyWith(
-            processingSnapshot: ProcessingSnapshot(
-              progress: _simProgressEstimator.currentPercent / 100.0,
-              statusLabel: current.statusLabel,
-              etaLabel: current.etaLabel,
-              chunkProgress: current.chunkProgress,
-              statusLog: current.statusLog,
-            ),
-          );
-        }
-      },
-    );
-
-    // 捕获当前会话标识，后续所有异步回调都以此校验所有权。
-    // 使用局部变量 + Object 引用比对，reset()/restoreSnapshot() 会创建新 Object，
-    // 使旧异步流程的引用自动失效，不受 state.taskId 可能为 null 的影响。
-    final owningSessionKey = _activeSessionKey;
-
-    try {
-      await for (final processingData in _repository.startDraftGeneration(
-        kbid: kbid,
-        userInitialPreference:
-            (userInitialPreference != null && userInitialPreference.isNotEmpty)
-            ? userInitialPreference
-            : null,
-      )) {
-        // 若在 SSE 流期间发生了会话切换，则停止消费后续事件
-        if (_activeSessionKey != owningSessionKey) {
-          if (kDebugMode) {
-            debugPrint('[FlowCtrl] SSE 流中止 — 会话已切换');
-          }
-          return;
-        }
-
-        // 首帧到达时 task 已创建完毕，同步 taskId + kbName 到 state，
-        // 确保后续 captureSnapshot() 能拿到正确的 taskId 且 HeroCard 能显示 kbName 标签
-        if (state.taskId == null && _repository.activeTaskId != null) {
-          final repoKbName = _repository.kbName;
-          state = state.copyWith(
-            taskId: _repository.activeTaskId,
-            videoAsset: repoKbName != null
-                ? VideoAssetInfo(
-                    title: state.videoAsset.title,
-                    durationLabel: state.videoAsset.durationLabel,
-                    sourceLabel: state.videoAsset.sourceLabel,
-                    fileName: state.videoAsset.fileName,
-                    kbName: repoKbName,
-                  )
-                : state.videoAsset,
-          );
-          // 同步更新侧边栏条目（syncActiveSession 仅在上传时调用，此时补充更新 kbName）
-          if (repoKbName != null) {
-            ref.read(videoSummarySessionHistoryProvider.notifier)
-                .syncActiveSession(
-                  VideoSummarySessionSnapshot(
-                    flowSnapshot: captureSnapshot(),
-                    readyPreferenceText: '',
-                    draftGuidanceText: '',
-                    draftBodyText: '',
-                  ),
-                );
-          }
-        }
-
-        // 使用模拟进度驱动主进度条
-        final realPercent = (processingData.progress * 100).round();
-        final isCompleted = processingData.progress >= 1.0;
-        final simulatedPercent = _simProgressEstimator.feedRealProgress(
-          realPercent,
-          isCompleted: isCompleted,
-        );
-
-        final snapshot = mapProcessingDataToSnapshot(processingData);
-        // 用模拟进度覆盖真实进度，驱动 HeroCard 主进度条
-        final overriddenSnapshot = ProcessingSnapshot(
-          progress: simulatedPercent / 100.0,
-          statusLabel: snapshot.statusLabel,
-          etaLabel: _buildSimulatedEtaLabel(processingData, simulatedPercent),
-          chunkProgress: snapshot.chunkProgress,
-          statusLog: snapshot.statusLog,
-        );
-
-        state = state.copyWith(processingSnapshot: overriddenSnapshot);
-      }
-
-      // 若在 await for 期间发生了会话切换，不再继续
-      if (_activeSessionKey != owningSessionKey) {
-        if (kDebugMode) {
-          debugPrint('[FlowCtrl] 跳过草稿获取 — 会话已切换');
-        }
-        return;
-      }
-
-      // repository 返回的是 raw draft data，进入页面前统一转换成 presentation model。
-      final draft = mapDraftDataToResult(await _repository.fetchDraftResult());
-
-      // 再次校验：获取草稿期间可能发生会话切换
-      if (_activeSessionKey != owningSessionKey) {
-        if (kDebugMode) {
-          debugPrint('[FlowCtrl] 跳过草稿更新 — 会话已切换');
-        }
-        return;
-      }
-
-      state = state.copyWith(
-        draftResult: draft,
-        stage: VideoSummaryStage.draft,
-        processingExpanded: false,
-        isDraftEditMode: false,
-      );
-    } catch (e) {
-      // 只有当前会话未改变时才展示错误
-      if (_activeSessionKey != owningSessionKey) {
-        if (kDebugMode) {
-          debugPrint('[FlowCtrl] 跳过错误展示 — 会话已切换');
-        }
-        return;
-      }
-      debugPrint('[FlowCtrl] Start draft generation failed: $e');
-      final String errorMsg;
-      if (e is TaskConflictException) {
-        errorMsg = e.message ?? '该知识库已存在同视频的任务，请前往视频详情页管理';
-      } else if (e is DioException) {
-        errorMsg = ApiError.fromDioException(e).userMessage;
-      } else {
-        errorMsg = '生成草稿失败，请稍后重试';
-      }
-      state = state.copyWith(
-        stage: VideoSummaryStage.ready,
-        errorMessage: errorMsg,
-      );
-    } finally {
-      _cancelSimProgressTimer();
-      // 仅当本此生成未被取消时才重置标志位
-      if (_activeSessionKey == owningSessionKey) {
-        state = state.copyWith(isGenerating: false);
-      }
-    }
   }
 
   Future<void> generateFinalSummary({
@@ -1456,7 +1216,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     _simProgressTimer = null;
   }
 
-  /// 取消所有轮询定时器（processing + draft）和 WS 进度订阅。
+  /// 取消所有轮询定时器（processing + draft + sim）和 WS 进度订阅。
   void _cancelAllPolling() {
     _cancelProcessingPoll();
     _cancelDraftStatusPoll();
@@ -1772,6 +1532,42 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       state = state.copyWith(taskId: taskId);
     }
 
+    // 生成随机模拟目标（15-25%）并启动模拟进度定时器（10秒匀速前进）
+    final simulatedTarget = 15 + Random().nextInt(11); // 15~25
+    const simDurationMs = 10000; // 10 秒
+    const simTickMs = 500;       // 每 500ms 前进一格
+    final simTicks = simDurationMs ~/ simTickMs; // 共 20 步
+    final simStepPercent = simulatedTarget / simTicks; // 每步增量
+    int simTickCount = 0;
+    bool firstRealEventReceived = false;
+    _cancelSimProgressTimer();
+    _simProgressTimer = Timer.periodic(
+      const Duration(milliseconds: simTickMs),
+      (_) {
+        if (firstRealEventReceived) {
+          _cancelSimProgressTimer();
+          return;
+        }
+        simTickCount++;
+        final current = state.processingSnapshot;
+        if (current != null) {
+          final nextProgress = (simulatedTarget * simTickCount / simTicks) / 100.0;
+          state = state.copyWith(
+            processingSnapshot: ProcessingSnapshot(
+              progress: nextProgress.clamp(0.0, 1.0),
+              statusLabel: current.statusLabel,
+              etaLabel: '正在准备处理资源…',
+              chunkProgress: current.chunkProgress,
+              statusLog: current.statusLog,
+            ),
+          );
+          if (simTickCount >= simTicks) {
+            _cancelSimProgressTimer();
+          }
+        }
+      },
+    );
+
     // 立即启动并行轮询，作为 WS 静默失效的兜底（10s 间隔）
     _startProcessingPoll(taskId, owningSessionKey, intervalSeconds: 10);
 
@@ -1784,14 +1580,33 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
             debugPrint('[FlowCtrl] 恢复 WS 流中止 — 会话已切换');
           }
           _cancelProcessingPoll();
+          _cancelSimProgressTimer();
           return;
         }
+
+        // 收到第一条真实事件：停止模拟，后续按剩余区间映射
+        if (!firstRealEventReceived) {
+          firstRealEventReceived = true;
+          _cancelSimProgressTimer();
+        }
+
+        // 将真实进度 [0, 1] 映射到 [simulatedTarget%, 100%]
+        final mappedProgress =
+            (simulatedTarget / 100.0) + ((100 - simulatedTarget) / 100.0) * processingData.progress;
+        final snapshot = mapProcessingDataToSnapshot(processingData);
         state = state.copyWith(
-          processingSnapshot: mapProcessingDataToSnapshot(processingData),
+          processingSnapshot: ProcessingSnapshot(
+            progress: mappedProgress.clamp(0.0, 1.0),
+            statusLabel: snapshot.statusLabel,
+            etaLabel: snapshot.etaLabel,
+            chunkProgress: snapshot.chunkProgress,
+            statusLog: snapshot.statusLog,
+          ),
         );
       }
 
-      // WS 流正常结束（收到 completed），停止轮询
+      // WS 流正常结束（收到 completed），停止轮询和模拟
+      _cancelSimProgressTimer();
       _cancelProcessingPoll();
       if (_activeSessionKey != owningSessionKey) return;
 
@@ -1814,6 +1629,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         debugPrint('[FlowCtrl] 恢复的 WS 任务已完成，已跳转到草稿页 — taskId=$taskId');
       }
     } catch (e) {
+      _cancelSimProgressTimer();
       if (_activeSessionKey != owningSessionKey) {
         _cancelProcessingPoll();
         return;
@@ -1944,23 +1760,6 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
     debugPrint('[FlowCtrl] 开始终稿状态轮询 — taskId=$taskId');
     _draftPollTimer = Timer(const Duration(seconds: 10), poll);
-  }
-
-  /// 构建模拟进度模式下的 eta 标签。
-  ///
-  /// 在预处理阶段（未收到真实分片事件）显示阶段提示；
-  /// 收到分片事件后显示 "分片 X/Y 完成 (模拟 XX%)"。
-  String _buildSimulatedEtaLabel(
-    VideoSummaryProcessingData data,
-    int simulatedPercent,
-  ) {
-    final cp = data.chunkProgress;
-    if (cp == null || !_simProgressEstimator.hasReceivedRealProgress) {
-      return data.currentMessage.isNotEmpty
-          ? data.currentMessage
-          : '正在准备处理内容。';
-    }
-    return '分片 ${cp.doneCount}/${cp.totalChunks} 完成';
   }
 
   TimestampRangeSelection _buildDefaultTimestampRange(String durationLabel) {

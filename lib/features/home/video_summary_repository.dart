@@ -65,11 +65,6 @@ abstract class VideoSummaryRepository {
     int pageSize = 50,
   });
 
-  Stream<VideoSummaryProcessingData> startDraftGeneration({
-    required String kbid,
-    String? userInitialPreference,
-  });
-
   Future<VideoSummaryDraftData> fetchDraftResult();
 
   Future<VideoSummaryFinalResultData> generateFinalSummary({
