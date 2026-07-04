@@ -314,6 +314,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     });
 
+    // 交叉校验：若侧边栏已加载完成但当前 FlowController 的 taskId 不在其
+    // sessions 列表中，说明任务已被级联删除（如 KB 删除），需要清理残留 UI。
+    if (!sessionHistory.isLoadingHistory &&
+        flowState.taskId != null &&
+        flowState.taskId!.isNotEmpty &&
+        !sessionHistory.sessions.any((s) => s.id == flowState.taskId)) {
+      Future.microtask(() {
+        ref
+            .read(videoSummaryFlowControllerProvider.notifier)
+            .reset();
+        ref
+            .read(videoSummaryTextEditingControllerProvider)
+            .clearForNewSession();
+      });
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
