@@ -116,6 +116,14 @@ class VideoSummarySessionHistoryController
       }
     });
 
+    // 若 provider 被 invalidate 后重建（如 KB 删除触发），此时 kbid 可能早已处于
+    // AsyncData，上面的 ref.listen 不会触发。通过 Future.microtask 确保在 widget
+    // 完成 build 后立即调度加载。
+    final kbidAsync = ref.watch(defaultKbidProvider);
+    if (kbidAsync is AsyncData) {
+      Future.microtask(_loadAll);
+    }
+
     return VideoSummarySessionHistoryState(
       sessions: [currentSession],
       activeSessionId: currentSession.id,
@@ -124,9 +132,18 @@ class VideoSummarySessionHistoryController
     );
   }
 
+  /// 防止 _loadAll() 被并发调用（如 ref.listen 和 Future.microtask 同时触发）。
+  bool _isLoadingAll = false;
+
   /// 加载后端任务列表到侧边栏。
   Future<void> _loadAll() async {
-    await _loadFromBackend();
+    if (_isLoadingAll) return;
+    _isLoadingAll = true;
+    try {
+      await _loadFromBackend();
+    } finally {
+      _isLoadingAll = false;
+    }
   }
 
   VideoSummarySessionHistoryEntry _buildCurrentSessionEntry(

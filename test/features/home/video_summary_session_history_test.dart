@@ -333,5 +333,175 @@ void main() {
       expect(flowState.uploadProgress, 0.7);
     });
   });
-}
 
+  group('Sidebar stale tasks after KB deletion', () {
+    late MockTaskService mockTaskService;
+    late MockVideoQAService mockVideoQAService;
+    late MockWsClient mockWsClient;
+    late ProviderContainer container;
+
+    /// Polls until the session history is no longer loading, or [maxTries] reached.
+    Future<void> _waitForLoad(int maxTries) async {
+      for (int i = 0; i < maxTries; i++) {
+        if (!container.read(videoSummarySessionHistoryProvider).isLoadingHistory) {
+          return;
+        }
+        await Future.delayed(const Duration(milliseconds: 10));
+      }
+    }
+
+    setUp(() {
+      mockTaskService = MockTaskService();
+      mockVideoQAService = MockVideoQAService();
+      mockWsClient = MockWsClient();
+      final mockVideoService = MockVideoService();
+
+      when(() => mockVideoService.getVideo(any())).thenAnswer(
+        (_) async => ApiResponse(
+          status: 'success',
+          data: VideoResourceResponseData(
+            videoId: 'vid_persistent_1',
+            ownerId: 'owner-1',
+            fileName: 'test_video.mp4',
+            duration: 120,
+          ),
+        ),
+      );
+
+      when(() => mockTaskService.listTasks(
+        params: any(named: 'params'),
+      )).thenAnswer(
+        (_) async => ApiListResponse(
+          status: 'success',
+          data: <VideoSummaryTaskResponseData>[
+            const VideoSummaryTaskResponseData(
+              taskId: 'task_persistent_1',
+              kbid: 'kb_default',
+              videoId: 'vid_persistent_1',
+              workflowState: 'WAITING_USER_APPROVAL',
+              draftSummary: 'Draft summary text',
+              createdAt: '2026-06-06T12:00:00Z',
+              updatedAt: '2026-06-06T12:00:00Z',
+            ),
+          ],
+          meta: MetaInfo(requestId: 'req-1', timestamp: '2026-06-06T12:00:00Z'),
+          pagination: const PaginationInfo(page: 1, pageSize: 50, total: 1, hasNext: false),
+        ),
+      );
+
+      when(() => mockTaskService.getTask(any())).thenAnswer(
+        (_) async => ApiResponse(
+          status: 'success',
+          data: const VideoSummaryTaskResponseData(
+            taskId: 'task_persistent_1',
+            kbid: 'kb_default',
+            videoId: 'vid_persistent_1',
+            workflowState: 'WAITING_USER_APPROVAL',
+            draftSummary: 'Draft summary text',
+            createdAt: '2026-06-06T12:00:00Z',
+            updatedAt: '2026-06-06T12:00:00Z',
+          ),
+          meta: MetaInfo(requestId: 'req-2', timestamp: '2026-06-06T12:00:00Z'),
+        ),
+      );
+
+      when(() => mockWsClient.eventStream).thenAnswer((_) => const Stream.empty());
+
+      container = ProviderContainer(
+        overrides: [
+          taskServiceProvider.overrideWithValue(mockTaskService),
+          videoQAServiceProvider.overrideWithValue(mockVideoQAService),
+          wsClientProvider.overrideWithValue(mockWsClient),
+          videoServiceProvider.overrideWithValue(mockVideoService),
+          defaultKbidProvider.overrideWith((ref) => 'kb_default'),
+        ],
+      );
+      addTearDown(container.dispose);
+    });
+
+    test('build() triggers _loadAll when kbid is already AsyncData', () async {
+      // Wait for the initial load to fully complete
+      await _waitForLoad(20);
+      final state = container.read(videoSummarySessionHistoryProvider);
+      expect(state.isLoadingHistory, false);
+      expect(state.sessions.length, 2); // session-current + task_persistent_1
+      expect(state.sessions.any((s) => s.id == 'task_persistent_1'), isTrue);
+
+      // Simulate KB deletion by invalidating the provider.
+      // In the real app, deleteLibrary() calls ref.invalidate() while the user
+      // is on the KB page. When they return to HomeScreen, build() runs fresh
+      // and must trigger _loadAll() even though kbid is already AsyncData.
+      container.invalidate(videoSummarySessionHistoryProvider);
+      await _waitForLoad(20);
+
+      final newState = container.read(videoSummarySessionHistoryProvider);
+      expect(newState.isLoadingHistory, false,
+          reason: 'Should finish loading after invalidation');
+      expect(newState.sessions.length, 2,
+          reason: 'Should reload backend data after invalidation');
+      expect(
+        newState.sessions.any((s) => s.id == 'task_persistent_1'),
+        isTrue,
+        reason: 'Backend task should appear in sidebar after fresh load',
+      );
+    });
+
+    test('invalidated provider reflects deleted KB (backend returns no tasks)', () async {
+      await _waitForLoad(20);
+      expect(container.read(videoSummarySessionHistoryProvider).sessions.length, 2);
+
+      // Update mock to simulate backend cascade-deleting tasks along with KB
+      when(() => mockTaskService.listTasks(
+        params: any(named: 'params'),
+      )).thenAnswer(
+        (_) async => ApiListResponse(
+          status: 'success',
+          data: <VideoSummaryTaskResponseData>[],
+          meta: MetaInfo(requestId: 'req-3', timestamp: '2026-06-06T12:00:00Z'),
+          pagination: const PaginationInfo(page: 1, pageSize: 50, total: 0, hasNext: false),
+        ),
+      );
+
+      container.invalidate(videoSummarySessionHistoryProvider);
+      await _waitForLoad(20);
+
+      final state = container.read(videoSummarySessionHistoryProvider);
+      expect(state.sessions.length, 1,
+          reason: 'Only session-current should remain after KB cascade-deleted all tasks');
+      expect(state.sessions.first.id, 'session-current');
+      expect(state.isLoadingHistory, false);
+    });
+
+    test('_isLoadingAll guard prevents concurrent _loadFromBackend calls', () async {
+      await _waitForLoad(20);
+
+      // Reset the mock counter by setting up a new stub that tracks calls
+      var callCount = 0;
+      when(() => mockTaskService.listTasks(
+        params: any(named: 'params'),
+      )).thenAnswer((_) async {
+        callCount++;
+        // Small delay to simulate network latency and create a window for
+        // concurrent calls to slip through without the guard
+        await Future.delayed(const Duration(milliseconds: 50));
+        return ApiListResponse(
+          status: 'success',
+          data: <VideoSummaryTaskResponseData>[],
+          meta: MetaInfo(requestId: 'req-guard', timestamp: '2026-06-06T12:00:00Z'),
+          pagination: const PaginationInfo(page: 1, pageSize: 50, total: 0, hasNext: false),
+        );
+      });
+
+      final historyNotifier = container.read(videoSummarySessionHistoryProvider.notifier);
+
+      // Fire two rapid retryLoadHistory calls — only one should reach the backend
+      historyNotifier.retryLoadHistory();
+      historyNotifier.retryLoadHistory();
+
+      await _waitForLoad(20);
+
+      expect(callCount, 1,
+          reason: '_isLoadingAll guard should prevent duplicate concurrent API calls');
+    });
+  });
+}

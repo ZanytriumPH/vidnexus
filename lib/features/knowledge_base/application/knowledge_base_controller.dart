@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/api/error_messages.dart';
 import '../../../services/service_providers.dart';
 import '../../auth/auth_controller.dart';
+import '../../home/application/video_summary_session_history_controller.dart';
 import '../http_knowledge_base_repository.dart';
 import '../knowledge_base_models.dart';
 import '../knowledge_base_repository.dart';
@@ -119,6 +120,8 @@ class LibraryListController extends Notifier<LibraryListState> {
       state = state.copyWith(
         libraries: state.libraries.where((l) => l.id != kbid).toList(),
       );
+      // KB 删除后端会级联删除关联任务，invalidate 侧边栏使其重新加载
+      ref.invalidate(videoSummarySessionHistoryProvider);
     } catch (e) {
       state = state.copyWith(errorMessage: UserFriendlyError.fromException(e));
     }
@@ -175,6 +178,8 @@ class LibraryListController extends Notifier<LibraryListState> {
       isSelectionMode: false,
       selectedIds: {},
     );
+    // 批量删除后级联删除关联任务，invalidate 侧边栏使其重新加载
+    ref.invalidate(videoSummarySessionHistoryProvider);
   }
 }
 
