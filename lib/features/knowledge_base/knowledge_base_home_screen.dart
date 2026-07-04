@@ -110,6 +110,9 @@ class _KnowledgeBaseHomeScreenState
                         isSelectionMode: isSelectionMode,
                         selectedIds: selectedIds,
                         onTap: controller.toggleSelect,
+                        onDeleteLibrary: (kbid) => controller.deleteLibrary(kbid),
+                        onRenameLibrary: (kbid, newName) =>
+                            controller.renameLibrary(kbid, newName),
                       ),
                     if (state.errorMessage != null)
                       Padding(
@@ -136,7 +139,7 @@ class _KnowledgeBaseHomeScreenState
                       backgroundColor: Colors.white,
                       title: const Text('删除知识库'),
                       content: Text(
-                          '确定要删除选中的 $count 个知识库吗？\n此操作不可撤销。'),
+                          '确定要删除选中的 $count 个知识库吗？\n此操作将级联删除已上传视频与历史会话，且不可撤销。'),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(ctx, false),
@@ -368,12 +371,16 @@ class _KnowledgeLibraryGrid extends StatelessWidget {
     required this.isSelectionMode,
     required this.selectedIds,
     required this.onTap,
+    required this.onDeleteLibrary,
+    required this.onRenameLibrary,
   });
 
   final List<KnowledgeBaseLibrary> libraries;
   final bool isSelectionMode;
   final Set<String> selectedIds;
   final ValueChanged<String> onTap;
+  final ValueChanged<String> onDeleteLibrary;
+  final void Function(String kbid, String newName) onRenameLibrary;
 
   @override
   Widget build(BuildContext context) {
@@ -393,6 +400,8 @@ class _KnowledgeLibraryGrid extends StatelessWidget {
                     isSelectionMode: isSelectionMode,
                     isSelected: selectedIds.contains(item.id),
                     onTap: () => onTap(item.id),
+                    onDelete: () => onDeleteLibrary(item.id),
+                    onRename: (newName) => onRenameLibrary(item.id, newName),
                   ),
                 ),
               )
@@ -403,100 +412,208 @@ class _KnowledgeLibraryGrid extends StatelessWidget {
   }
 }
 
-class _KnowledgeLibraryCard extends StatelessWidget {
+class _KnowledgeLibraryCard extends StatefulWidget {
   const _KnowledgeLibraryCard({
     required this.item,
     required this.isSelectionMode,
     required this.isSelected,
     required this.onTap,
+    required this.onDelete,
+    required this.onRename,
   });
 
   final KnowledgeBaseLibrary item;
   final bool isSelectionMode;
   final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
+  final ValueChanged<String> onRename;
+
+  @override
+  State<_KnowledgeLibraryCard> createState() => _KnowledgeLibraryCardState();
+}
+
+class _KnowledgeLibraryCardState extends State<_KnowledgeLibraryCard> {
+  void _showRenameDialog() {
+    final nameController = TextEditingController(text: widget.item.title);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('重命名知识库'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(hintText: '输入新名称'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isNotEmpty) {
+                widget.onRename(name);
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteConfirmDialog() {
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('删除知识库'),
+        content: Text('确定要删除「${widget.item.title}」吗？此操作将级联删除已上传视频与历史会话，且不可撤销。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              widget.onDelete();
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('删除', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final hasLatestQuestion = item.latestQuestion != null &&
-        item.latestQuestion!.isNotEmpty;
+    final hasLatestQuestion = widget.item.latestQuestion != null &&
+        widget.item.latestQuestion!.isNotEmpty;
 
     return InkWell(
-      onTap: isSelectionMode
-          ? onTap
-          : () => AppNavigator.openKnowledgeBaseSession(context, kbid: item.id),
+      onTap: widget.isSelectionMode
+          ? widget.onTap
+          : () => AppNavigator.openKnowledgeBaseSession(context, kbid: widget.item.id),
       borderRadius: BorderRadius.circular(20),
       child: AppCard(
         radius: 20,
         padding: const EdgeInsets.all(16),
         backgroundColor: Colors.white,
-        borderColor: isSelected ? AppColors.primary : AppColors.borderStrong,
+        borderColor: widget.isSelected ? AppColors.primary : AppColors.borderStrong,
         child: SizedBox(
           height: 130,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
             children: [
-              Row(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      item.title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
+                  // 标题行
+                  Text(
+                    widget.item.title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    '${widget.item.sourceCount} 份资料',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (hasLatestQuestion) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      '最近提问 "${widget.item.latestQuestion}"',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                        height: 1.35,
                       ),
-                      maxLines: 1,
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  if (isSelectionMode)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 6),
-                      child: Icon(
-                        isSelected
-                            ? Icons.check_circle
-                            : Icons.radio_button_unchecked,
-                        color: isSelected ? AppColors.primary : AppColors.textHint,
-                        size: 20,
-                      ),
+                  ],
+                  const Spacer(),
+                  Text(
+                    widget.item.meta,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 11,
+                      color: AppColors.textHint,
+                      fontWeight: FontWeight.w500,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
-              const SizedBox(height: 5),
-              Text(
-                '${item.sourceCount} 份资料',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              if (hasLatestQuestion) ...[
-                const SizedBox(height: 3),
-                Text(
-                  '最近提问 "${item.latestQuestion}"',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
-                    height: 1.35,
-                  ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-              const Spacer(),
-              Text(
-                item.meta,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 11,
-                  color: AppColors.textHint,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              // 右上角三点 / 选择框
+              Positioned(
+                top: -16,
+                right: -20,
+                child: widget.isSelectionMode
+                    ? Icon(
+                        widget.isSelected
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
+                        color: widget.isSelected
+                            ? AppColors.primary
+                            : AppColors.textHint,
+                        size: 20,
+                      )
+                    : PopupMenuButton<String>(
+                        padding: EdgeInsets.zero,
+                        iconSize: 18,
+                        icon: Icon(
+                          Icons.more_vert,
+                          color: AppColors.textHint.withValues(alpha: 0.6),
+                        ),
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        onSelected: (value) {
+                          if (value == 'rename') {
+                            _showRenameDialog();
+                          } else if (value == 'delete') {
+                            _showDeleteConfirmDialog();
+                          }
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                            value: 'rename',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, size: 18, color: AppColors.textPrimary),
+                                SizedBox(width: 10),
+                                Text('重命名', style: TextStyle(fontSize: 14)),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                SizedBox(width: 10),
+                                Text('删除', style: TextStyle(fontSize: 14, color: Colors.red)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ],
           ),

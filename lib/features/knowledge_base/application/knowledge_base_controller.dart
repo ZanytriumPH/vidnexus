@@ -114,6 +114,20 @@ class LibraryListController extends Notifier<LibraryListState> {
     }
   }
 
+  /// 重命名知识库。
+  Future<void> renameLibrary(String kbid, String newName) async {
+    try {
+      final updated = await _repo.updateLibrary(kbid, name: newName);
+      state = state.copyWith(
+        libraries: state.libraries
+            .map((l) => l.id == kbid ? updated : l)
+            .toList(),
+      );
+    } catch (e) {
+      state = state.copyWith(errorMessage: UserFriendlyError.fromException(e));
+    }
+  }
+
   void clearError() {
     state = state.copyWith(clearError: true);
   }
