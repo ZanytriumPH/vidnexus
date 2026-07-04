@@ -293,14 +293,14 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     state = state.copyWith(clearError: true);
   }
 
-  /// 用户手动刷新处理进度状态。
-  /// 根据当前阶段查询后端任务状态，重新同步前端展示。
+  /// 用户手动刷新处理进度状态 — 仅重连 WS，不重置模拟进度。
   void refreshProcessingStatus() {
     final taskId = state.taskId;
     if (taskId == null || taskId.isEmpty) return;
 
     if (state.stage == VideoSummaryStage.processing) {
-      _recoverProcessingFromBackend(taskId);
+      final owningSessionKey = _activeSessionKey;
+      _resumeDraftGeneration(taskId, owningSessionKey, skipSimulated: true);
     } else if (state.stage == VideoSummaryStage.draft) {
       _recoverDraftFromBackend(taskId);
     }
@@ -1529,12 +1529,14 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
   /// 重新订阅 WS 实时进度流（用于切回 processing 阶段会话时恢复监听）。
   /// 同时启动并行轮询，作为 WS 静默失效的兜底。
+  /// [skipSimulated] 为 true 时跳过模拟进度阶段（用于手动刷新）。
   Future<void> _resumeDraftGeneration(
     String taskId,
-    Object owningSessionKey,
-  ) async {
+    Object owningSessionKey, {
+    bool skipSimulated = false,
+  }) async {
     if (kDebugMode) {
-      debugPrint('[FlowCtrl] 开始恢复 WS 监听 — taskId=$taskId');
+      debugPrint('[FlowCtrl] 开始恢复 WS 监听 — taskId=$taskId skipSim=$skipSimulated');
     }
 
     // 确保 taskId 已同步到 state，否则后续 captureSnapshot() 拿不到
@@ -1543,40 +1545,43 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     }
 
     // 生成随机模拟目标（15-25%）并启动模拟进度定时器（10秒匀速前进）
+    // 刷新时跳过模拟阶段
     final simulatedTarget = 15 + Random().nextInt(11); // 15~25
     const simDurationMs = 10000; // 10 秒
     const simTickMs = 500;       // 每 500ms 前进一格
     final simTicks = simDurationMs ~/ simTickMs; // 共 20 步
     final simStepPercent = simulatedTarget / simTicks; // 每步增量
     int simTickCount = 0;
-    bool firstRealEventReceived = false;
+    bool firstRealEventReceived = skipSimulated;
     _cancelSimProgressTimer();
-    _simProgressTimer = Timer.periodic(
-      const Duration(milliseconds: simTickMs),
-      (_) {
-        if (firstRealEventReceived) {
-          _cancelSimProgressTimer();
-          return;
-        }
-        simTickCount++;
-        final current = state.processingSnapshot;
-        if (current != null) {
-          final nextProgress = (simulatedTarget * simTickCount / simTicks) / 100.0;
-          state = state.copyWith(
-            processingSnapshot: ProcessingSnapshot(
-              progress: nextProgress.clamp(0.0, 1.0),
-              statusLabel: current.statusLabel,
-              etaLabel: '正在准备处理资源…',
-              chunkProgress: current.chunkProgress,
-              statusLog: current.statusLog,
-            ),
-          );
-          if (simTickCount >= simTicks) {
+    if (!skipSimulated) {
+      _simProgressTimer = Timer.periodic(
+        const Duration(milliseconds: simTickMs),
+        (_) {
+          if (firstRealEventReceived) {
             _cancelSimProgressTimer();
+            return;
           }
-        }
-      },
-    );
+          simTickCount++;
+          final current = state.processingSnapshot;
+          if (current != null) {
+            final nextProgress = (simulatedTarget * simTickCount / simTicks) / 100.0;
+            state = state.copyWith(
+              processingSnapshot: ProcessingSnapshot(
+                progress: nextProgress.clamp(0.0, 1.0),
+                statusLabel: current.statusLabel,
+                etaLabel: '正在准备处理资源…',
+                chunkProgress: current.chunkProgress,
+                statusLog: current.statusLog,
+              ),
+            );
+            if (simTickCount >= simTicks) {
+              _cancelSimProgressTimer();
+            }
+          }
+        },
+      );
+    }
 
     // 立即启动并行轮询，作为 WS 静默失效的兜底（10s 间隔）
     _startProcessingPoll(taskId, owningSessionKey, intervalSeconds: 10);
