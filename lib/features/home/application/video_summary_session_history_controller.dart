@@ -368,30 +368,8 @@ class VideoSummarySessionHistoryController
   }
 
   void activateSession(String sessionId) {
-    if (state.activeSessionId == sessionId) {
-      // 即使已是活跃会话，仍移动到顶部（用户可能从视频详情页重复点击同一任务）
-      _moveSessionToTop(sessionId);
-      return;
-    }
-    _moveSessionToTop(sessionId);
+    if (state.activeSessionId == sessionId) return;
     state = state.copyWith(activeSessionId: sessionId);
-  }
-
-  /// 将指定会话移动到列表顶部（紧接 session-current 之后），实现"最近点击置顶"。
-  void _moveSessionToTop(String sessionId) {
-    final index = state.sessions.indexWhere((s) => s.id == sessionId);
-    if (index <= 1) return; // 已在顶部（index 0 = session-current，index 1 = 已是第一个）
-    final entry = state.sessions[index];
-    final current = state.sessions.firstWhere(
-      (s) => s.id == 'session-current',
-      orElse: () => state.sessions.first,
-    );
-    final others = state.sessions
-        .where((s) => s.id != sessionId && s.id != 'session-current')
-        .toList();
-    state = state.copyWith(
-      sessions: [current, entry, ...others],
-    );
   }
 
   void syncActiveSession(VideoSummarySessionSnapshot snapshot) {

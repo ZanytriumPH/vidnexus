@@ -9,15 +9,18 @@ import 'package:vidnexus/features/home/video_summary_repository.dart';
 import 'package:vidnexus/features/home/video_summary_models.dart';
 import 'package:vidnexus/services/task_service.dart';
 import 'package:vidnexus/services/video_qa_service.dart';
+import 'package:vidnexus/services/video_service.dart';
 import 'package:vidnexus/services/websocket/ws_client.dart';
 import 'package:vidnexus/services/websocket/ws_provider.dart';
 import 'package:vidnexus/services/service_providers.dart';
 import 'package:vidnexus/services/models/common_dto.dart';
+import 'package:vidnexus/services/models/video_resource_dto.dart';
 import 'package:vidnexus/services/models/video_summary_task_dto.dart';
 
 class MockTaskService extends Mock implements TaskService {}
 class MockVideoQAService extends Mock implements VideoQAService {}
 class MockWsClient extends Mock implements WsClient {}
+class MockVideoService extends Mock implements VideoService {}
 
 class FakePageParams extends Fake implements PageParams {}
 
@@ -36,6 +39,20 @@ void main() {
       mockTaskService = MockTaskService();
       mockVideoQAService = MockVideoQAService();
       mockWsClient = MockWsClient();
+      final mockVideoService = MockVideoService();
+
+      // Stub getVideo for any videoId to avoid real HTTP calls in _loadFromBackend.
+      when(() => mockVideoService.getVideo(any())).thenAnswer(
+        (_) async => ApiResponse(
+          status: 'success',
+          data: VideoResourceResponseData(
+            videoId: 'vid_persistent_1',
+            ownerId: 'owner-1',
+            fileName: 'test_video.mp4',
+            duration: 120,
+          ),
+        ),
+      );
 
       // Stub default KB responses and task status
       when(() => mockTaskService.listTasks(
@@ -82,6 +99,7 @@ void main() {
           taskServiceProvider.overrideWithValue(mockTaskService),
           videoQAServiceProvider.overrideWithValue(mockVideoQAService),
           wsClientProvider.overrideWithValue(mockWsClient),
+          videoServiceProvider.overrideWithValue(mockVideoService),
           defaultKbidProvider.overrideWith((ref) => 'kb_default'),
         ],
       );
