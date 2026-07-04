@@ -156,7 +156,7 @@ class VideoSummaryHistoryDrawer extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '从本地上传视频',
+                        '回到首页上传视频',
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
                               fontSize: 13,
