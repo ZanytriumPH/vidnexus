@@ -255,9 +255,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return;
       }
 
-      flowCtrl.restoreSnapshot(snapshot);
-      debugPrint('[HomeScreen] restoreSnapshot completed');
-
+      // 必须先将任务注册到 session history，再恢复 flow snapshot。
+      // 否则 restoreSnapshot 触发的 rebuild 中，交叉校验守卫会因
+      // taskId 尚未出现在 sessions 列表中而误判为"任务已被删除"。
       final historyCtrl = ref.read(videoSummarySessionHistoryProvider.notifier);
       historyCtrl.addOrActivateTaskSession(
         taskId: taskId,
@@ -268,6 +268,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           draftBodyText: draftSummary ?? '',
         ),
       );
+
+      flowCtrl.restoreSnapshot(snapshot);
+      debugPrint('[HomeScreen] restoreSnapshot completed');
     } catch (e) {
       debugPrint('[HomeScreen] _restoreVideoSession failed: $e');
       // 查找失败则停留在首页默认状态

@@ -593,13 +593,14 @@ class VideoSummarySessionHistoryController
     );
   }
 
-  /// 按 videoId 去重：同一视频出现多条记录时，仅保留数据最完整的那条。
+  /// 按 videoId 去重：同一视频出现多条记录时的合并策略。
   /// 作为 state setter 的透明过滤器，所有写入自动经过此函数。
   ///
-  /// 完整性排序（逐级比较）：
-  /// 1. 有 taskId 优于无 taskId
-  /// 2. isUploading == false 优于 true
-  /// 3. durationLabel 非占位值优于 "0m 00s"
+  /// 规则：
+  /// - 不同 taskId 的正式条目全部保留（同一视频支持多个任务）
+  /// - 同一 taskId 重复时保留数据更完整的那条
+  /// - 纯 temp 条目（无 taskId）在有正式条目时被清理，
+  ///   多个 temp 条目之间仅保留最完整的那条
   static VideoSummarySessionHistoryState _deduplicate(
     VideoSummarySessionHistoryState s,
   ) {
@@ -618,26 +619,66 @@ class VideoSummarySessionHistoryController
     for (final entry in groups.entries) {
       if (entry.value.length <= 1) continue;
 
-      final sorted = List<int>.from(entry.value)
-        ..sort((a, b) {
-          final sa = sessions[a].snapshot.flowSnapshot;
-          final sb = sessions[b].snapshot.flowSnapshot;
-          final aHasTask = sa.taskId != null && sa.taskId!.isNotEmpty;
-          final bHasTask = sb.taskId != null && sb.taskId!.isNotEmpty;
-          if (aHasTask != bHasTask) return aHasTask ? -1 : 1;
-          if (sa.isUploading != sb.isUploading) return sa.isUploading ? 1 : -1;
-          final aHasDuration = sessions[a].durationLabel != '0m 00s';
-          final bHasDuration = sessions[b].durationLabel != '0m 00s';
-          if (aHasDuration != bHasDuration) return aHasDuration ? -1 : 1;
-          return a.compareTo(b);
-        });
+      // 拆分为有 taskId 和无 taskId 两组
+      final taskIndices = <int>[];
+      final tempIndices = <int>[];
+      for (final i in entry.value) {
+        final taskId = sessions[i].snapshot.flowSnapshot.taskId;
+        if (taskId != null && taskId.isNotEmpty) {
+          taskIndices.add(i);
+        } else {
+          tempIndices.add(i);
+        }
+      }
 
-      for (int i = 1; i < sorted.length; i++) {
-        toRemoveIndices.add(sorted[i]);
-        debugPrint(
-          '[SessionHistory] 去重移除 — ${sessions[sorted[i]].id}'
-          ' (videoId=${entry.key})',
-        );
+      // 不同 taskId 的正式条目全部保留，只对相同 taskId 去重
+      final seenTaskIds = <String>{};
+      for (final i in taskIndices) {
+        final taskId = sessions[i].snapshot.flowSnapshot.taskId!;
+        if (seenTaskIds.contains(taskId)) {
+          // 同一 taskId 重复 → 保留质量更好的，移除另一个
+          toRemoveIndices.add(i);
+          debugPrint(
+            '[SessionHistory] 去重移除（重复taskId）— ${sessions[i].id}'
+            ' taskId=$taskId videoId=${entry.key}',
+          );
+        } else {
+          seenTaskIds.add(taskId);
+        }
+      }
+
+      // 纯 temp 条目：如果存在正式条目则清理全部 temp；
+      // 如果仅有多个 temp 则保留最完整的那条
+      if (taskIndices.isNotEmpty) {
+        // 存在正式条目 → 清理全部 temp
+        for (final i in tempIndices) {
+          toRemoveIndices.add(i);
+          debugPrint(
+            '[SessionHistory] 去重移除（temp被正式条目替代）— ${sessions[i].id}'
+            ' videoId=${entry.key}',
+          );
+        }
+      } else if (tempIndices.length > 1) {
+        // 仅有多个 temp → 保留最完整的那条
+        final sorted = List<int>.from(tempIndices)
+          ..sort((a, b) {
+            final sa = sessions[a].snapshot.flowSnapshot;
+            final sb = sessions[b].snapshot.flowSnapshot;
+            if (sa.isUploading != sb.isUploading) {
+              return sa.isUploading ? 1 : -1;
+            }
+            final aHasDuration = sessions[a].durationLabel != '0m 00s';
+            final bHasDuration = sessions[b].durationLabel != '0m 00s';
+            if (aHasDuration != bHasDuration) return aHasDuration ? -1 : 1;
+            return a.compareTo(b);
+          });
+        for (int i = 1; i < sorted.length; i++) {
+          toRemoveIndices.add(sorted[i]);
+          debugPrint(
+            '[SessionHistory] 去重移除（多temp保留一个）— ${sessions[sorted[i]].id}'
+            ' videoId=${entry.key}',
+          );
+        }
       }
     }
 
