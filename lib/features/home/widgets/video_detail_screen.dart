@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/routing/app_router.dart';
 import '../../../services/api/api_client.dart';
+import '../../../services/api/error_messages.dart';
 import '../../../services/models/common_dto.dart';
 import '../../../services/models/video_resource_dto.dart';
 import '../../../services/models/video_summary_task_dto.dart';
@@ -77,7 +78,7 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _error = e.toString();
+        _error = UserFriendlyError.fromException(e);
       });
     }
   }
@@ -167,7 +168,7 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('删除失败：$e'),
+          content: Text('删除失败：${UserFriendlyError.fromException(e)}'),
           backgroundColor: Colors.red,
         ),
       );
@@ -431,7 +432,7 @@ class _VideoDetailScreenState extends ConsumerState<VideoDetailScreen> {
       if (!mounted) return;
       Navigator.of(context).pop(); // dismiss loading
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('获取视频播放地址失败: $e')),
+        SnackBar(content: Text('获取视频播放地址失败：${UserFriendlyError.fromException(e)}')),
       );
     }
   }
@@ -828,7 +829,7 @@ class _CreateTaskBottomSheetState
       );
       final taskId = createResp.data?.taskId;
       if (taskId == null || taskId.isEmpty) {
-        throw Exception('任务创建失败：未返回 taskId');
+        throw Exception('任务创建失败，请稍后重试');
       }
 
       // 2. 触发分析
@@ -881,7 +882,7 @@ class _CreateTaskBottomSheetState
       if (!mounted) return;
       setState(() => _isCreating = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('任务创建失败：$e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('任务创建失败：${UserFriendlyError.fromException(e)}'), backgroundColor: Colors.red),
       );
     }
   }

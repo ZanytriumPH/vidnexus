@@ -78,6 +78,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   String? get activeTaskId => _taskId;
 
   /// 当前任务关联的知识库名称（从 API 响应捕获）。
+  @override
   String? get kbName => _kbName;
 
   // ---- VideoSummaryRepository 实现 ----
@@ -147,7 +148,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     );
     final dto = resp.data;
     if (dto == null) {
-      throw StateError('cloneTaskToKb returned null data');
+      throw StateError('任务克隆失败，请稍后重试');
     }
     _kbName = dto.kbName;
     return VideoSummaryTaskInfo(
@@ -213,7 +214,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     firstEventTimeout = Timer(const Duration(seconds: 15), () {
       if (!controller.isClosed) {
         debugPrint('[HttpRepo] resumeTaskProgress — 首事件超时（15s）taskId=$taskId');
-        controller.addError(TimeoutException('恢复进度监听超时，taskId=$taskId'));
+        controller.addError(TimeoutException('恢复进度监听超时，请检查网络后重试'));
         controller.close();
       }
     });
@@ -422,7 +423,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       debugPrint(
         '[HttpRepo] WebSocket 连接失败（${e.toString().split('\n').first}），将无法接收实时进度',
       );
-      throw TaskFailedException('WebSocket 未连接，无法启动任务');
+      throw TaskFailedException('实时连接失败，请检查网络后重试');
     }
 
     // 1. 创建任务（传入用户总结偏好）
@@ -448,7 +449,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     }
     final data = createResp.data;
     if (data == null) {
-      throw StateError('Task creation returned null data');
+      throw StateError('任务创建失败，请稍后重试');
     }
     _taskId = data.taskId;
     _kbName = data.kbName;
@@ -510,7 +511,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       if (!controller.isClosed) {
         debugPrint('[HttpRepo] WebSocket 首事件超时（120s 内未收到任何进度消息）');
         controller.addError(
-          TimeoutException('任务启动超时，未收到后端进度反馈，taskId=$taskId'),
+          TimeoutException('任务启动超时，请稍后重试'),
         );
         controller.close();
       }
@@ -670,13 +671,13 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   Future<VideoSummaryDraftData> fetchDraftResult() async {
     final taskId = _taskId;
     if (taskId == null) {
-      throw StateError('No active task — call startDraftGeneration() first');
+      throw StateError('暂无进行中的任务，请先生成初稿');
     }
 
     final resp = await _taskService.getTask(taskId);
     final dto = resp.data;
     if (dto == null) {
-      throw StateError('Task $taskId not found');
+      throw StateError('任务不存在或已被删除');
     }
 
     final draftText = dto.draftSummary ?? '';
@@ -698,7 +699,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   }) async {
     final taskId = _taskId;
     if (taskId == null) {
-      throw StateError('No active task — call startDraftGeneration() first');
+      throw StateError('暂无进行中的任务，请先生成初稿');
     }
 
     // 1. 提交用户指引并触发 Phase-2 终稿生成（new.md 新增 approveAndFinalize）
@@ -752,7 +753,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
       if (!completer.isCompleted) {
         debugPrint('[HttpRepo] Phase-2 WS 超时（900s）— taskId=$taskId');
         completer.completeError(
-          TimeoutException('终稿生成超时（900s），taskId=$taskId'),
+          TimeoutException('终稿生成超时，请稍后重试'),
         );
       }
     });
@@ -768,7 +769,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     final resp = await _taskService.getTask(taskId);
     final dto = resp.data;
     if (dto == null) {
-      throw StateError('Task $taskId not found after final generation');
+      throw StateError('终稿生成失败，任务可能已被删除');
     }
 
     final finalText = dto.finalSummary ?? dto.draftSummary ?? '';
@@ -850,7 +851,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
           '[HttpRepo] resumeFinalGeneration — WS 超时（120s）taskId=$taskId',
         );
         completer.completeError(
-          TimeoutException('终稿生成超时（120s），taskId=$taskId'),
+          TimeoutException('终稿生成超时，请稍后重试'),
         );
       }
     });
@@ -866,7 +867,7 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
     final resp = await _taskService.getTask(taskId);
     final dto = resp.data;
     if (dto == null) {
-      throw StateError('Task $taskId not found after final generation');
+      throw StateError('终稿生成失败，任务可能已被删除');
     }
 
     final finalText = dto.finalSummary ?? dto.draftSummary ?? '';
@@ -883,12 +884,12 @@ class HttpVideoSummaryRepository extends VideoSummaryRepository {
   }) {
     final taskId = _taskId;
     if (taskId == null) {
-      throw StateError('No active task — call startDraftGeneration() first');
+      throw StateError('暂无进行中的任务，请先生成初稿');
     }
     final qaSvc = _videoQAService;
     if (qaSvc == null) {
       throw UnimplementedError(
-        'VideoQAService not injected — add videoQAService to provider',
+        '视频问答服务未就绪，请稍后重试',
       );
     }
 

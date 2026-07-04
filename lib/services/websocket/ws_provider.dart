@@ -47,7 +47,7 @@ final wsEventProvider = StreamProvider<WSEventEnvelope?>((ref) {
 final wsReadyProvider = FutureProvider<void>((ref) async {
   final authState = ref.watch(authControllerProvider);
   if (!authState.isLoggedIn) {
-    throw StateError('用户未登录，无法建立 WebSocket 连接');
+    throw StateError('请先登录后再进行操作');
   }
 
   // 触发 wsEventProvider 保持活跃（从而建立连接）

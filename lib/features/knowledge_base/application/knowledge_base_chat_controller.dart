@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../services/api/error_messages.dart';
+
 import '../../../services/global_qa_service.dart';
 import '../../../services/models/global_chat_dto.dart';
 import '../../../services/models/video_qa_dto.dart' show AttachmentInfo;
@@ -317,7 +319,7 @@ class KnowledgeBaseChatController extends ChangeNotifier {
         final lastMsg = currentMessages.last;
         currentMessages[currentMessages.length - 1] = KnowledgeChatMessage(
           sender: lastMsg.sender,
-          text: '抱歉，回答生成失败：$e',
+          text: '抱歉，回答生成失败：${UserFriendlyError.fromException(e)}',
         );
         _emit(_state.copyWith(
           messages: currentMessages,

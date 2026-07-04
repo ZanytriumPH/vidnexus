@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/routing/app_router.dart';
 import '../../../app/theme/app_colors.dart';
+import '../../../services/api/error_messages.dart';
 import '../../../services/models/common_dto.dart';
 import '../../../services/models/video_resource_dto.dart';
 import '../../../services/video_service.dart';
@@ -61,7 +62,7 @@ class _ReadyStageWorkspaceState extends State<ReadyStageWorkspace> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _error = e.toString();
+        _error = UserFriendlyError.fromException(e);
       });
     }
   }

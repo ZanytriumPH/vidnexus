@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../services/api/error_messages.dart';
 import '../../../services/service_providers.dart';
 import '../http_knowledge_base_repository.dart';
 import '../knowledge_base_models.dart';
@@ -74,7 +75,7 @@ class LibraryListController extends Notifier<LibraryListState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: e.toString(),
+        errorMessage: UserFriendlyError.fromException(e),
       );
     }
   }
@@ -97,7 +98,7 @@ class LibraryListController extends Notifier<LibraryListState> {
       );
       return library;
     } catch (e) {
-      state = state.copyWith(errorMessage: e.toString());
+      state = state.copyWith(errorMessage: UserFriendlyError.fromException(e));
       return null;
     }
   }
@@ -109,7 +110,7 @@ class LibraryListController extends Notifier<LibraryListState> {
         libraries: state.libraries.where((l) => l.id != kbid).toList(),
       );
     } catch (e) {
-      state = state.copyWith(errorMessage: e.toString());
+      state = state.copyWith(errorMessage: UserFriendlyError.fromException(e));
     }
   }
 
@@ -208,7 +209,7 @@ class SelectedLibraryController extends Notifier<SelectedLibraryState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: e.toString(),
+        errorMessage: UserFriendlyError.fromException(e),
       );
     }
   }

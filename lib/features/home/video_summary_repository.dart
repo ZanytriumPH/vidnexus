@@ -29,7 +29,7 @@ final defaultKbidProvider = FutureProvider<String>((ref) async {
   // 没有知识库则自动创建默认知识库
   final createResp = await kbService.createKB(name: '默认知识库');
   if (createResp.data == null) {
-    throw Exception('Failed to create default knowledge base');
+    throw Exception('创建默认知识库失败，请稍后重试');
   }
   return createResp.data!.kbid;
 });

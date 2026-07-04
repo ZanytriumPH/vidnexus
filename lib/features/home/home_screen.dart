@@ -6,6 +6,7 @@ import '../../app/routing/app_router.dart';
 import '../../app/routing/app_route_arguments.dart';
 import '../../app/widgets/app_bottom_nav.dart';
 import '../../services/api/api_client.dart';
+import '../../services/api/error_messages.dart';
 import '../../services/models/common_dto.dart';
 import '../../services/models/video_summary_task_dto.dart';
 import '../../services/models/video_qa_dto.dart' show AttachmentInfo;
@@ -174,7 +175,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       };
 
       final draftParagraphs = draftSummary != null
-          ? draftSummary!
+          ? draftSummary
                 .split(RegExp(r'\n\s*\n'))
                 .map((p) => p.trim())
                 .where((p) => p.isNotEmpty)
@@ -689,7 +690,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       Navigator.of(context).pop(); // 关闭 loading
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('获取视频播放地址失败: $e')));
+      ).showSnackBar(SnackBar(content: Text('获取视频播放地址失败：${UserFriendlyError.fromException(e)}')));
     }
   }
 

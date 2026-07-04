@@ -43,7 +43,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     }).catchError((Object e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = '视频加载失败，请检查网络后重试';
       });
     });
   }
@@ -327,7 +327,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                 }).catchError((Object e) {
                   if (!mounted) return;
                   setState(() {
-                    _error = e.toString();
+                    _error = '视频加载失败，请检查网络后重试';
                   });
                 });
               },

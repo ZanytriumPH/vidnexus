@@ -196,7 +196,10 @@ class TaskFailedException implements Exception {
   final String taskId;
 
   @override
-  String toString() => 'Task $taskId failed on server';
+  String toString() => '任务处理失败，请稍后重试';
+
+  /// The raw task ID for programmatic use.
+  String get rawTaskId => taskId;
 }
 
 /// 创建 Task 时 (KB, video) 重复导致的 409 冲突异常。
@@ -213,5 +216,5 @@ class TaskConflictException implements Exception {
 
   @override
   String toString() =>
-      'TaskConflictException(existingTaskId: $existingTaskId, kbid: $kbid)';
+      '该视频已存在分析任务，是否覆盖并重新生成？';
 }

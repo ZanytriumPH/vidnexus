@@ -73,7 +73,7 @@ class WsClient {
     if (_connectedCompleter != null && !_connectedCompleter!.isCompleted) {
       return _connectedCompleter!.future.timeout(
         timeout,
-        onTimeout: () => throw TimeoutException('WebSocket 连接超时（${timeout.inSeconds}s）'),
+        onTimeout: () => throw TimeoutException('实时连接超时，请检查网络后重试'),
       );
     }
 
@@ -84,7 +84,7 @@ class WsClient {
       timeout,
       onTimeout: () {
         _connectedCompleter = null;
-        throw TimeoutException('WebSocket 连接超时（${timeout.inSeconds}s）');
+        throw TimeoutException('实时连接超时，请检查网络后重试');
       },
     );
   }

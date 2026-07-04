@@ -12,7 +12,7 @@ class QAPollingTimeoutException implements Exception {
   final Duration elapsed;
 
   @override
-  String toString() => 'QA polling timeout for $qaId after ${elapsed.inSeconds}s';
+  String toString() => '回答生成超时，请稍后重试';
 }
 
 /// 将 VideoQAService 的 QA 轮询转化为 [VideoSummaryChatReplyData]。

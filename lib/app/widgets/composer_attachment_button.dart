@@ -121,7 +121,7 @@ class _ComposerAttachmentButtonState extends State<ComposerAttachmentButton> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('选取图片失败：$e')),
+          SnackBar(content: Text('选取图片失败，请重试')),
         );
       }
     } finally {

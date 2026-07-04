@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../services/api/api_client.dart';
 import '../../services/api/auth_interceptor.dart';
+import '../../services/api/error_messages.dart';
 import '../../services/models/auth_dto.dart';
 import '../../services/models/common_dto.dart';
 import '../../services/service_providers.dart';
@@ -57,7 +58,7 @@ class AuthController extends Notifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: e.toString(),
+        errorMessage: UserFriendlyError.fromException(e),
       );
     }
   }
@@ -89,7 +90,7 @@ class AuthController extends Notifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: e.toString(),
+        errorMessage: UserFriendlyError.fromException(e),
       );
     }
   }
@@ -214,7 +215,7 @@ class AuthController extends Notifier<AuthState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: e.toString(),
+        errorMessage: UserFriendlyError.fromException(e),
       );
     }
   }

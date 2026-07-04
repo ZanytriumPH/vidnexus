@@ -10,6 +10,7 @@ import '../../../app/widgets/app_buttons.dart';
 import '../../../app/widgets/app_typing_indicator.dart';
 import '../../../app/widgets/composer_attachment_button.dart';
 import '../../../services/api/api_client.dart';
+import '../../../services/api/error_messages.dart';
 import '../../../services/attachment_service.dart';
 import '../../../services/models/common_dto.dart';
 import '../../../services/models/video_summary_task_dto.dart';
@@ -508,7 +509,7 @@ class _ChatComposerState extends State<ChatComposer> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('图片上传失败：$e')),
+          SnackBar(content: Text('图片上传失败：${UserFriendlyError.fromException(e)}')),
         );
       }
     } finally {
@@ -950,7 +951,7 @@ class _AddToKnowledgeBaseSheetState
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('操作失败：${e.message}'),
+              content: Text('操作失败：${ApiError.fromDioException(e).userMessage}'),
               backgroundColor: Colors.red,
             ),
           );
@@ -962,7 +963,7 @@ class _AddToKnowledgeBaseSheetState
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('添加失败：$e'),
+            content: Text('添加失败：${UserFriendlyError.fromException(e)}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1064,7 +1065,7 @@ class _AddToKnowledgeBaseSheetState
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('操作失败：$e')));
+      ).showSnackBar(SnackBar(content: Text('操作失败：${UserFriendlyError.fromException(e)}')));
     } finally {
       if (mounted) setState(() => _isCreating = false);
     }

@@ -7,6 +7,7 @@ import '../../../app/theme/app_theme.dart';
 import '../../../app/widgets/app_bottom_nav.dart';
 import '../../../app/widgets/app_buttons.dart';
 import '../../../app/widgets/composer_attachment_button.dart';
+import '../../../services/api/error_messages.dart';
 import '../../../services/attachment_service.dart';
 import '../../../services/api/api_client.dart';
 import '../../../services/models/video_qa_dto.dart' show AttachmentInfo;
@@ -154,7 +155,7 @@ class _KnowledgeBaseComposerState extends State<KnowledgeBaseComposer> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('图片上传失败：$e')),
+          SnackBar(content: Text('图片上传失败：${UserFriendlyError.fromException(e)}')),
         );
       }
     } finally {

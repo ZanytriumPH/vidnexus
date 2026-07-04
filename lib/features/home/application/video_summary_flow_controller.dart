@@ -344,7 +344,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
       final uploadId = initResp.uploadId;
       if (uploadId.isEmpty) {
-        throw Exception('Failed to initialize upload: empty upload_id');
+        throw Exception('上传初始化失败，请稍后重试');
       }
 
       debugPrint(
@@ -633,10 +633,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
             // async_finalize_upload 写入，是唯一的 canonical ID）。
             final resolvedId = data.videoId;
             if (resolvedId == null || resolvedId.isEmpty) {
-              throw Exception(
-                'async_finalize_upload completed but no video_id'
-                ' — uploadId=$uploadId',
-              );
+              throw Exception('文件处理失败，请稍后重试');
             }
             await _applyCeleryReadyState(
               videoId: resolvedId,
@@ -653,10 +650,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
             // 去重复用已有视频
             final resolvedId = data.videoId;
             if (resolvedId == null || resolvedId.isEmpty) {
-              throw Exception(
-                'async_finalize_upload dedup_reused but no video_id'
-                ' — uploadId=$uploadId',
-              );
+              throw Exception('文件处理失败，请稍后重试');
             }
             if (kDebugMode) {
               debugPrint(
@@ -679,9 +673,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
             throw Exception('文件格式不支持，请检查文件后重试');
 
           case 'failed':
-            throw Exception(
-              'async_finalize_upload failed — uploadId=$uploadId',
-            );
+            throw Exception('文件处理失败，请稍后重试');
 
           default:
             // 非终态（created / uploading / uploading_complete / finalizing）
@@ -694,10 +686,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
     }
 
     // 超时
-    throw Exception(
-      '文件处理超时，请稍后在视频列表中查看或重试'
-      ' — uploadId=$uploadId',
-    );
+    throw Exception('文件处理超时，请稍后在视频列表中查看或重试');
   }
 
   /// 将 Celery 就绪状态应用到当前 state 或后台临时会话。
@@ -1045,7 +1034,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       );
 
       // 异步等待期间可能发生会话切换
-      if (_activeSessionKey != owningSessionKey) return null;
+      if (_activeSessionKey != owningSessionKey) return;
 
       final summaryData = mapFinalResultDataToSummary(summary);
       // 进入 finalChat 时，会用总结中的首个时间片段给时间旅行功能提供默认范围。
@@ -1165,7 +1154,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       }
     } catch (e) {
       // 错误只展示给发起消息的会话
-      if (_activeSessionKey != owningSessionKey) return null;
+      if (_activeSessionKey != owningSessionKey) return;
       debugPrint('[FlowController] SSE QA failed: $e');
       final currentMessages = List<ChatMessage>.from(state.chatMessages);
       if (currentMessages.isNotEmpty) {
@@ -1489,7 +1478,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       }
 
       // 再次校验：恢复期间用户可能又切走了
-      if (_activeSessionKey != owningSessionKey) return null;
+      if (_activeSessionKey != owningSessionKey) return;
 
       if (kDebugMode) {
         debugPrint(
@@ -1510,7 +1499,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           break;
 
         case WorkflowState.failed:
-          if (_activeSessionKey != owningSessionKey) return null;
+          if (_activeSessionKey != owningSessionKey) return;
           state = state.copyWith(
             stage: VideoSummaryStage.ready,
             errorMessage: '视频处理失败，请重试',
@@ -1526,7 +1515,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           // Phase 1 已完成、Phase 2 正在进行。
           // 先取草稿跳转到 draft，再建立 Phase 2 的 WS 监听。
           await _transitionToDraftFromBackend(taskId, owningSessionKey);
-          if (_activeSessionKey != owningSessionKey) return null;
+          if (_activeSessionKey != owningSessionKey) return;
           _recoverDraftFromBackend(taskId);
           break;
       }
@@ -1565,7 +1554,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
           break;
 
         case WorkflowState.failed:
-          if (_activeSessionKey != owningSessionKey) return null;
+          if (_activeSessionKey != owningSessionKey) return;
           state = state.copyWith(errorMessage: '终稿生成失败，请重试');
           break;
 
@@ -1604,12 +1593,12 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
         case WorkflowState.finalGenerating:
           // 终稿生成仍在运行，恢复生成中状态并重新订阅 WS
-          if (_activeSessionKey != owningSessionKey) return null;
+          if (_activeSessionKey != owningSessionKey) return;
           _resumeFinalGeneration(taskId, owningSessionKey);
           break;
 
         case WorkflowState.failed:
-          if (_activeSessionKey != owningSessionKey) return null;
+          if (_activeSessionKey != owningSessionKey) return;
           state = state.copyWith(errorMessage: '终稿生成失败，请重试');
           break;
 
@@ -1617,7 +1606,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
         case WorkflowState.draftGenerating:
           // 理论上级不该出现此状态（finalChat 阶段应已完成 Phase 1），
           // 做防御处理：回退到 draft 恢复流程
-          if (_activeSessionKey != owningSessionKey) return null;
+          if (_activeSessionKey != owningSessionKey) return;
           state = state.copyWith(
             stage: VideoSummaryStage.draft,
             isGenerating: false,
@@ -1661,7 +1650,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       final summary = await _repository.resumeFinalGeneration(taskId);
 
       _cancelDraftStatusPoll();
-      if (_activeSessionKey != owningSessionKey) return null;
+      if (_activeSessionKey != owningSessionKey) return;
 
       final summaryData = mapFinalResultDataToSummary(summary);
       final seededRange = _buildRangeFromSummary(summaryData);
@@ -1700,7 +1689,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
       // 先获取草稿信息
       final draft = mapDraftDataToResult(await _repository.fetchDraftResult());
-      if (_activeSessionKey != owningSessionKey) return null;
+      if (_activeSessionKey != owningSessionKey) return;
 
       // 通过 getTask 获取终稿数据
       final taskInfo = await _repository.getTaskStatus(taskId);
@@ -1730,7 +1719,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       }
     } catch (e) {
       debugPrint('[FlowCtrl] 获取后台终稿失败 — taskId=$taskId: $e');
-      if (_activeSessionKey != owningSessionKey) return null;
+      if (_activeSessionKey != owningSessionKey) return;
       state = state.copyWith(errorMessage: '获取终稿失败，请重试');
     }
   }
@@ -1746,7 +1735,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       final draft = mapDraftDataToResult(await _repository.fetchDraftResult());
 
       // 校验：获取期间用户可能又切走了
-      if (_activeSessionKey != owningSessionKey) return null;
+      if (_activeSessionKey != owningSessionKey) return;
 
       state = state.copyWith(
         draftResult: draft,
@@ -1760,7 +1749,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       }
     } catch (e) {
       debugPrint('[FlowCtrl] 获取后台草稿失败 — taskId=$taskId: $e');
-      if (_activeSessionKey != owningSessionKey) return null;
+      if (_activeSessionKey != owningSessionKey) return;
       state = state.copyWith(
         stage: VideoSummaryStage.ready,
         errorMessage: '获取草稿失败，请重试',
@@ -1804,7 +1793,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
 
       // WS 流正常结束（收到 completed），停止轮询
       _cancelProcessingPoll();
-      if (_activeSessionKey != owningSessionKey) return null;
+      if (_activeSessionKey != owningSessionKey) return;
 
       // 如果轮询已经过渡了阶段，跳过重复操作
       if (state.stage != VideoSummaryStage.processing) return;
@@ -1812,7 +1801,7 @@ class VideoSummaryFlowController extends Notifier<VideoSummaryFlowState> {
       _repository.updateTaskId(taskId);
       final draft = mapDraftDataToResult(await _repository.fetchDraftResult());
 
-      if (_activeSessionKey != owningSessionKey) return null;
+      if (_activeSessionKey != owningSessionKey) return;
 
       state = state.copyWith(
         draftResult: draft,
