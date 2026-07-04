@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/api/error_messages.dart';
 import '../../../services/service_providers.dart';
+import '../../auth/auth_controller.dart';
 import '../http_knowledge_base_repository.dart';
 import '../knowledge_base_models.dart';
 import '../knowledge_base_repository.dart';
@@ -60,6 +61,15 @@ class LibraryListController extends Notifier<LibraryListState> {
 
   @override
   LibraryListState build() {
+    // 监听登录状态：用户换号时自动刷新知识库列表
+    ref.listen(authControllerProvider, (prev, next) {
+      final prevUserId = prev?.currentUser?.userId;
+      final nextUserId = next.currentUser?.userId;
+      if (prev != null && prevUserId != nextUserId) {
+        Future.microtask(_loadLibraries);
+      }
+    });
+
     Future.microtask(_loadLibraries);
     return const LibraryListState();
   }

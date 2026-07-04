@@ -643,6 +643,15 @@ class _CreateTaskBottomSheetState
   bool _isCreating = false;
 
   @override
+  void initState() {
+    super.initState();
+    // 每次打开都强制刷新，防止切换账号后显示旧用户的 KB 列表
+    Future.microtask(() {
+      ref.read(libraryListControllerProvider.notifier).refresh();
+    });
+  }
+
+  @override
   void dispose() {
     _preferenceController.dispose();
     super.dispose();
