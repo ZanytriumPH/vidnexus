@@ -109,8 +109,12 @@ class VideoSummarySessionHistoryController
     final videoAsset = _repository.getVideoAsset();
     final currentSession = _buildCurrentSessionEntry(videoAsset);
 
-    // 先加载本地持久化会话，再异步加载后端任务列表
-    _loadAll();
+    // 监听 kbid 解析：等待 kbid 可用后再加载后端历史，避免因 kbid 为空导致 API 失败
+    ref.listen(defaultKbidProvider, (prev, next) {
+      if (prev is AsyncLoading && next is AsyncData) {
+        _loadAll();
+      }
+    });
 
     return VideoSummarySessionHistoryState(
       sessions: [currentSession],

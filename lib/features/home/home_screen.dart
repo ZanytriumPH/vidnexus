@@ -283,6 +283,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final useBoundedStageLayout =
         flowState.stage == VideoSummaryStage.ready ||
         flowState.stage == VideoSummaryStage.finalChat;
+    // 用于强制刷新 workspace（账号切换时重建 ReadyStageWorkspace 以重新加载"最近上传"列表）
+    final currentUserId = ref.watch(
+      authControllerProvider.select((s) => s.currentUser?.userId ?? ''),
+    );
 
     // 监听认证状态变化：当用户登出或新用户登入时，立即使会话历史
     // 与流程控制器失效，确保账号之间的缓存数据完全隔离。
@@ -388,9 +392,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   const SizedBox(height: 5),
                   Expanded(
                     child: useBoundedStageLayout
-                        ? _buildWorkspace(flowState, textEditing)
+                        ? _buildWorkspace(
+                            flowState,
+                            textEditing,
+                            key: ValueKey('workspace_$currentUserId'),
+                          )
                         : SingleChildScrollView(
-                            child: _buildWorkspace(flowState, textEditing),
+                            child: _buildWorkspace(
+                              flowState,
+                              textEditing,
+                              key: ValueKey('workspace_$currentUserId'),
+                            ),
                           ),
                   ),
                 ],
@@ -696,10 +708,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   VideoSummaryWorkspace _buildWorkspace(
     VideoSummaryFlowState flowState,
-    VideoSummaryTextEditingController textEditing,
-  ) {
+    VideoSummaryTextEditingController textEditing, {
+    Key? key,
+  }) {
     // 这里统一把 controller 状态和回调接到各 stage workspace，避免子组件直接读多个 provider。
     return VideoSummaryWorkspace(
+      key: key,
       stage: flowState.stage,
       highlighted: flowState.uploadHighlighted,
       videoAsset: flowState.videoAsset,
