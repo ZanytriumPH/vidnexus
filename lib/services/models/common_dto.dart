@@ -223,35 +223,7 @@ class ApiError {
     );
   }
 
-  /// 用户可读的错误消息。
-  String get userMessage {
-    final raw = detail ?? message ?? '';
-
-    // 先按 HTTP 状态码映射
-    if (statusCode != null) {
-      final statusMsg = _statusMessage(statusCode!);
-      if (statusMsg != null) return statusMsg;
-    }
-
-    // 再按后端返回的 detail/message 内容映射
-    if (raw.isNotEmpty) {
-      return UserFriendlyError.mapMessage(raw);
-    }
-
-    return '操作失败，请稍后重试';
-  }
-
-  /// HTTP 状态码 → 用户友好消息。
-  static String? _statusMessage(int statusCode) {
-    return switch (statusCode) {
-      400 => '请求参数有误，请检查输入内容',
-      401 => '登录已过期，请重新登录',
-      403 => '您没有权限执行此操作',
-      404 => '请求的资源不存在',
-      422 => '输入数据格式不正确，请检查后重试',
-      429 => '操作太频繁，请稍后再试',
-      500 || 502 || 503 => '服务器繁忙，请稍后重试',
-      _ => null,
-    };
-  }
+  /// 用户可读的错误消息。委托给 [UserFriendlyError.fromApiError]
+  /// 以使用 error.code → statusCode → message 三层优先级映射。
+  String get userMessage => UserFriendlyError.fromApiError(this);
 }
