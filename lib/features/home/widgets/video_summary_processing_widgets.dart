@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/widgets/app_card.dart';
@@ -434,26 +435,83 @@ class ProcessingCollapsedHintCard extends StatelessWidget {
           ),
           if (onRefresh != null) ...[
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: onRefresh,
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF2F4F7),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.refresh_rounded,
-                  size: 16,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
+            AnimatedRefreshButton(onRefresh: onRefresh!),
           ],
         ],
       ),
     ),
   );
+  }
+}
+
+class AnimatedRefreshButton extends StatefulWidget {
+  const AnimatedRefreshButton({
+    required this.onRefresh,
+    super.key,
+  });
+
+  final VoidCallback onRefresh;
+
+  @override
+  State<AnimatedRefreshButton> createState() => _AnimatedRefreshButtonState();
+}
+
+class _AnimatedRefreshButtonState extends State<AnimatedRefreshButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    HapticFeedback.lightImpact();
+    _controller.repeat();
+    widget.onRefresh();
+    // 旋转 ~1.3 圈后自动停止，给予明确的点击反馈
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        _controller.stop();
+        _controller.animateBack(
+          0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _handleTap,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF2F4F7),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: RotationTransition(
+          turns: _controller,
+          child: const Icon(
+            Icons.refresh_rounded,
+            size: 16,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
   }
 }
 

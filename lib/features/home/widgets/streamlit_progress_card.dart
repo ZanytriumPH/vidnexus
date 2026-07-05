@@ -88,21 +88,7 @@ class _Header extends StatelessWidget {
         ),
         const Spacer(),
         if (onRefresh != null) ...[
-          GestureDetector(
-            onTap: onRefresh,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF2F4F7),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.refresh_rounded,
-                size: 16,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
+          AnimatedRefreshButton(onRefresh: onRefresh!),
           const SizedBox(width: 6),
         ],
         GestureDetector(
